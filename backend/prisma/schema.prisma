@@ -1,0 +1,189 @@
+// Schema de Prisma para el CRM
+// Modelos: Usuario, Proyecto, Tarea
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Áreas del equipo
+enum Area {
+  DESARROLLO
+  ADMINISTRACION
+  COMUNICACION
+}
+
+// Roles disponibles en el sistema
+enum Rol {
+  ADMIN
+  MIEMBRO
+}
+
+// Modelo de Usuario
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  email     String   @unique
+  password  String
+  area      Area
+  rol       Rol      @default(MIEMBRO)
+  creadoEn  DateTime @default(now())
+
+  // Seguridad: Recuperación de contraseña
+  resetToken        String?
+  resetTokenExpires DateTime?
+
+  // Seguridad: Verificación de cuenta
+  verificado        Boolean   @default(false)
+  verificationToken String?
+  verificationTokenExpires DateTime?
+
+  // Relaciones (se usarán en fases posteriores)
+  proyectosCreados Proyecto[] @relation("CreadorProyecto")
+  tareasAsignadas  Tarea[]    @relation("AsignadoTarea")
+  proyectosMiembro Proyecto[] @relation("ProyectoMiembro")
+  notificaciones   Notificacion[] @relation("DestinatarioNotificacion")
+  comentarios      Comentario[]   @relation("AutorComentario")
+  actividades      LogActividad[] @relation("AutorActividad")
+  adjuntos         Adjunto[]      @relation("AutorAdjunto")
+
+  @@map("usuarios")
+}
+
+// Modelo de Proyecto
+model Proyecto {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  estado      String   @default("ACTIVO")
+  creadoEn    DateTime @default(now())
+
+  // Relación con el creador
+  creadorId Int
+  creador   Usuario @relation("CreadorProyecto", fields: [creadorId], references: [id])
+
+  // Relación con miembros del equipo (muchos a muchos)
+  miembros    Usuario[] @relation("ProyectoMiembro")
+
+  // Relación con tareas
+  tareas      Tarea[]
+  actividades LogActividad[]
+  comentarios Comentario[]
+  adjuntos    Adjunto[]
+
+  @@map("proyectos")
+}
+
+// Modelo de Tarea
+model Tarea {
+  id          Int      @id @default(autoincrement())
+  titulo      String
+  descripcion String?
+  estado      String   @default("PENDIENTE")
+  prioridad   String   @default("MEDIA")
+  creadoEn    DateTime @default(now())
+  venceEn     DateTime?
+
+  // Relación con proyecto
+  proyectoId Int
+  proyecto   Proyecto @relation(fields: [proyectoId], references: [id])
+
+  // Relación con usuario asignado
+  asignadoId Int?
+  asignado   Usuario? @relation("AsignadoTarea", fields: [asignadoId], references: [id])
+
+  comentarios Comentario[]
+  adjuntos    Adjunto[]
+
+  // Dependencias (una tarea puede depender de otra)
+  dependeDeId Int?
+  dependeDe   Tarea?   @relation("Dependencia", fields: [dependeDeId], references: [id])
+  bloqueaA    Tarea[]  @relation("Dependencia")
+
+  @@map("tareas")
+}
+
+// Modelo de Notificación
+model Notificacion {
+  id        Int      @id @default(autoincrement())
+  mensaje   String
+  tipo      String   // ASIGNACION, ESTADO, URGENTE
+  leida     Boolean  @default(false)
+  creadaEn  DateTime @default(now())
+
+  // Relación con el destinatario
+  usuarioId Int
+  usuario   Usuario  @relation("DestinatarioNotificacion", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // Referencia opcional a una tarea
+  tareaId   Int?
+
+  @@map("notificaciones")
+}
+
+// Modelo de Comentario
+model Comentario {
+  id        Int      @id @default(autoincrement())
+  contenido String
+  creadoEn  DateTime @default(now())
+
+  // Relación con el autor
+  autorId   Int
+  autor     Usuario  @relation("AutorComentario", fields: [autorId], references: [id], onDelete: Cascade)
+
+  // Relación con la tarea (opcional si es comentario de proyecto)
+  tareaId   Int?
+  tarea     Tarea?    @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+
+  // Relación con el proyecto (opcional)
+  proyectoId Int?
+  proyecto   Proyecto? @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  @@map("comentarios")
+}
+
+// Modelo de Auditoría / Log de Actividad
+model LogActividad {
+  id          Int      @id @default(autoincrement())
+  accion      String   // e.g., "CREAR_TAREA", "CAMBIO_ESTADO", "NUEVO_COMENTARIO"
+  descripcion String   // Mensaje legible para humanos
+  creadoEn    DateTime @default(now())
+
+  // Quién realizó la acción
+  usuarioId   Int
+  usuario     Usuario  @relation("AutorActividad", fields: [usuarioId], references: [id])
+
+  // A qué proyecto pertenece esta acción
+  proyectoId  Int
+  proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  @@map("logs_actividad")
+}
+
+// Modelo de Archivos Adjuntos
+model Adjunto {
+  id          Int      @id @default(autoincrement())
+  nombre      String   // Nombre original del archivo
+  url         String   // Ruta en el servidor o URL
+  tipo        String?  // MIME type (image/png, application/pdf, etc)
+  tamano      Int?     // Tamaño en bytes
+  creadoEn    DateTime @default(now())
+
+  // Quién subió el archivo
+  usuarioId   Int
+  usuario     Usuario  @relation("AutorAdjunto", fields: [usuarioId], references: [id])
+
+  // A qué tarea pertenece (opcional)
+  tareaId     Int?
+  tarea       Tarea?   @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+
+  // A qué proyecto pertenece (opcional)
+  proyectoId  Int?
+  proyecto    Proyecto? @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  @@map("adjuntos")
+}
