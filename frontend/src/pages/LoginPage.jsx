@@ -62,7 +62,7 @@ const LoginPage = () => {
             🏢
           </div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: '700', color: 'var(--color-text)' }}>
-            CRM Interno
+            Panel Interno
           </h1>
           <p style={{ color: 'var(--color-text-muted)', marginTop: '0.4rem', fontSize: '0.9rem' }}>
             Inicia sesión para continuar

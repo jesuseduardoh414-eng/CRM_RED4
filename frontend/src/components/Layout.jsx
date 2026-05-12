@@ -129,7 +129,7 @@ const Layout = ({ children }) => {
             fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontWeight: '800', 
             textTransform: 'uppercase', letterSpacing: '0.15em', textAlign: 'center' 
           }}>
-            Sistema Interno
+            Panel Interno
           </div>
         </div>
 
