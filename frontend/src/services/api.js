@@ -144,6 +144,30 @@ export const tareasService = {
     });
     return handleResponse(res);
   },
+
+  // ── Importación masiva ──────────────────────────────────────────────────
+  importar: async (proyectoId, archivo) => {
+    const fd = new FormData();
+    fd.append('archivo', archivo);
+    const token = localStorage.getItem('crm_token');
+    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    return handleResponse(res);
+  },
+
+  descargarPlantilla: (tipo) => {
+    const token = localStorage.getItem('crm_token');
+    const url   = `${API_URL}/tareas/plantilla/${tipo}`;
+    const a = document.createElement('a');
+    a.href = url + (token ? `?token=${token}` : '');
+    a.download = `plantilla_tareas.${tipo === 'json' ? 'json' : 'xlsx'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
 };
 
 // ── Usuarios ──────────────────────────────────────────────────────────────

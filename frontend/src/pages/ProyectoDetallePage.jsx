@@ -13,6 +13,7 @@ import Spinner    from '../components/Spinner';
 import TaskComments from '../components/TaskComments';
 import ProjectActivityLog from '../components/ProjectActivityLog';
 import TaskAttachments from '../components/TaskAttachments';
+import ModalImportar from '../components/ModalImportar';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
 const AREA_CONFIG = {
@@ -446,6 +447,7 @@ const ProyectoDetallePage = () => {
   const [cargando, setCargando]         = useState(true);
   const [error, setError]               = useState('');
   const [modalAbierto, setModal]        = useState(false);
+  const [modalImportar, setModalImportar] = useState(false);
   const [tareaEditando, setTareaEditando]   = useState(null);
   const [filtroCol, setFiltroCol]       = useState('TODOS');
   const [filtroArea, setFiltroArea]     = useState('TODAS');
@@ -472,7 +474,12 @@ const ProyectoDetallePage = () => {
     }
   }, [id]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    const init = async () => {
+      await cargar();
+    };
+    init();
+  }, [cargar]);
 
   // Estadísticas de tareas
   const pendientes  = tareas.filter(t => t.estado === 'PENDIENTE').length;
@@ -645,6 +652,24 @@ const ProyectoDetallePage = () => {
           <div style={{ display: 'flex', gap: '0.65rem', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
               {/* Toggle de vista */}
               <ToggleVista vista={vista} onChange={setVista} />
+
+              {/* Botón importar tareas — Visible para todos */}
+              <button
+                onClick={() => setModalImportar(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  padding: '0.6rem 1.1rem',
+                  background: 'transparent',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '0.5rem', color: 'var(--color-text-muted)',
+                  fontWeight: '600', fontSize: '0.82rem', cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.color = 'var(--color-primary)'; }}
+                onMouseOut={e  => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+              >
+                📥 Importar tareas
+              </button>
 
               {/* Botón nueva tarea — Visible para todos los que ven el proyecto */}
               <button
@@ -825,7 +850,7 @@ const ProyectoDetallePage = () => {
         )}
       </div>{/* ── fin div principal padding ── */}
 
-      {/* Modal */}
+      {/* Modal creación/edición de tarea */}
       {modalAbierto && (
         <ModalTarea
           tarea={tareaEditando}
@@ -834,6 +859,19 @@ const ProyectoDetallePage = () => {
           tareasProyecto={tareas}
           onClose={() => setModal(false)}
           onGuardar={handleGuardar}
+        />
+      )}
+
+      {/* Modal importación masiva */}
+      {modalImportar && (
+        <ModalImportar
+          proyectoId={parseInt(id)}
+          onClose={() => setModalImportar(false)}
+          onImportado={() => {
+            setModalImportar(false);
+            showToast('Tareas importadas correctamente', 'success');
+            cargar();
+          }}
         />
       )}
     </>

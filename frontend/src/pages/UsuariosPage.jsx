@@ -1,5 +1,5 @@
 // Página de Gestión de Usuarios (Solo Admin)
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { usuariosService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
@@ -14,7 +14,7 @@ const UsuariosPage = () => {
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const { showToast } = useToast();
 
-  const fetchUsuarios = async () => {
+  const fetchUsuarios = useCallback(async () => {
     try {
       const data = await usuariosService.listar();
       setUsuarios(data.usuarios);
@@ -23,11 +23,14 @@ const UsuariosPage = () => {
     } finally {
       setCargando(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
-    fetchUsuarios();
-  }, []);
+    const load = async () => {
+      await fetchUsuarios();
+    };
+    load();
+  }, [fetchUsuarios]);
 
   const handleEliminar = async (id) => {
     if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;

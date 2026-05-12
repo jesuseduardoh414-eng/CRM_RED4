@@ -410,7 +410,12 @@ const ProyectosPage = () => {
     }
   }, []);
 
-  useEffect(() => { cargarProyectos(); }, [cargarProyectos]);
+  useEffect(() => {
+    const init = async () => {
+      await cargarProyectos();
+    };
+    init();
+  }, [cargarProyectos]);
 
   // Abrir modal para crear
   const handleCrear = () => {

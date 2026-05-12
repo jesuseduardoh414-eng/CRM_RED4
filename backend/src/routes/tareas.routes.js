@@ -3,11 +3,13 @@
 
 const express = require('express');
 const { listar, crear, editar, eliminar, actualizarEstado } = require('../controllers/tareas.controller');
+const { importar, plantillaJSON, plantillaExcel } = require('../controllers/importar.controller');
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin }      = require('../middlewares/roles.middleware');
 const { listar: listarComentarios, crear: crearComentario, eliminar: eliminarComentario } = require('../controllers/comentarios.controller');
 const { listar: listarAdjuntos, subir: subirAdjunto, eliminar: eliminarAdjunto, descargar: descargarAdjunto } = require('../controllers/adjuntos.controller');
 const upload = require('../middlewares/upload.middleware');
+const uploadImport = require('../middlewares/uploadImport.middleware');
 
 const routerProyecto = express.Router({ mergeParams: true });
 const routerTarea    = express.Router();
@@ -15,9 +17,16 @@ const routerTarea    = express.Router();
 routerProyecto.use(verificarToken);
 routerTarea.use(verificarToken);
 
+// ── Plantillas descargables ────────────────────────────────────────────────
+routerTarea.get('/plantilla/json',  plantillaJSON);
+routerTarea.get('/plantilla/excel', plantillaExcel);
+
 // Listar y crear tareas (cualquier usuario autenticado)
 routerProyecto.get('/',  listar);
-routerProyecto.post('/', upload.array('archivos', 5), crear); // Máximo 5 archivos al crear
+routerProyecto.post('/', upload.array('archivos', 5), crear);
+
+// ── Importación masiva ─────────────────────────────────────────────────────
+routerProyecto.post('/importar', uploadImport.single('archivo'), importar);
 
 // Editar y cambiar estado (cualquier usuario autenticado)
 routerTarea.put('/:id',          editar);
