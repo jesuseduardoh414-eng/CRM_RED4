@@ -32,13 +32,13 @@ const VerifyAccountPage = () => {
   return (
     <div style={{ 
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(circle at top right, #1e1b4b, #020617)', padding: '1.5rem'
+      background: '#ffffff', padding: '1.5rem'
     }}>
       <div style={{ 
-        width: '100%', maxWidth: '450px', background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)',
+        width: '100%', maxWidth: '450px', background: '#ffffff',
+        border: '1px solid var(--color-border)',
         borderRadius: '1.5rem', padding: '3rem', textAlign: 'center',
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+        boxShadow: 'var(--shadow-xl)'
       }}>
         {estado === 'verificando' && (
           <>
@@ -54,7 +54,7 @@ const VerifyAccountPage = () => {
               borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '2rem', margin: '0 auto 1.5rem', color: '#10b981', border: '2px solid #10b981'
             }}>✅</div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: '#fff', marginBottom: '1rem' }}>¡Cuenta Verificada!</h1>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>¡Cuenta Verificada!</h1>
             <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>
               {mensaje}<br/>
               <span style={{ fontSize: '0.85rem', marginTop: '0.5rem', display: 'block' }}>Redirigiendo al login en 3 segundos...</span>
@@ -72,7 +72,7 @@ const VerifyAccountPage = () => {
               borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '2rem', margin: '0 auto 1.5rem', color: '#ef4444', border: '2px solid #ef4444'
             }}>❌</div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: '#fff', marginBottom: '1rem' }}>Error de Verificación</h1>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>Error de Verificación</h1>
             <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>{mensaje}</p>
             <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: '700', textDecoration: 'none' }}>
               Intentar registrarse de nuevo

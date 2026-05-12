@@ -58,7 +58,7 @@ const RegisterPage = () => {
       alignItems: 'center',
       justifyContent: 'center',
       padding: '1.5rem',
-      background: 'radial-gradient(ellipse at top, #1e1b4b 0%, #0f172a 60%)',
+      background: '#ffffff',
     }}>
       <div style={{ width: '100%', maxWidth: '420px' }}>
 
@@ -169,7 +169,7 @@ const RegisterPage = () => {
               display: 'flex', alignItems: 'center', gap: '0.5rem',
             }}>
               <span>ℹ️</span>
-              <span>Tu cuenta será creada como <strong style={{ color: '#818cf8' }}>Miembro</strong>. Solo el administrador puede asignar roles.</span>
+              <span>Tu cuenta será creada como <strong style={{ color: '#ffffff' }}>Miembro</strong>. Solo el administrador puede asignar roles.</span>
             </div>
 
             <button type="submit" className="btn-primary" disabled={cargando} style={{ marginTop: '0.25rem' }}>

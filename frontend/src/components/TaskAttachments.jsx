@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
 import { adjuntosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { 
+  Paperclip, 
+  Upload, 
+  Trash2, 
+  Image as ImageIcon, 
+  FileText, 
+  FileSpreadsheet, 
+  Archive, 
+  File,
+  FileCheck
+} from 'lucide-react';
 
 const TaskAttachments = ({ tareaId, type = 'tareas' }) => {
   const { usuario } = useAuth();
@@ -61,12 +72,12 @@ const TaskAttachments = ({ tareaId, type = 'tareas' }) => {
   };
 
   const getFileIcon = (tipo) => {
-    if (tipo?.includes('image')) return '🖼️';
-    if (tipo?.includes('pdf'))   return '📕';
-    if (tipo?.includes('word'))  return '📘';
-    if (tipo?.includes('excel') || tipo?.includes('spreadsheet')) return '📗';
-    if (tipo?.includes('zip') || tipo?.includes('rar')) return '📦';
-    return '📄';
+    if (tipo?.includes('image')) return <ImageIcon size={24} />;
+    if (tipo?.includes('pdf'))   return <FileText size={24} color="#f87171" />;
+    if (tipo?.includes('word'))  return <FileText size={24} color="#60a5fa" />;
+    if (tipo?.includes('excel') || tipo?.includes('spreadsheet')) return <FileSpreadsheet size={24} color="#34d399" />;
+    if (tipo?.includes('zip') || tipo?.includes('rar')) return <Archive size={24} />;
+    return <File size={24} />;
   };
 
   if (cargando) return <div style={{ padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Cargando archivos...</div>;
@@ -75,7 +86,7 @@ const TaskAttachments = ({ tareaId, type = 'tareas' }) => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '1.2rem' }}>📎</span>
+          <Paperclip size={20} />
           <h4 style={{ fontSize: '1.1rem', fontWeight: '800' }}>
             {type === 'proyectos' ? 'Documentación del Proyecto' : 'Archivos Adjuntos'}
           </h4>
@@ -90,7 +101,11 @@ const TaskAttachments = ({ tareaId, type = 'tareas' }) => {
           onMouseOver={e => e.currentTarget.style.background = 'var(--color-border)'}
           onMouseOut={e => e.currentTarget.style.background = 'var(--color-surface-3)'}
         >
-          {subiendo ? 'Subiendo...' : 'Subir archivo'}
+          {subiendo ? 'Subiendo...' : (
+            <>
+              <Upload size={14} /> Subir archivo
+            </>
+          )}
           <input type="file" onChange={handleFileUpload} disabled={subiendo} style={{ display: 'none' }} />
         </label>
       </div>
@@ -148,7 +163,9 @@ const TaskAttachments = ({ tareaId, type = 'tareas' }) => {
                   }}
                   onMouseOver={e => e.currentTarget.style.opacity = 1}
                   onMouseOut={e => e.currentTarget.style.opacity = 0.5}
-                >🗑️</button>
+                >
+                  <Trash2 size={16} color="var(--color-accent-error)" />
+                </button>
               )}
             </div>
           ))

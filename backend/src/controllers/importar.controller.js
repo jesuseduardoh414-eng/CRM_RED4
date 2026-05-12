@@ -19,7 +19,9 @@ const {
 
 // ── POST /api/proyectos/:proyectoId/tareas/importar ─────────────────────────
 const importar = async (req, res) => {
-  const proyectoId = parseInt(req.params.proyectoId);
+  // El routerProyecto se monta en /api/proyectos/:id/tareas,
+  // por lo que el parámetro del proyecto se llama 'id'
+  const proyectoId = parseInt(req.params.id);
 
   if (isNaN(proyectoId)) {
     return res.status(400).json({ error: 'ID de proyecto inválido' });
@@ -52,14 +54,36 @@ const importar = async (req, res) => {
       }
     }
 
-    // 3. Detectar tipo de archivo por extensión
+    // 3. Determinar el asignado por defecto según el modo elegido en el frontend
+    //    modoAsignacion: 'yo' | 'miembro' | 'archivo'
+    const modoAsignacion = req.body.modoAsignacion || 'archivo';
+    let asignadoPorDefecto = null;
+
+    if (modoAsignacion === 'yo') {
+      // Asignar al usuario que hace la subida
+      asignadoPorDefecto = req.usuario.id;
+    } else if (modoAsignacion === 'miembro') {
+      const miembroId = parseInt(req.body.asignadoId);
+      if (!isNaN(miembroId)) {
+        // Validar que el miembro pertenezca al proyecto
+        const esMiembro = proyecto.miembros.some(m => m.id === miembroId);
+        if (!esMiembro && req.usuario.rol !== 'ADMIN') {
+          fs.unlinkSync(filePath);
+          return res.status(400).json({ error: 'El miembro seleccionado no pertenece a este proyecto' });
+        }
+        asignadoPorDefecto = miembroId;
+      }
+    }
+    // modo 'archivo' → asignadoPorDefecto = null (respeta columna del archivo)
+
+    // 4. Detectar tipo de archivo por extensión
     const ext = path.extname(req.file.originalname).toLowerCase();
     let resultado;
 
     if (ext === '.json') {
-      resultado = await procesarJSON(filePath, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id);
+      resultado = await procesarJSON(filePath, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
     } else if (ext === '.xlsx' || ext === '.xls') {
-      resultado = await procesarExcel(filePath, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id);
+      resultado = await procesarExcel(filePath, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
     } else {
       fs.unlinkSync(filePath);
       return res.status(400).json({ error: 'Tipo de archivo no soportado. Usa .json, .xlsx o .xls' });

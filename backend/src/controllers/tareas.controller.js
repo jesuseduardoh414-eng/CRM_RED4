@@ -78,7 +78,7 @@ const crear = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
   if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
-  const { titulo, descripcion, asignadoId, prioridad, estado, venceEn, dependeDeId, primerComentario } = req.body;
+  const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId, primerComentario } = req.body;
   const archivos = req.files;
 
   if (!titulo || titulo.trim() === '') {
@@ -110,6 +110,7 @@ const crear = async (req, res) => {
         descripcion: descripcion?.trim() || null,
         prioridad:   prioridad  || 'MEDIA',
         estado:      estado     || 'PENDIENTE',
+        fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date(),
         venceEn:     venceEn    ? new Date(venceEn) : null,
         proyectoId,
         asignadoId:  asignadoId ? parseInt(asignadoId) : null,
@@ -175,7 +176,7 @@ const editar = async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
 
-  const { titulo, descripcion, asignadoId, prioridad, estado, venceEn, dependeDeId } = req.body;
+  const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId } = req.body;
 
   try {
     const existente = await prisma.tarea.findUnique({ where: { id } });
@@ -189,6 +190,7 @@ const editar = async (req, res) => {
         ...(prioridad    !== undefined && { prioridad }),
         ...(estado       !== undefined && { estado }),
         ...(asignadoId   !== undefined && { asignadoId: asignadoId ? parseInt(asignadoId) : null }),
+        ...(fechaInicio  !== undefined && { fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date() }),
         ...(venceEn      !== undefined && { venceEn: venceEn ? new Date(venceEn) : null }),
         ...(dependeDeId  !== undefined && { dependeDeId: dependeDeId ? parseInt(dependeDeId) : null }),
       },

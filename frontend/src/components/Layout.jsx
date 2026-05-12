@@ -1,259 +1,275 @@
-// Layout principal — sidebar + área de contenido
-// Responsivo desde 768px: sidebar colapsable con hamburger
-
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import NotificationCenter from './NotificationCenter';
+import { agendaService } from '../services/api';
+import { 
+  LayoutDashboard, 
+  FolderKanban, 
+  Users, 
+  ShieldCheck, 
+  LogOut, 
+  Menu,
+  Bell,
+  Calendar
+} from 'lucide-react';
 
-// ── Íconos SVG ───────────────────────────────────────────────────────────────
-const IconDashboard = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-    <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-  </svg>
-);
-const IconProyectos = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-  </svg>
-);
-const IconEquipo = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-    <circle cx="9" cy="7" r="4"/>
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-  </svg>
-);
-const IconGestion = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    <circle cx="12" cy="11" r="3"/>
-  </svg>
-);
-const IconLogout = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-    <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-  </svg>
-);
-const IconMenu = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="3" y1="6"  x2="21" y2="6"/>
-    <line x1="3" y1="12" x2="21" y2="12"/>
-    <line x1="3" y1="18" x2="21" y2="18"/>
-  </svg>
-);
-const IconClose = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-);
-
-const AREA_COLORS = {
-  DESARROLLO:     '#818cf8',
-  ADMINISTRACION: '#fbbf24',
-  COMUNICACION:   '#34d399',
-};
+// ── Íconos SVG (Material Style) ──────────────────────────────────────────────
+// Los íconos ahora vienen de lucide-react
+const IconDashboard = () => <LayoutDashboard size={20} strokeWidth={2.5} />;
+const IconProyectos = () => <FolderKanban size={20} strokeWidth={2.5} />;
+const IconEquipo     = () => <Users size={20} strokeWidth={2.5} />;
+const IconGestion    = () => <ShieldCheck size={20} strokeWidth={2.5} />;
+const IconLogout     = () => <LogOut size={18} strokeWidth={2.5} />;
+const IconMenu       = () => <Menu size={24} strokeWidth={2.5} />;
+const IconAgenda     = () => <Calendar size={20} strokeWidth={2.5} />;
 
 const navLinks = [
-  { to: '/dashboard', label: 'Dashboard', Icon: IconDashboard },
-  { to: '/proyectos',  label: 'Proyectos',  Icon: IconProyectos },
-  { to: '/equipo',     label: 'Mi Equipo',  Icon: IconEquipo },
+  { to: '/dashboard', label: 'Inicio', Icon: IconDashboard },
+  { to: '/proyectos',  label: 'Proyectos', Icon: IconProyectos },
+  { to: '/agenda',     label: 'Mi Agenda', Icon: IconAgenda, badge: true },
+  { to: '/equipo',     label: 'Comunidad', Icon: IconEquipo },
 ];
 
-const SIDEBAR_W = 240;
+const SIDEBAR_W = 280;
 
 const Layout = ({ children }) => {
   const { usuario, logout } = useAuth();
   const { showToast }       = useToast();
   const navigate            = useNavigate();
-  const [open, setOpen]     = useState(false); // sidebar en móvil
-  const [isMobile, setMobile] = useState(window.innerWidth < 768);
+  const [open, setOpen]     = useState(false);
+  const [isMobile, setMobile] = useState(window.innerWidth < 1024);
+  const [recordatoriosCount, setRecordatoriosCount] = useState(0);
 
-  // Detectar cambio de tamaño
+  // Sistema de Alertas de Agenda
   useEffect(() => {
-    const onResize = () => setMobile(window.innerWidth < 768);
+    if (!usuario) return;
+
+    const checarAgenda = async () => {
+      try {
+        const [{ recordatorios }, { pendientes }] = await Promise.all([
+          agendaService.recordatorios(),
+          agendaService.invitacionesPendientes()
+        ]);
+        
+        setRecordatoriosCount(recordatorios.length + pendientes.length);
+
+        // Notificar recordatorios próximos
+        const yaNotificados = JSON.parse(localStorage.getItem('crm_recordatorios_vistos') || '[]');
+        const ahora = new Date();
+
+        recordatorios.forEach(r => {
+          if (!yaNotificados.includes(r.id)) {
+            const min = Math.round((new Date(r.fechaInicio) - ahora) / 60000);
+            const msg = `Recordatorio: ${r.titulo} en ${min} minutos`;
+            showToast(msg, 'info');
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("CRM - Recordatorio", { body: msg, icon: '/logo.png' });
+            }
+            yaNotificados.push(r.id);
+          }
+        });
+
+        localStorage.setItem('crm_recordatorios_vistos', JSON.stringify(yaNotificados));
+      } catch (error) {
+        console.error('Error al checar agenda:', error);
+      }
+    };
+
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
+    checarAgenda();
+    const interval = setInterval(checarAgenda, 60000);
+    return () => clearInterval(interval);
+  }, [usuario, showToast]);
+
+  useEffect(() => {
+    const onResize = () => setMobile(window.innerWidth < 1024);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Cerrar sidebar al navegar en móvil
-  const handleNav = () => { if (isMobile) setOpen(false); };
-
   const handleLogout = () => {
     logout();
-    showToast('Sesión cerrada correctamente', 'info');
+    showToast('Sesión cerrada', 'info');
     navigate('/login');
   };
-
-  const areaColor = AREA_COLORS[usuario?.area] || '#94a3b8';
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-surface)', position: 'relative' }}>
 
-      {/* ── Overlay móvil ───────────────────────────────────────────── */}
-      {isMobile && open && (
-        <div
-          onClick={() => setOpen(false)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            zIndex: 40, backdropFilter: 'blur(2px)',
-          }}
-        />
-      )}
-
       {/* ── Sidebar ─────────────────────────────────────────────────── */}
       <aside style={{
-        width:        SIDEBAR_W,
-        flexShrink:   0,
-        background:   'var(--color-surface-2)',
-        borderRight:  '1px solid var(--color-border)',
-        display:      'flex',
-        flexDirection:'column',
-        position:     isMobile ? 'fixed' : 'sticky',
-        top:          0,
-        left:         isMobile ? (open ? 0 : -SIDEBAR_W) : 0,
-        height:       '100vh',
-        zIndex:       50,
-        transition:   'left 0.25s ease',
+        width: SIDEBAR_W,
+        flexShrink: 0,
+        background: 'var(--color-sidebar)',
+        display: 'flex',
+        flexDirection: 'column',
+        position: isMobile ? 'fixed' : 'sticky',
+        top: 0,
+        left: isMobile ? (open ? 0 : -SIDEBAR_W) : 0,
+        height: '100vh',
+        zIndex: 100,
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}>
-        {/* Logo + botón cerrar en móvil */}
-        <div style={{
-          padding:      '1.25rem 1rem 1rem',
-          borderBottom: '1px solid var(--color-border)',
-          display:      'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <div style={{
-              width: '34px', height: '34px',
-              background: 'var(--color-primary)', borderRadius: '10px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1rem', flexShrink: 0,
-            }}>🏢</div>
-            <div>
-              <div style={{ fontWeight: '700', fontSize: '0.9rem', lineHeight: 1.2 }}>CRM Interno</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)' }}>Gestión de proyectos</div>
-            </div>
+        {/* Logo Branding (Centered & Large) */}
+        <div style={{ padding: '3rem 1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <img 
+            src="/logo.png" 
+            alt="Red 4 Design" 
+            style={{ 
+              width: '100%', maxWidth: '200px', height: 'auto',
+              objectFit: 'contain'
+            }} 
+          />
+          <div style={{ 
+            fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontWeight: '800', 
+            textTransform: 'uppercase', letterSpacing: '0.15em', textAlign: 'center' 
+          }}>
+            Sistema Interno
           </div>
-          {isMobile && (
-            <button onClick={() => setOpen(false)} style={{
-              background: 'none', border: 'none', color: 'var(--color-text-muted)',
-              cursor: 'pointer', padding: '0.25rem',
-            }}><IconClose /></button>
-          )}
         </div>
 
-        <nav style={{ flex: 1, padding: '0.85rem 0.65rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-          {navLinks.map(({ to, label, Icon }) => (
+        {/* Navegación */}
+        <nav style={{ flex: 1, padding: '0 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ fontSize: '0.65rem', fontWeight: '800', color: 'rgba(255,255,255,0.3)', padding: '1rem 0.75rem 0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Menú Principal</div>
+          {navLinks.map(({ to, label, Icon, badge }) => (
             <NavLink
-              key={to} to={to} onClick={handleNav}
+              key={to} to={to} onClick={() => isMobile && setOpen(false)}
               style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: '0.65rem',
-                padding: '0.6rem 0.85rem', borderRadius: '0.5rem',
-                textDecoration: 'none', fontSize: '1.05rem',
+                display: 'flex', alignItems: 'center', gap: '1rem',
+                padding: '0.9rem 1.25rem', borderRadius: '12px',
+                textDecoration: 'none', fontSize: '0.95rem',
                 fontWeight: isActive ? '700' : '500',
-                color:      isActive ? '#fff' : 'var(--color-text-muted)',
-                background: isActive ? 'var(--color-primary)' : 'transparent',
-                transition: 'all 0.15s',
+                background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
+                color: isActive ? '#fff' : 'rgba(255,255,255,0.5)',
+                transition: 'var(--transition-base)'
               })}
-              onMouseOver={e => { if (!e.currentTarget.getAttribute('aria-current')) { e.currentTarget.style.background = 'var(--color-surface-3)'; e.currentTarget.style.color = 'var(--color-text)'; } }}
-              onMouseOut={e  => { if (!e.currentTarget.getAttribute('aria-current')) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-muted)'; } }}
             >
-              <Icon />{label}
+              <Icon /> 
+              <span style={{ flex: 1 }}>{label}</span>
+              {badge && recordatoriosCount > 0 && (
+                <span style={{
+                  background: 'var(--color-error)', color: '#fff',
+                  fontSize: '0.65rem', fontWeight: '900',
+                  padding: '0.1rem 0.4rem', borderRadius: '6px',
+                  boxShadow: '0 2px 4px rgba(239,68,68,0.3)'
+                }}>
+                  {recordatoriosCount}
+                </span>
+              )}
             </NavLink>
           ))}
 
           {usuario?.rol === 'ADMIN' && (
-            <NavLink
-              to="/usuarios" onClick={handleNav}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: '0.65rem',
-                padding: '0.6rem 0.85rem', borderRadius: '0.5rem',
-                textDecoration: 'none', fontSize: '1.05rem',
-                fontWeight: isActive ? '700' : '500',
-                color:      isActive ? '#fff' : 'var(--color-text-muted)',
-                background: isActive ? '#f59e0b' : 'transparent', // Color naranja para gestión
-                transition: 'all 0.15s',
-              })}
-              onMouseOver={e => { if (!e.currentTarget.getAttribute('aria-current')) { e.currentTarget.style.background = 'rgba(245,158,11,0.1)'; e.currentTarget.style.color = '#f59e0b'; } }}
-              onMouseOut={e  => { if (!e.currentTarget.getAttribute('aria-current')) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-muted)'; } }}
-            >
-              <IconGestion /> Gestión de Equipo
-            </NavLink>
+            <>
+              <div style={{ fontSize: '0.65rem', fontWeight: '800', color: 'rgba(255,255,255,0.3)', padding: '2rem 0.75rem 0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Administración</div>
+              <NavLink
+                to="/usuarios" onClick={() => isMobile && setOpen(false)}
+                style={({ isActive }) => ({
+                  display: 'flex', alignItems: 'center', gap: '1rem',
+                  padding: '0.9rem 1.25rem', borderRadius: '12px',
+                  textDecoration: 'none', fontSize: '0.95rem',
+                  fontWeight: isActive ? '700' : '500',
+                  background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  color: isActive ? '#fff' : 'rgba(255,255,255,0.5)',
+                  transition: 'var(--transition-base)'
+                })}
+              >
+                <IconGestion /> Usuarios
+              </NavLink>
+            </>
           )}
         </nav>
-        
-        {/* Notificaciones */}
-        <div style={{ padding: '0.5rem 1.15rem', display: 'flex', justifyContent: 'flex-start' }}>
-          <NotificationCenter />
-        </div>
 
-        {/* Usuario + Logout */}
-        <div style={{ padding: '0.85rem 0.65rem', borderTop: '1px solid var(--color-border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.65rem' }}>
-            <div style={{
-              width: '32px', height: '32px', borderRadius: '50%',
-              background: 'var(--color-primary)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '0.8rem', fontWeight: '700', flexShrink: 0,
+        {/* User Profile Card (Figma Style) */}
+        <div style={{ padding: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ 
+            display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem'
+          }}>
+            <div style={{ 
+              width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '1rem', color: '#fff',
+              border: '2px solid rgba(255,255,255,0.1)'
             }}>
-              {usuario?.nombre?.charAt(0)?.toUpperCase()}
+              {usuario?.nombre?.charAt(0).toUpperCase()}
             </div>
-            <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {usuario?.nombre}
-              </div>
-              <div style={{ fontSize: '0.68rem', color: areaColor, fontWeight: '500' }}>
-                {usuario?.area} · {usuario?.rol}
-              </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{usuario?.nombre}</div>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontWeight: '500' }}>{usuario?.email?.split('@')[0]}</div>
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>
+               <NotificationCenter />
             </div>
           </div>
+          
           <button
             onClick={handleLogout}
             style={{
-              display: 'flex', alignItems: 'center', gap: '0.5rem',
-              width: '100%', padding: '0.5rem 0.75rem',
-              background: 'rgba(248,113,113,0.08)',
-              border: '1px solid rgba(248,113,113,0.2)',
-              borderRadius: '0.4rem', color: 'var(--color-error)',
-              fontSize: '0.8rem', fontWeight: '500', cursor: 'pointer',
-              transition: 'background 0.15s',
+              width: '100%', padding: '0.75rem', borderRadius: '10px',
+              background: 'rgba(239, 68, 68, 0.1)', border: 'none',
+              color: '#f87171', fontSize: '0.85rem', fontWeight: '700',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+              transition: 'all 0.2s'
             }}
-            onMouseOver={e => e.currentTarget.style.background = 'rgba(248,113,113,0.15)'}
-            onMouseOut={e  => e.currentTarget.style.background = 'rgba(248,113,113,0.08)'}
+            onMouseOver={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+            onMouseOut={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
           >
-            <IconLogout /> Cerrar sesión
+            <IconLogout /> Salir
           </button>
         </div>
       </aside>
 
-      {/* ── Main ────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-
-        {/* Topbar móvil */}
-        {isMobile && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '0.75rem',
-            padding: '0.75rem 1rem',
-            background: 'var(--color-surface-2)',
-            borderBottom: '1px solid var(--color-border)',
-            position: 'sticky', top: 0, zIndex: 30,
-          }}>
-            <button
-              onClick={() => setOpen(true)}
-              style={{ background: 'none', border: 'none', color: 'var(--color-text)', cursor: 'pointer' }}
-            ><IconMenu /></button>
-            <span style={{ fontWeight: '700', fontSize: '0.9rem' }}>CRM Interno</span>
+      {/* ── Content Area ───────────────────────────────────────────── */}
+      <main style={{ flex: 1, minWidth: 0, position: 'relative', height: '100vh', overflowY: 'auto', background: 'var(--color-bg-base)' }}>
+        {/* Top Header (Figma Style) */}
+        <header style={{
+          height: '70px', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)',
+          display: 'flex', alignItems: 'center', padding: '0 2.5rem', gap: '2rem', position: 'sticky', top: 0, zIndex: 90
+        }}>
+          {isMobile && (
+            <button onClick={() => setOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--color-text)', cursor: 'pointer' }}>
+              <IconMenu />
+            </button>
+          )}
+          
+          {/* Barra de Búsqueda */}
+          <div style={{ position: 'relative', flex: 1, maxWidth: '600px' }}>
+            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+            <input 
+              type="text" placeholder="Buscar proyectos, tareas o miembros..."
+              style={{
+                width: '100%', padding: '0.75rem 1rem 0.75rem 2.75rem', borderRadius: '12px',
+                background: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
+                fontSize: '0.9rem', outline: 'none', transition: 'var(--transition-base)'
+              }}
+              onFocus={e => e.target.style.borderColor = 'var(--color-primary)'}
+              onBlur={e => e.target.style.borderColor = 'var(--color-border)'}
+            />
           </div>
-        )}
 
-        <main style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginLeft: 'auto' }}>
+            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Bell size={20} /></div>
+            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Calendar size={20} /></div>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)' }} />
+          </div>
+        </header>
+
+        <div style={{ padding: isMobile ? '1.5rem' : '3rem', maxWidth: '1600px', margin: '0 auto' }}>
           {children}
-        </main>
-      </div>
+        </div>
+      </main>
+
+      {/* Overlay Móvil */}
+      {isMobile && open && (
+        <div 
+          onClick={() => setOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 99 }} 
+        />
+      )}
     </div>
   );
 };

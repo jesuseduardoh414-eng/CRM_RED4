@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
 import { logsService } from '../services/api';
+import { 
+  PlusCircle, 
+  Pencil, 
+  Zap, 
+  MessageSquare, 
+  Trash2, 
+  History,
+  RotateCw,
+  Inbox
+} from 'lucide-react';
 
 const ProjectActivityLog = ({ proyectoId }) => {
   const [logs, setLogs] = useState([]);
@@ -22,12 +32,12 @@ const ProjectActivityLog = ({ proyectoId }) => {
 
   const getIcon = (accion) => {
     switch (accion) {
-      case 'CREAR_TAREA':      return '🆕';
-      case 'EDITAR_TAREA':     return '✏️';
-      case 'CAMBIO_ESTADO':    return '⚡';
-      case 'NUEVO_COMENTARIO': return '💬';
-      case 'ELIMINAR_TAREA':   return '🗑️';
-      default: return '📜';
+      case 'CREAR_TAREA':      return <PlusCircle size={18} />;
+      case 'EDITAR_TAREA':     return <Pencil size={18} />;
+      case 'CAMBIO_ESTADO':    return <Zap size={18} />;
+      case 'NUEVO_COMENTARIO': return <MessageSquare size={18} />;
+      case 'ELIMINAR_TAREA':   return <Trash2 size={18} />;
+      default: return <History size={18} />;
     }
   };
 
@@ -44,13 +54,22 @@ const ProjectActivityLog = ({ proyectoId }) => {
     <div style={{ background: 'var(--color-surface-2)', borderRadius: '1.25rem', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
       <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: '800' }}>Historial de Actividad</h3>
-        <button onClick={fetchLogs} style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600' }}>Actualizar ↻</button>
+        <button 
+          onClick={fetchLogs} 
+          style={{ 
+            background: 'none', border: 'none', color: 'var(--color-primary)', 
+            cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600',
+            display: 'flex', alignItems: 'center', gap: '0.4rem'
+          }}
+        >
+          Actualizar <RotateCw size={14} />
+        </button>
       </div>
 
       <div style={{ maxHeight: '500px', overflowY: 'auto', padding: '1rem' }}>
         {logs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-muted)' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📭</div>
+          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ color: 'var(--color-text-dim)' }}><Inbox size={32} /></div>
             No hay actividades registradas aún.
           </div>
         ) : (

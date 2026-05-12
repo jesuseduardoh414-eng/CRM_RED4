@@ -43,7 +43,7 @@ const LoginPage = () => {
       alignItems: 'center',
       justifyContent: 'center',
       padding: '1.5rem',
-      background: 'radial-gradient(ellipse at top, #1e1b4b 0%, #0f172a 60%)',
+      background: '#ffffff',
     }}>
       <div style={{ width: '100%', maxWidth: '420px' }}>
 

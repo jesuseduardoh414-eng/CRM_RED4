@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { comentariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { MessageSquare, Trash2, Send } from 'lucide-react';
 
 const TaskComments = ({ tareaId, type = 'tareas' }) => {
   const { usuario } = useAuth();
@@ -65,7 +66,7 @@ const TaskComments = ({ tareaId, type = 'tareas' }) => {
       
       {/* Título de sección con estilo premium */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-        <span style={{ fontSize: '1.3rem' }}>💬</span>
+        <MessageSquare size={20} color="var(--color-primary)" />
         <h3 style={{ fontSize: '1.15rem', fontWeight: '900', color: 'var(--color-text)' }}>
           {type === 'proyectos' ? 'Muro del Proyecto' : 'Hilo de la Tarea'} <span style={{ color: 'var(--color-text-muted)', fontWeight: '400', fontSize: '0.9rem' }}>({comentarios.length})</span>
         </h3>
@@ -145,7 +146,9 @@ const TaskComments = ({ tareaId, type = 'tareas' }) => {
                         }}
                         onMouseOver={e => e.currentTarget.style.transform = 'scale(1.2)'}
                         onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
-                      >🗑️</button>
+                      >
+                        <Trash2 size={12} color="var(--color-accent-error)" />
+                      </button>
                     )}
                   </div>
                 </div>
@@ -197,7 +200,7 @@ const TaskComments = ({ tareaId, type = 'tareas' }) => {
               }}
             >
               {enviando ? 'Enviando...' : (
-                <><span>Enviar</span> 🚀</>
+                <><span>Enviar</span> <Send size={14} /></>
               )}
             </button>
           </div>

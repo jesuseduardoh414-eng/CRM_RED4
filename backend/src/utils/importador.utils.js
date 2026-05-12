@@ -39,7 +39,7 @@ const prisma = require('../lib/prisma');
 // ── Constantes de validación ────────────────────────────────────────────────
 const ESTADOS_VALIDOS   = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 const PRIORIDADES_VALID = ['BAJA', 'MEDIA', 'ALTA'];
-const COLUMNS_EXCEL     = ['titulo', 'descripcion', 'estado', 'prioridad', 'venceEn', 'asignadoEmail'];
+const COLUMNS_EXCEL     = ['titulo', 'descripcion', 'estado', 'prioridad', 'fechaInicio', 'venceEn', 'asignadoEmail'];
 
 /**
  * Valida y normaliza un objeto de tarea raw.
@@ -73,6 +73,14 @@ const validarFila = (raw, indice) => {
     }
   }
 
+  // Fecha fechaInicio
+  if (raw.fechaInicio) {
+    const fecha = new Date(raw.fechaInicio);
+    if (isNaN(fecha.getTime())) {
+      errores.push(`fechaInicio "${raw.fechaInicio}" no es una fecha válida (usa formato YYYY-MM-DD)`);
+    }
+  }
+
   // Fecha venceEn
   if (raw.venceEn) {
     const fecha = new Date(raw.venceEn);
@@ -92,6 +100,7 @@ const validarFila = (raw, indice) => {
       descripcion: raw.descripcion ? String(raw.descripcion).trim() : null,
       estado:      raw.estado    ? String(raw.estado).toUpperCase()    : 'PENDIENTE',
       prioridad:   raw.prioridad ? String(raw.prioridad).toUpperCase() : 'MEDIA',
+      fechaInicio: raw.fechaInicio ? new Date(raw.fechaInicio) : new Date(),
       venceEn:     raw.venceEn   ? new Date(raw.venceEn) : null,
       asignadoEmail: raw.asignadoEmail ? String(raw.asignadoEmail).trim().toLowerCase() : null,
     },
@@ -99,18 +108,9 @@ const validarFila = (raw, indice) => {
   };
 };
 
-/**
- * Resuelve asignadoEmail → asignadoId, verificando que sea miembro del proyecto.
- */
-const resolverAsignado = async (email, proyectoId, miembros) => {
-  if (!email) return null;
-  const miembro = miembros.find(m => m.email.toLowerCase() === email);
-  if (!miembro) return { error: `el email "${email}" no corresponde a ningún miembro del proyecto` };
-  return { id: miembro.id };
-};
 
 // ── Procesador JSON ─────────────────────────────────────────────────────────
-const procesarJSON = async (filePath, proyectoId, miembros, registrarActividad, usuarioId) => {
+const procesarJSON = async (filePath, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
   let raw;
   try {
     const contenido = fs.readFileSync(filePath, 'utf-8');
@@ -123,11 +123,11 @@ const procesarJSON = async (filePath, proyectoId, miembros, registrarActividad, 
     throw new Error('El archivo JSON debe contener un array de tareas en el nivel raíz');
   }
 
-  return procesarFilas(raw, proyectoId, miembros, registrarActividad, usuarioId);
+  return procesarFilas(raw, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
 };
 
 // ── Procesador Excel ────────────────────────────────────────────────────────
-const procesarExcel = async (filePath, proyectoId, miembros, registrarActividad, usuarioId) => {
+const procesarExcel = async (filePath, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
   let workbook;
   try {
     workbook = XLSX.readFile(filePath);
@@ -155,11 +155,11 @@ const procesarExcel = async (filePath, proyectoId, miembros, registrarActividad,
     COLUMNS_EXCEL.some(col => row[col] && String(row[col]).trim() !== '')
   );
 
-  return procesarFilas(filasValidas, proyectoId, miembros, registrarActividad, usuarioId);
+  return procesarFilas(filasValidas, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
 };
 
 // ── Procesamiento común ─────────────────────────────────────────────────────
-const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, usuarioId) => {
+const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
   const errores = [];
   const tareasACrear = [];
 
@@ -172,16 +172,21 @@ const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, us
       continue;
     }
 
-    // Resolver email → id de asignado
+    // Resolver asignado:
+    // 1. Si la fila tiene asignadoEmail, intentar resolverlo
+    // 2. Si no hay email o no se encontró, usar asignadoPorDefecto
+    // 3. Si nada, dejar sin asignar
     if (tarea.asignadoEmail) {
-      const resultado = await resolverAsignado(tarea.asignadoEmail, proyectoId, miembros);
-      if (resultado.error) {
-        errores.push({ fila: numeroFila, razon: resultado.error });
-        continue;
+      const miembro = miembros.find(m => m.email.toLowerCase() === tarea.asignadoEmail);
+      if (miembro) {
+        tarea.asignadoId = miembro.id;
+      } else {
+        // Email no encontrado → usar el default o dejar sin asignar (sin avisos ruidosos)
+        tarea.asignadoId = asignadoPorDefecto;
       }
-      tarea.asignadoId = resultado.id;
     } else {
-      tarea.asignadoId = null;
+      // Sin email en el archivo → usar el default
+      tarea.asignadoId = asignadoPorDefecto;
     }
 
     delete tarea.asignadoEmail;
@@ -217,6 +222,7 @@ const generarPlantillaJSON = () => {
       descripcion: "Crear wireframes y mockups para la nueva pantalla de reportes",
       estado: "PENDIENTE",
       prioridad: "ALTA",
+      fechaInicio: "2025-06-01",
       venceEn: "2025-06-15",
       asignadoEmail: "miembro@empresa.com"
     },
@@ -247,6 +253,7 @@ const generarPlantillaExcel = () => {
       descripcion: "Crear wireframes y mockups para la nueva pantalla de reportes",
       estado: "PENDIENTE",
       prioridad: "ALTA",
+      fechaInicio: "2025-06-01",
       venceEn: "2025-06-15",
       asignadoEmail: "miembro@empresa.com"
     },

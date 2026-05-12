@@ -3,6 +3,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { usuariosService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
+import { 
+  Pencil, 
+  Trash2, 
+  UserPlus
+} from 'lucide-react';
 
 const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION'];
 const ROLES = ['MIEMBRO', 'ADMIN'];
@@ -25,12 +30,7 @@ const UsuariosPage = () => {
     }
   }, [showToast]);
 
-  useEffect(() => {
-    const load = async () => {
-      await fetchUsuarios();
-    };
-    load();
-  }, [fetchUsuarios]);
+  useEffect(() => { fetchUsuarios(); }, [fetchUsuarios]);
 
   const handleEliminar = async (id) => {
     if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;
@@ -38,9 +38,7 @@ const UsuariosPage = () => {
       await usuariosService.eliminar(id);
       setUsuarios(prev => prev.filter(u => u.id !== id));
       showToast('Usuario eliminado', 'success');
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
+    } catch (error) { showToast(error.message, 'error'); }
   };
 
   const handleGuardar = () => {
@@ -52,83 +50,78 @@ const UsuariosPage = () => {
   if (cargando) return <Spinner texto="Cargando equipo..." />;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '3rem', flexWrap: 'wrap', gap: '2rem' }}>
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '0.5rem' }}>Gestión de Equipo</h1>
-          <p style={{ color: 'var(--color-text-muted)' }}>Administra los miembros, roles y accesos del CRM.</p>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '0.75rem' }}>Gestión de Equipo</h1>
+          <p style={{ fontSize: '1.1rem', color: 'var(--color-text-muted)' }}>Administra los miembros, roles y accesos del sistema.</p>
         </div>
         <button 
           onClick={() => { setUsuarioEditando(null); setModal(true); }}
           className="btn-primary"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          style={{ padding: '0.8rem 1.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
         >
-          <span>➕</span> Nuevo Miembro
+          <UserPlus size={18} /> Nuevo Miembro
         </button>
       </div>
 
-      <div style={{ 
-        background: 'var(--color-surface-2)', 
-        borderRadius: '1rem', 
-        border: '1px solid var(--color-border)',
-        overflow: 'hidden'
-      }}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--color-border)' }}>
-              <th style={{ textAlign: 'left', padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>MIEMBRO</th>
-              <th style={{ textAlign: 'left', padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>ÁREA</th>
-              <th style={{ textAlign: 'left', padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>ROL</th>
-              <th style={{ textAlign: 'left', padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>REGISTRO</th>
-              <th style={{ textAlign: 'right', padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>ACCIONES</th>
+            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MIEMBRO</th>
+              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ÁREA</th>
+              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ROL</th>
+              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>REGISTRO</th>
+              <th style={{ textAlign: 'right', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACCIONES</th>
             </tr>
           </thead>
           <tbody>
             {usuarios.map(u => (
-              <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.01)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                <td style={{ padding: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background 0.2s' }}>
+                <td style={{ padding: '1.25rem 1.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ 
-                      width: '36px', height: '36px', borderRadius: '10px', 
+                      width: '40px', height: '40px', borderRadius: '12px', 
                       background: 'var(--color-surface-3)', border: '1px solid var(--color-border)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: '800', color: 'var(--color-primary)'
+                      fontWeight: '800', color: 'var(--color-primary-light)', fontSize: '1rem'
                     }}>
                       {u.nombre.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div style={{ fontWeight: '700' }}>{u.nombre}</div>
+                      <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>{u.nombre}</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{u.email}</div>
                     </div>
                   </div>
                 </td>
-                <td style={{ padding: '1rem' }}>
+                <td style={{ padding: '1.25rem 1.5rem' }}>
                   <span style={{ 
-                    fontSize: '0.75rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '999px',
-                    background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)'
+                    fontSize: '0.7rem', fontWeight: '800', padding: '0.25rem 0.75rem', borderRadius: '6px',
+                    background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary-light)', textTransform: 'uppercase'
                   }}>{u.area}</span>
                 </td>
-                <td style={{ padding: '1rem' }}>
+                <td style={{ padding: '1.25rem 1.5rem' }}>
                   <span style={{ 
-                    fontSize: '0.75rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '999px',
-                    background: u.rol === 'ADMIN' ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)',
-                    color: u.rol === 'ADMIN' ? '#f59e0b' : '#10b981'
+                    fontSize: '0.7rem', fontWeight: '800', padding: '0.25rem 0.75rem', borderRadius: '6px',
+                    background: u.rol === 'ADMIN' ? 'rgba(255,145,0,0.1)' : 'rgba(0,209,102,0.1)',
+                    color: u.rol === 'ADMIN' ? '#ff9100' : '#00d166', textTransform: 'uppercase'
                   }}>{u.rol}</span>
                 </td>
-                <td style={{ padding: '1rem', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                  {new Date(u.creadoEn).toLocaleDateString()}
+                <td style={{ padding: '1.25rem 1.5rem', fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '500' }}>
+                  {new Date(u.creadoEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </td>
-                <td style={{ padding: '1rem', textAlign: 'right' }}>
-                  <button 
-                    onClick={() => { setUsuarioEditando(u); setModal(true); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', marginRight: '0.5rem' }}
-                    title="Editar"
-                  >✏️</button>
-                  <button 
-                    onClick={() => handleEliminar(u.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}
-                    title="Eliminar"
-                  >🗑️</button>
+                <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button 
+                      onClick={() => { setUsuarioEditando(u); setModal(true); }}
+                      style={{ background: 'var(--color-surface-3)', border: 'none', borderRadius: '0.5rem', padding: '0.5rem', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text)' }}
+                    ><Pencil size={14} /></button>
+                    <button 
+                      onClick={() => handleEliminar(u.id)}
+                      style={{ background: 'rgba(244,63,94,0.05)', border: 'none', borderRadius: '0.5rem', padding: '0.5rem', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-accent-error)' }}
+                    ><Trash2 size={14} /></button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -138,6 +131,7 @@ const UsuariosPage = () => {
 
       {modalAbierto && (
         <ModalUsuario 
+          key={usuarioEditando?.id || 'nuevo'}
           usuario={usuarioEditando} 
           onClose={() => { setModal(false); setUsuarioEditando(null); }}
           onGuardar={handleGuardar}
@@ -164,82 +158,57 @@ const ModalUsuario = ({ usuario, onClose, onGuardar }) => {
     try {
       if (usuario) {
         await usuariosService.editar(usuario.id, form);
-        showToast('Usuario actualizado', 'success');
+        showToast('Usuario actualizado');
       } else {
         await usuariosService.crear(form);
-        showToast('Usuario creado', 'success');
+        showToast('Usuario creado');
       }
       onGuardar();
-    } catch (error) {
-      showToast(error.message, 'error');
-    } finally {
-      setCargando(false);
-    }
+    } catch (error) { showToast(error.message, 'error'); }
+    finally { setCargando(false); }
   };
 
   return (
-    <div style={{ 
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem'
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ 
-        background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', 
-        borderRadius: '1.25rem', padding: '2rem', width: '100%', maxWidth: '450px',
-        animation: 'fadeSlideIn 0.2s ease'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '900', marginBottom: '1.5rem' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+      <div className="card" style={{ width: '100%', maxWidth: '500px', background: 'var(--color-surface-2)', padding: '2.5rem' }}>
+        <h2 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem', letterSpacing: '-0.02em' }}>
           {usuario ? 'Editar Miembro' : 'Nuevo Miembro'}
         </h2>
         
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div className="form-group">
-            <label className="form-label">Nombre Completo</label>
-            <input 
-              type="text" className="form-input" required 
-              value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})}
-            />
+            <label className="form-label">NOMBRE COMPLETO</label>
+            <input className="form-input" required value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Ej. Juan Pérez" />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Correo Electrónico</label>
-            <input 
-              type="email" className="form-input" required 
-              value={form.email} onChange={e => setForm({...form, email: e.target.value})}
-            />
+            <label className="form-label">CORREO ELECTRÓNICO</label>
+            <input type="email" className="form-input" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="juan@empresa.com" />
           </div>
 
           <div className="form-group">
-            <label className="form-label">
-              {usuario ? 'Nueva Contraseña (opcional)' : 'Contraseña'}
-            </label>
-            <input 
-              type="password" className="form-input" required={!usuario}
-              value={form.password} onChange={e => setForm({...form, password: e.target.value})}
-            />
+            <label className="form-label">{usuario ? 'NUEVA CONTRASEÑA (OPCIONAL)' : 'CONTRASEÑA'}</label>
+            <input type="password" className="form-input" required={!usuario} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
             <div className="form-group">
-              <label className="form-label">Área</label>
+              <label className="form-label">ÁREA</label>
               <select className="form-input form-select" value={form.area} onChange={e => setForm({...form, area: e.target.value})}>
                 {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Rol</label>
+              <label className="form-label">ROL</label>
               <select className="form-input form-select" value={form.rol} onChange={e => setForm({...form, rol: e.target.value})}>
                 {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '0.6rem', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-              Cancelar
-            </button>
-            <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 1 }}>
-              {cargando ? 'Guardando...' : 'Guardar'}
-            </button>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: '0.8rem', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '700', cursor: 'pointer' }}>CANCELAR</button>
+            <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 1.5 }}>{cargando ? 'GUARDANDO...' : 'GUARDAR'}</button>
           </div>
         </form>
       </div>

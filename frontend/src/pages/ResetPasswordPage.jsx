@@ -33,15 +33,15 @@ const ResetPasswordPage = () => {
   return (
     <div style={{ 
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(circle at top right, #1e1b4b, #020617)', padding: '1.5rem'
+      background: '#ffffff', padding: '1.5rem'
     }}>
       <div style={{ 
-        width: '100%', maxWidth: '400px', background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '1.5rem', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+        width: '100%', maxWidth: '400px', background: '#ffffff',
+        border: '1px solid var(--color-border)',
+        borderRadius: '1.5rem', padding: '2.5rem', boxShadow: 'var(--shadow-xl)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: '#fff' }}>Nueva Contraseña</h1>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)' }}>Nueva Contraseña</h1>
           <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
             Ingresa tu nueva clave de acceso segura.
           </p>

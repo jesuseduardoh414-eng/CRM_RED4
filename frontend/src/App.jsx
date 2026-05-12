@@ -16,6 +16,7 @@ import UsuariosPage          from './pages/UsuariosPage';
 import ForgotPasswordPage    from './pages/ForgotPasswordPage';
 import ResetPasswordPage     from './pages/ResetPasswordPage';
 import VerifyAccountPage     from './pages/VerifyAccountPage';
+import AgendaPage            from './pages/AgendaPage';
 
 // Redirige al dashboard si ya hay sesión activa (evita volver al login)
 const RutaPublica = ({ children }) => {
@@ -49,6 +50,7 @@ const AppRoutes = () => (
     <Route path="/proyectos/:id" element={<RutaConLayout><ProyectoDetallePage /></RutaConLayout>} />
     <Route path="/equipo"    element={<RutaConLayout><EquipoPage /></RutaConLayout>} />
     <Route path="/usuarios"  element={<RutaConLayout><UsuariosPage /></RutaConLayout>} />
+    <Route path="/agenda"    element={<RutaConLayout><AgendaPage /></RutaConLayout>} />
 
     {/* Fallback */}
     <Route path="*" element={<Navigate to="/dashboard" replace />} />

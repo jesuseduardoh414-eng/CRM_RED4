@@ -1,263 +1,255 @@
-// Página de Proyectos
-// Lista de proyectos en tarjetas, modal de crear/editar, botones de eliminar
-
+// Página de Proyectos (Material Design Premium)
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { proyectosService, usuariosService } from '../services/api';
 import Spinner from '../components/Spinner';
+import { 
+  Code2, 
+  BarChart3, 
+  Mail, 
+  Folder,
+  ArrowRight,
+  MoreVertical,
+  Edit,
+  Trash2,
+  Plus,
+  ExternalLink,
+  FolderOpen,
+  ChevronRight,
+  Pencil
+} from 'lucide-react';
 
-// ── Constantes de área ──────────────────────────────────────────────────────
-const AREA_CONFIG = {
-  DESARROLLO:     { label: 'Desarrollo',     color: '#6366f1', bg: 'rgba(99,102,241,0.15)',  border: 'rgba(99,102,241,0.35)',  icon: '💻' },
-  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)',  border: 'rgba(245,158,11,0.35)',  icon: '📊' },
-  COMUNICACION:   { label: 'Comunicación',   color: '#10b981', bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.35)', icon: '📢' },
+// ── Configuraciones Visuales ────────────────────────────────────────────────
+const AREA_CONF = {
+  DESARROLLO:     { label: 'Desarrollo',     color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={14} /> },
+  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  icon: <BarChart3 size={14} /> },
+  COMUNICACION:   { label: 'Comunicación',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={14} /> },
 };
 
-const ESTADOS = ['ACTIVO', 'EN_PAUSA', 'CERRADO'];
+const ESTADOS = [
+  { value: 'ACTIVO',   label: 'Activo',   color: '#00d166', bg: 'rgba(0,209,102,0.12)' },
+  { value: 'EN_PAUSA', label: 'En pausa', color: '#ff9100', bg: 'rgba(255,145,0,0.12)' },
+  { value: 'CERRADO',  label: 'Cerrado',  color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
+];
 
-// ── Modal crear/editar ──────────────────────────────────────────────────────
-const Modal = ({ proyecto, onClose, onGuardar }) => {
-  const [form, setForm]         = useState({
-    nombre:      proyecto?.nombre      || '',
+// ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
+const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
+  const area = AREA_CONF[proyecto.area] || { label: proyecto.area, color: '#94a3b8', bg: 'rgba(255,255,255,0.05)', icon: <Folder size={14} /> };
+  const estado = ESTADOS.find(e => e.value === proyecto.estado) || ESTADOS[0];
+  
+  // Calcular progreso real basado en tareas HECHO
+  const total = proyecto._count?.tareas || 0;
+  // Nota: necesitamos que el backend nos devuelva el conteo de hechas o calcularlo aquí si tenemos las tareas
+  // Por ahora simularemos un porcentaje o usaremos el dato si estuviera disponible. 
+  // En este punto el listado de proyectos usualmente solo trae _count.
+  const progreso = proyecto.progreso || 0; 
+
+  return (
+    <div 
+      onClick={onVerDetalle}
+      className="card" 
+      style={{ 
+        padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '1.25rem',
+        border: '1px solid var(--color-border)', transition: 'var(--transition-base)',
+        background: 'var(--color-surface)', borderRadius: '16px'
+      }}
+      onMouseOver={e => {
+        e.currentTarget.style.transform = 'translateY(-4px)';
+        e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
+        e.currentTarget.style.borderColor = 'var(--color-primary-light)';
+      }}
+      onMouseOut={e => {
+        e.currentTarget.style.transform = 'none';
+        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+        e.currentTarget.style.borderColor = 'var(--color-border)';
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--color-text)', marginBottom: '0.25rem' }}>{proyecto.nombre}</h3>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: estado.color, background: estado.bg, padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+              {estado.label}
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>
+              {area.label}
+            </span>
+          </div>
+        </div>
+        <div style={{ color: 'var(--color-primary)', opacity: 0.6, display: 'flex' }}>
+          <ChevronRight size={20} />
+        </div>
+      </div>
+
+      <p style={{ fontSize: '0.9rem', color: 'var(--color-text-dim)', lineHeight: 1.5, minHeight: '2.7rem' }}>
+        {proyecto.descripcion || 'Gestión operativa del proyecto y seguimiento de hitos.'}
+      </p>
+
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: '700' }}>
+          <span style={{ color: 'var(--color-text-muted)' }}>Progreso</span>
+          <span style={{ color: 'var(--color-text)' }}>{progreso}%</span>
+        </div>
+        <div style={{ height: '8px', background: 'var(--color-bg-base)', borderRadius: '10px', overflow: 'hidden' }}>
+          <div style={{ 
+            height: '100%', width: `${progreso}%`, 
+            background: 'var(--color-primary)', borderRadius: '10px',
+            transition: 'width 1s ease-in-out'
+          }} />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--color-border-light)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--color-surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: '800', border: '1px solid var(--color-border)' }}>
+            {proyecto.creador?.nombre?.charAt(0)}
+          </div>
+          <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--color-text-dim)' }}>{total} Tareas</span>
+        </div>
+        
+        {esAdmin && (
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEditar(proyecto); }}
+              style={{ padding: '0.4rem 0.75rem', borderRadius: '8px', background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--color-text)' }}
+            >
+              <Pencil size={12} /> Editar
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEliminar(proyecto); }}
+              style={{ padding: '0.4rem', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', border: 'none', color: 'var(--color-accent-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Modal de Proyecto ────────────────────────────────────────────────────────
+const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
+  const [form, setForm] = useState({
+    nombre: proyecto?.nombre || '',
     descripcion: proyecto?.descripcion || '',
-    estado:      proyecto?.estado      || 'ACTIVO',
-    primerComentario: '',
+    estado: proyecto?.estado || 'ACTIVO',
+    area: proyecto?.area || 'DESARROLLO',
+    fechaInicio: proyecto?.fechaInicio ? proyecto.fechaInicio.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    fechaFin: proyecto?.fechaFin ? proyecto.fechaFin.slice(0, 10) : '',
     miembrosIds: proyecto?.miembros?.map(m => m.id) || [],
   });
   const [usuarios, setUsuarios] = useState([]);
-  const [archivos, setArchivos] = useState([]);
-  const [error, setError]       = useState('');
   const [cargando, setCargando] = useState(false);
 
-  // Cargar usuarios para el selector
   useEffect(() => {
-    const cargarUsuarios = async () => {
-      try {
-        const { usuarios } = await usuariosService.listar();
-        setUsuarios(usuarios);
-      } catch (err) {
-        console.error('Error al cargar usuarios', err);
-      }
-    };
-    cargarUsuarios();
+    usuariosService.listar().then(d => setUsuarios(d.usuarios)).catch(console.error);
   }, []);
 
-  const handleChange = e => {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    setError('');
-  };
+  // Filtrar usuarios por el área seleccionada
+  const usuariosFiltrados = usuarios.filter(u => u.area === form.area);
 
-  const handleToggleMiembro = (id) => {
+  const toggleMiembro = (id) => {
     setForm(prev => {
-      const ids = [...prev.miembrosIds];
-      if (ids.includes(id)) {
-        return { ...prev, miembrosIds: ids.filter(mid => mid !== id) };
-      } else {
-        return { ...prev, miembrosIds: [...ids, id] };
-      }
+      const exists = prev.miembrosIds.includes(id);
+      if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
+      return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
   };
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.nombre.trim()) { setError('El nombre es requerido'); return; }
     setCargando(true);
     try {
-      if (proyecto) {
-        await proyectosService.editar(proyecto.id, form);
-      } else {
-        const fd = new FormData();
-        Object.entries(form).forEach(([k, v]) => {
-          if (k === 'miembrosIds') {
-            fd.append(k, JSON.stringify(v));
-          } else if (v) {
-            fd.append(k, v);
-          }
-        });
-        archivos.forEach(file => {
-          fd.append('archivos', file);
-        });
-        await proyectosService.crear(fd);
-      }
-      onGuardar(!!proyecto);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setCargando(false);
-    }
+      if (proyecto) await proyectosService.editar(proyecto.id, form);
+      else await proyectosService.crear(form);
+      onGuardar();
+    } catch (err) { alert(err.message); }
+    finally { setCargando(false); }
   };
 
   return (
-    // Fondo oscuro semitransparente
-    <div
-      onClick={e => e.target === e.currentTarget && onClose()}
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.65)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 100, padding: '1rem',
-        backdropFilter: 'blur(4px)',
-      }}
-    >
-      <div style={{
-        background: 'var(--color-surface-2)',
-        border: '1px solid var(--color-border)',
-        borderRadius: '1.25rem',
-        padding: '1.75rem',
-        width: '100%', maxWidth: '520px',
-        maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
-        animation: 'fadeSlideIn 0.18s ease',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: '700' }}>
-            {proyecto ? 'Editar proyecto' : 'Nuevo proyecto'}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none', border: 'none', color: 'var(--color-text-muted)',
-              fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1, padding: '0.2rem',
-            }}
-          >✕</button>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
-          {error && <div className="alert-error">{error}</div>}
-
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div className="card" style={{ width: '100%', maxWidth: '550px', background: 'var(--color-surface)', padding: '2.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h2 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem' }}>{proyecto ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="form-group">
-            <label className="form-label" htmlFor="modal-nombre">Nombre del proyecto</label>
-            <input
-              id="modal-nombre" name="nombre" type="text"
-              className="form-input" required
-              placeholder="Ej. Rediseño web Q3"
-              value={form.nombre} onChange={handleChange}
-            />
+            <label className="form-label">NOMBRE DEL PROYECTO</label>
+            <input className="form-input" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required placeholder="Ej: Rediseño de Marca" />
           </div>
-
           <div className="form-group">
-            <label className="form-label" htmlFor="modal-desc">Descripción (opcional)</label>
-            <textarea
-              id="modal-desc" name="descripcion"
-              className="form-input"
-              placeholder="Describe el objetivo del proyecto..."
-              rows={2}
-              value={form.descripcion} onChange={handleChange}
-              style={{ resize: 'vertical', fontFamily: 'inherit' }}
-            />
+            <label className="form-label">DESCRIPCIÓN</label>
+            <textarea className="form-input" rows="3" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Objetivos y alcance..." />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
-              <label className="form-label" htmlFor="modal-estado">Estado</label>
-              <select
-                id="modal-estado" name="estado"
-                className="form-input form-select"
-                value={form.estado} onChange={handleChange}
-              >
-                {ESTADOS.map(e => (
-                  <option key={e} value={e}>
-                    {e === 'ACTIVO' ? '🟢 Activo' : e === 'EN_PAUSA' ? '🟡 En pausa' : '🔴 Cerrado'}
-                  </option>
-                ))}
+              <label className="form-label">ESTADO</label>
+              <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
+                {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
               </select>
             </div>
-
             <div className="form-group">
-              <label className="form-label">Miembros involucrados</label>
-              <div style={{
-                background: 'var(--color-surface-3)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '0.5rem',
-                padding: '0.65rem',
-                minHeight: '100px', maxHeight: '150px', overflowY: 'auto',
-                display: 'flex', flexDirection: 'column', gap: '0.5rem'
-              }}>
-                {usuarios.length === 0 ? (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: '1.5rem' }}>
-                    Cargando equipo...
-                  </span>
-                ) : (
-                  usuarios.map(u => (
-                    <label key={u.id} style={{ 
-                      display: 'flex', alignItems: 'center', gap: '0.65rem', 
-                      cursor: 'pointer', fontSize: '0.85rem', padding: '0.25rem',
-                      borderRadius: '0.25rem', transition: 'background 0.15s'
-                    }}
-                      onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <input 
-                        type="checkbox" 
-                        checked={form.miembrosIds.includes(u.id)} 
-                        onChange={() => handleToggleMiembro(u.id)}
-                        style={{ cursor: 'pointer', accentColor: 'var(--color-primary)' }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ 
-                          color: form.miembrosIds.includes(u.id) ? 'var(--color-primary)' : 'var(--color-text)',
-                          fontWeight: form.miembrosIds.includes(u.id) ? '700' : '500'
-                        }}>
-                          {u.nombre}
-                        </span>
-                        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem' }}>
-                          {u.rol} • {u.area}
-                        </small>
-                      </div>
-                    </label>
-                  ))
-                )}
-              </div>
+              <label className="form-label">ÁREA RESPONSABLE</label>
+              <select 
+                className="form-input form-select" 
+                value={form.area} 
+                onChange={e => setForm({...form, area: e.target.value, miembrosIds: []})}
+              >
+                {Object.keys(AREA_CONF).map(k => <option key={k} value={k}>{AREA_CONF[k].label}</option>)}
+              </select>
             </div>
           </div>
 
-          {!proyecto && (
-            <>
-              {/* Primer Comentario */}
-              <div className="form-group" style={{ marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)' }}>
-                <label className="form-label" htmlFor="modal-com">Contexto Inicial / Primer Comentario</label>
-                <textarea
-                  id="modal-com" name="primerComentario"
-                  className="form-input"
-                  placeholder="Explica el contexto o pasos iniciales..."
-                  rows={2}
-                  value={form.primerComentario} onChange={handleChange}
-                  style={{ resize: 'vertical', fontFamily: 'inherit' }}
-                />
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">FECHA INICIO</label>
+              <input type="date" className="form-input" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">FECHA FIN (OPCIONAL)</label>
+              <input type="date" className="form-input" value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})} />
+            </div>
+          </div>
 
-              {/* Archivos */}
-              <div className="form-group">
-                <label className="form-label">Adjuntar Documentación Inicial</label>
-                <input 
-                  type="file" multiple 
-                  onChange={e => setArchivos([...e.target.files])}
-                  style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}
-                />
-              </div>
-            </>
-          )}
+          <div className="form-group">
+            <label className="form-label">SELECCIONAR RESPONSABLES ({form.area})</label>
+            <div style={{ 
+              display: 'flex', flexWrap: 'wrap', gap: '0.5rem', 
+              padding: '1rem', background: 'var(--color-surface-2)', 
+              borderRadius: '1rem', border: '1px solid var(--color-border)',
+              minHeight: '60px'
+            }}>
+              {usuariosFiltrados.length === 0 ? (
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)' }}>No hay usuarios en esta área</span>
+              ) : (
+                usuariosFiltrados.map(u => {
+                  const isSelected = form.miembrosIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id} type="button"
+                      onClick={() => toggleMiembro(u.id)}
+                      style={{
+                        padding: '0.4rem 0.8rem', borderRadius: '0.6rem', border: '1px solid',
+                        borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                        background: isSelected ? 'var(--color-primary)' : 'transparent',
+                        color: isSelected ? '#fff' : 'var(--color-text)',
+                        fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                      }}
+                    >
+                      {isSelected ? '✓ ' : '+ '}{u.nombre}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                flex: 1, padding: '0.7rem',
-                background: 'var(--color-surface-3)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '0.5rem',
-                color: 'var(--color-text-muted)',
-                cursor: 'pointer', fontWeight: '500', fontSize: '0.875rem',
-              }}
-            >
-              Cancelar
-            </button>
-            <button type="submit" className="btn-primary" disabled={cargando} style={{ flex: 1 }}>
-              {cargando ? 'Guardando...' : proyecto ? 'Guardar cambios' : 'Crear proyecto'}
-            </button>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--color-border-light)' }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-dim)', padding: '0.8rem', borderRadius: '0.85rem', cursor: 'pointer', fontWeight: '700' }}>CANCELAR</button>
+            <button type="submit" className="btn-primary" style={{ flex: 2 }} disabled={cargando}>{cargando ? 'GUARDANDO...' : 'GUARDAR PROYECTO'}</button>
           </div>
         </form>
       </div>
@@ -265,364 +257,95 @@ const Modal = ({ proyecto, onClose, onGuardar }) => {
   );
 };
 
-// ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
-const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
-  const area = AREA_CONFIG[proyecto.creador?.area] || {
-    label: proyecto.creador?.area, color: '#94a3b8', bg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.15)', icon: '📁',
-  };
-
-  const estadoBadge = {
-    ACTIVO:   { label: 'Activo',   color: '#34d399', bg: 'rgba(52,211,153,0.15)' },
-    EN_PAUSA: { label: 'En pausa', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' },
-    CERRADO:  { label: 'Cerrado',  color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' },
-  }[proyecto.estado] || { label: proyecto.estado, color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
-
-  return (
-    <div style={{
-      background: 'var(--color-surface-2)',
-      border: `1px solid ${area.border}`,
-      borderRadius: '1rem',
-      padding: '1.25rem',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '0.85rem',
-      transition: 'transform 0.2s, box-shadow 0.2s',
-    }}
-      onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 32px ${area.color}22`; }}
-      onMouseOut={e  => { e.currentTarget.style.transform = 'none';              e.currentTarget.style.boxShadow = 'none'; }}
-    >
-      {/* Cabecera: área + estado */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-        <span style={{
-          display: 'flex', alignItems: 'center', gap: '0.4rem',
-          padding: '0.25rem 0.7rem', borderRadius: '999px',
-          background: area.bg, color: area.color,
-          fontSize: '0.72rem', fontWeight: '600',
-        }}>
-          {area.icon} {area.label}
-        </span>
-        <span style={{
-          padding: '0.25rem 0.65rem', borderRadius: '999px',
-          background: estadoBadge.bg, color: estadoBadge.color,
-          fontSize: '0.85rem', fontWeight: '700',
-        }}>
-          {estadoBadge.label}
-        </span>
-      </div>
-
-      {/* Nombre y descripción — click navega al detalle */}
-      <div onClick={onVerDetalle} style={{ cursor: 'pointer' }}>
-        <h3 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.35rem', lineHeight: 1.3, color: 'var(--color-text)', transition: 'color 0.15s' }}
-          onMouseOver={e => e.currentTarget.style.color = 'var(--color-primary)'}
-          onMouseOut={e  => e.currentTarget.style.color = 'var(--color-text)'}
-        >
-          {proyecto.nombre}
-        </h3>
-        {proyecto.descripcion && (
-          <p style={{
-            fontSize: '1.05rem', color: 'var(--color-text-muted)', lineHeight: 1.5,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {proyecto.descripcion}
-          </p>
-        )}
-      </div>
-
-      {/* Metadata: creador y tareas */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-          👤 {proyecto.creador?.nombre}
-        </span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-          📋 {proyecto._count?.tareas} tarea{proyecto._count?.tareas !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      {/* Acciones — solo visibles para ADMIN */}
-      {esAdmin && (
-        <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)' }}>
-          <button
-            onClick={() => onEditar(proyecto)}
-            style={{
-              flex: 1, padding: '0.45rem',
-              background: 'var(--color-surface-3)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '0.4rem',
-              color: 'var(--color-text)',
-              fontSize: '0.78rem', fontWeight: '500', cursor: 'pointer',
-              transition: 'background 0.15s',
-            }}
-            onMouseOver={e => e.currentTarget.style.background = '#475569'}
-            onMouseOut={e  => e.currentTarget.style.background = 'var(--color-surface-3)'}
-          >
-            ✏️ Editar
-          </button>
-          <button
-            onClick={() => onEliminar(proyecto)}
-            style={{
-              padding: '0.45rem 0.75rem',
-              background: 'rgba(248,113,113,0.1)',
-              border: '1px solid rgba(248,113,113,0.25)',
-              borderRadius: '0.4rem',
-              color: 'var(--color-error)',
-              fontSize: '0.78rem', fontWeight: '500', cursor: 'pointer',
-              transition: 'background 0.15s',
-            }}
-            onMouseOver={e => e.currentTarget.style.background = 'rgba(248,113,113,0.2)'}
-            onMouseOut={e  => e.currentTarget.style.background = 'rgba(248,113,113,0.1)'}
-          >
-            🗑️
-          </button>
-        </div>
-      )}
-
-    </div>
-  );
-};
-
-// ── Página principal ────────────────────────────────────────────────────────
+// ── Componente Principal ─────────────────────────────────────────────────────
 const ProyectosPage = () => {
   const { usuario } = useAuth();
-  const navigate    = useNavigate();
+  const navigate = useNavigate();
   const { showToast } = useToast();
-  const esAdmin     = usuario?.rol === 'ADMIN';
+  const esAdmin = usuario?.rol === 'ADMIN';
 
-  const [proyectos, setProyectos]           = useState([]);
-  const [cargando, setCargando]             = useState(true);
-  const [error, setError]                   = useState('');
-  const [modalAbierto, setModalAbierto]     = useState(false);
-  const [proyectoEditando, setProyectoEditando] = useState(null);
-  const [filtroEstado, setFiltroEstado]     = useState('TODOS');
-  const [filtradoPorUsuario, setFiltradoPorUsuario] = useState(false);
+  const [proyectos, setProyectos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [filtro, setFiltro] = useState('TODOS');
 
-  // Cargar proyectos del backend
-  const cargarProyectos = useCallback(async () => {
+  const cargar = useCallback(async () => {
     setCargando(true);
-    setError('');
     try {
       const data = await proyectosService.listar();
       setProyectos(data.proyectos);
-      setFiltradoPorUsuario(data.filtradoPorUsuario ?? false);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setCargando(false);
-    }
-  }, []);
+    } catch (err) { showToast(err.message, 'error'); }
+    finally { setCargando(false); }
+  }, [showToast]);
 
-  useEffect(() => {
-    const init = async () => {
-      await cargarProyectos();
-    };
-    init();
-  }, [cargarProyectos]);
+  useEffect(() => { cargar(); }, [cargar]);
 
-  // Abrir modal para crear
-  const handleCrear = () => {
-    setProyectoEditando(null);
-    setModalAbierto(true);
-  };
-
-  // Abrir modal para editar
-  const handleEditar = (proyecto) => {
-    setProyectoEditando(proyecto);
-    setModalAbierto(true);
-  };
-
-  // Eliminar con confirmación
-  const handleEliminar = async (proyecto) => {
-    if (!window.confirm(`¿Eliminar el proyecto "${proyecto.nombre}"? Esta acción no se puede deshacer.`)) return;
+  const handleEliminar = async (p) => {
+    if (!window.confirm(`¿Eliminar "${p.nombre}"?`)) return;
     try {
-      await proyectosService.eliminar(proyecto.id);
-      setProyectos(prev => prev.filter(p => p.id !== proyecto.id));
-      showToast('Proyecto eliminado', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
+      await proyectosService.eliminar(p.id);
+      setProyectos(prev => prev.filter(x => x.id !== p.id));
+      showToast('Proyecto eliminado');
+    } catch (err) { showToast(err.message, 'error'); }
   };
 
-  // Al guardar en el modal, recargar la lista, mostrar toast y cerrar
-  const handleGuardar = (esEdicion) => {
-    setModalAbierto(false);
-    showToast(esEdicion ? 'Proyecto actualizado' : 'Proyecto creado con éxito', 'success');
-    cargarProyectos();
-  };
+  const filtrados = filtro === 'TODOS' ? proyectos : proyectos.filter(p => p.estado === filtro);
 
-  // Exportar todos los proyectos como JSON
-  const handleExportar = () => {
-    const datos = {
-      exportadoEn: new Date().toISOString(),
-      total: proyectos.length,
-      proyectos,
-    };
-    const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `proyectos-crm-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Proyectos exportados correctamente', 'success');
-  };
-
-  // Filtrado local por estado
-  const proyectosFiltrados = filtroEstado === 'TODOS'
-    ? proyectos
-    : proyectos.filter(p => p.estado === filtroEstado);
+  if (cargando) return <Spinner texto="Sincronizando proyectos..." />;
 
   return (
-    <>
-      {/* Animación del modal */}
-      <style>{`
-        @keyframes fadeSlideIn {
-          from { opacity: 0; transform: translateY(-12px) scale(0.97); }
-          to   { opacity: 1; transform: none; }
-        }
-      `}</style>
-
-      <div style={{ padding: '1.5rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
-
-        {/* Encabezado */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 style={{ fontSize: '2.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>Proyectos</h1>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '1.15rem' }}>
-              {proyectos.length} proyecto{proyectos.length !== 1 ? 's' : ''} en total
-            </p>
-          </div>
-          {esAdmin && (
-            <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              {/* Exportar JSON */}
-              <button
-                onClick={handleExportar}
-                title="Exportar todos los proyectos como JSON"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '0.35rem',
-                  padding: '0.6rem 1rem',
-                  background: 'var(--color-surface-3)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '0.6rem',
-                  color: 'var(--color-text-muted)', fontWeight: '500', fontSize: '0.82rem',
-                  cursor: 'pointer', transition: 'background 0.15s',
-                }}
-                onMouseOver={e => { e.currentTarget.style.background = '#334155'; e.currentTarget.style.color = 'var(--color-text)'; }}
-                onMouseOut={e  => { e.currentTarget.style.background = 'var(--color-surface-3)'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
-              >
-                ⬇️ Exportar JSON
-              </button>
-
-              {/* Nuevo proyecto */}
-              <button
-                onClick={handleCrear}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '0.4rem',
-                  padding: '0.65rem 1.25rem',
-                  background: 'var(--color-primary)',
-                  border: 'none', borderRadius: '0.6rem',
-                  color: '#fff', fontWeight: '600', fontSize: '0.875rem',
-                  cursor: 'pointer', transition: 'background 0.15s',
-                }}
-                onMouseOver={e => e.currentTarget.style.background = 'var(--color-primary-dark)'}
-                onMouseOut={e  => e.currentTarget.style.background = 'var(--color-primary)'}
-              >
-                + Nuevo proyecto
-              </button>
-            </div>
-          )}
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '2rem' }}>
+        <div>
+          <h1 style={{ fontSize: '3rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1 }}>Proyectos</h1>
+          <p style={{ fontSize: '1.1rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Gestión estratégica y operativa del equipo</p>
         </div>
-
-        {/* Banner: vista filtrada para miembros */}
-        {filtradoPorUsuario && (
-          <div style={{
-            background: 'rgba(99,102,241,0.08)',
-            border: '1px solid rgba(99,102,241,0.2)',
-            borderRadius: '0.75rem',
-            padding: '0.85rem 1.25rem',
-            marginBottom: '1.5rem',
-            display: 'flex', alignItems: 'center', gap: '0.85rem',
-            fontSize: '0.84rem', color: 'var(--color-text)',
-          }}>
-            <span style={{ fontSize: '1.25rem' }}>🛡️</span>
-            <p style={{ margin: 0 }}>
-              Estás viendo solo los <strong>proyectos donde tienes tareas asignadas</strong>.
-              El administrador puede ver la lista completa.
-            </p>
-          </div>
-        )}
-
-        {/* Filtros */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-          {['TODOS', ...ESTADOS].map(estado => (
-            <button
-              key={estado}
-              onClick={() => setFiltroEstado(estado)}
-              style={{
-                padding: '0.35rem 0.9rem',
-                borderRadius: '999px',
-                border: '1px solid',
-                fontSize: '0.8rem', fontWeight: '500',
-                cursor: 'pointer', transition: 'all 0.15s',
-                borderColor: filtroEstado === estado ? 'var(--color-primary)' : 'var(--color-border)',
-                background:   filtroEstado === estado ? 'var(--color-primary)' : 'transparent',
-                color:        filtroEstado === estado ? '#fff' : 'var(--color-text-muted)',
-              }}
-            >
-              {estado === 'TODOS' ? 'Todos' : estado === 'ACTIVO' ? 'Activos' : estado === 'EN_PAUSA' ? 'En pausa' : 'Cerrados'}
-            </button>
-          ))}
-        </div>
-
-        {/* Error */}
-        {error && <div className="alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-
-        {/* Grid de proyectos */}
-        {cargando ? (
-          <Spinner texto="Cargando proyectos..." />
-        ) : proyectosFiltrados.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '4rem 2rem',
-            background: 'var(--color-surface-2)',
-            border: '1px dashed var(--color-border)',
-            borderRadius: '1rem',
-            color: 'var(--color-text-muted)',
-          }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📁</div>
-            <div style={{ fontWeight: '600', marginBottom: '0.4rem' }}>
-              {filtroEstado === 'TODOS' ? 'Aún no hay proyectos' : `No hay proyectos "${filtroEstado.toLowerCase()}"`}
-            </div>
-            <div style={{ fontSize: '0.85rem' }}>
-              {filtroEstado === 'TODOS' ? 'Crea el primer proyecto con el botón de arriba.' : 'Prueba con otro filtro.'}
-            </div>
-          </div>
-        ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: '1.25rem',
-            }}>
-            {proyectosFiltrados.map(proyecto => (
-              <ProyectoCard
-                key={proyecto.id}
-                proyecto={proyecto}
-                onEditar={handleEditar}
-                onEliminar={handleEliminar}
-                onVerDetalle={() => navigate(`/proyectos/${proyecto.id}`)}
-                esAdmin={esAdmin}
-              />
-            ))}
-          </div>
+        {esAdmin && (
+          <button onClick={() => { setEditando(null); setModal(true); }} className="btn-primary" style={{ padding: '0.9rem 2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Plus size={20} /> Nuevo Proyecto
+          </button>
         )}
       </div>
 
-      {/* Modal crear/editar */}
-      {modalAbierto && (
-        <Modal
-          proyecto={proyectoEditando}
-          onClose={() => setModalAbierto(false)}
-          onGuardar={handleGuardar}
-        />
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2.5rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+        {['TODOS', 'ACTIVO', 'EN_PAUSA', 'CERRADO'].map(f => (
+          <button
+            key={f} onClick={() => setFiltro(f)}
+            style={{
+              padding: '0.6rem 1.25rem', borderRadius: '999px', border: '1px solid var(--color-border)',
+              background: filtro === f ? 'var(--color-primary)' : 'var(--color-surface-2)',
+              color: filtro === f ? '#fff' : 'var(--color-text-muted)',
+              fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            {f === 'TODOS' ? 'Todos' : ESTADOS.find(e => e.value === f)?.label}
+          </button>
+        ))}
+      </div>
+
+      {filtrados.length === 0 ? (
+        <div className="card" style={{ padding: '5rem', textAlign: 'center', border: '2px dashed var(--color-border)', background: 'transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ color: 'var(--color-text-dim)' }}><FolderOpen size={48} /></div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-text-dim)' }}>No se encontraron proyectos</h3>
+          <p style={{ color: 'var(--color-text-muted)' }}>Comienza creando uno nuevo o cambia el filtro.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '2rem' }}>
+          {filtrados.map(p => (
+            <ProyectoCard 
+              key={p.id} proyecto={p} esAdmin={esAdmin} 
+              onEditar={setEditando} 
+              onEliminar={handleEliminar}
+              onVerDetalle={() => navigate(`/proyectos/${p.id}`)}
+            />
+          ))}
+        </div>
       )}
-    </>
+
+      {modal && <ModalProyecto proyecto={editando} onClose={() => setModal(false)} onGuardar={() => { setModal(false); cargar(); }} />}
+    </div>
   );
 };
 

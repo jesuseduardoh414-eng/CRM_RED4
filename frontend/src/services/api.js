@@ -146,9 +146,11 @@ export const tareasService = {
   },
 
   // ── Importación masiva ──────────────────────────────────────────────────
-  importar: async (proyectoId, archivo) => {
+  importar: async (proyectoId, archivo, modoAsignacion = 'archivo', asignadoId = null) => {
     const fd = new FormData();
     fd.append('archivo', archivo);
+    fd.append('modoAsignacion', modoAsignacion);
+    if (asignadoId) fd.append('asignadoId', asignadoId);
     const token = localStorage.getItem('crm_token');
     const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar`, {
       method: 'POST',
@@ -284,4 +286,88 @@ export const statsService = {
     const res = await fetch(`${API_URL}/stats/admin`, { headers: getHeaders() });
     return handleResponse(res);
   }
+};
+
+// ── Agenda Personal ────────────────────────────────────────────────────────
+export const agendaService = {
+  listar: async (fechaInicio, fechaFin) => {
+    let url = `${API_URL}/agenda`;
+    if (fechaInicio && fechaFin) {
+      url += `?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+    }
+    const res = await fetch(url, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  crear: async (datos) => {
+    const res = await fetch(`${API_URL}/agenda`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
+    });
+    return handleResponse(res);
+  },
+  editar: async (id, datos) => {
+    const res = await fetch(`${API_URL}/agenda/${id}`, {
+      method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos),
+    });
+    return handleResponse(res);
+  },
+  eliminar: async (id) => {
+    const res = await fetch(`${API_URL}/agenda/${id}`, {
+      method: 'DELETE', headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+  recordatorios: async () => {
+    const res = await fetch(`${API_URL}/agenda/recordatorios`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  // Phase 8.1 - Compartidos e Invitaciones
+  invitacionesPendientes: async () => {
+    const res = await fetch(`${API_URL}/agenda/invitaciones/pendientes`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  responderInvitacion: async (id, estado) => {
+    const res = await fetch(`${API_URL}/agenda/${id}/responder`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ estado }),
+    });
+    return handleResponse(res);
+  },
+  consultarDisponibilidad: async ({ usuarios_ids, inicio, fin }) => {
+    const params = new URLSearchParams({ usuarios_ids, inicio });
+    if (fin) params.append('fin', fin);
+    const res = await fetch(`${API_URL}/agenda/disponibilidad?${params}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  // Phase 8.1 - Configuración Laboral
+  getConfigLaboral: async () => {
+    const res = await fetch(`${API_URL}/agenda/config-laboral`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  updateConfigLaboral: async (payload) => {
+    const res = await fetch(`${API_URL}/agenda/config-laboral`, {
+      method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  // Phase 8.1 - Días Especiales
+  listarDiasEspeciales: async (mes, anio) => {
+    let url = `${API_URL}/agenda/dias-especiales`;
+    if (mes && anio) url += `?mes=${mes}&anio=${anio}`;
+    const res = await fetch(url, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  crearDiaEspecial: async (payload) => {
+    const res = await fetch(`${API_URL}/agenda/dias-especiales`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+  eliminarDiaEspecial: async (id) => {
+    const res = await fetch(`${API_URL}/agenda/dias-especiales/${id}`, {
+      method: 'DELETE', headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
 };

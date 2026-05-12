@@ -6,9 +6,9 @@ import { createContext, useContext, useState, useCallback, useRef } from 'react'
 const ToastContext = createContext(null);
 
 const TIPOS = {
-  success: { color: '#34d399', bg: 'rgba(52,211,153,0.12)', border: 'rgba(52,211,153,0.3)', icon: '✅' },
-  error:   { color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)', icon: '❌' },
-  info:    { color: '#818cf8', bg: 'rgba(129,140,248,0.12)', border: 'rgba(129,140,248,0.3)', icon: 'ℹ️' },
+  success: { color: '#fff', bg: '#10b981', border: '#059669', icon: '✅' },
+  error:   { color: '#fff', bg: '#ef4444', border: '#dc2626', icon: '❌' },
+  info:    { color: '#fff', bg: '#3b82f6', border: '#2563eb', icon: 'ℹ️' },
 };
 
 export const ToastProvider = ({ children }) => {
@@ -29,9 +29,9 @@ export const ToastProvider = ({ children }) => {
 
       {/* Contenedor fijo de toasts */}
       <div style={{
-        position: 'fixed', bottom: '1.5rem', right: '1.5rem',
-        zIndex: 999, display: 'flex', flexDirection: 'column',
-        gap: '0.5rem', maxWidth: '360px',
+        position: 'fixed', bottom: '2rem', right: '2rem',
+        zIndex: 9999, display: 'flex', flexDirection: 'column',
+        gap: '0.75rem', maxWidth: '400px',
       }}>
         {toasts.map(toast => {
           const conf = TIPOS[toast.type] || TIPOS.info;
@@ -39,25 +39,34 @@ export const ToastProvider = ({ children }) => {
             <div
               key={toast.id}
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.75rem',
-                padding: '0.75rem 1rem',
+                display: 'flex', alignItems: 'center', gap: '1rem',
+                padding: '1rem 1.25rem',
                 background: conf.bg,
                 border: `1px solid ${conf.border}`,
-                borderRadius: '0.75rem',
+                borderRadius: '1rem',
                 color: conf.color,
-                fontSize: '0.875rem', fontWeight: '500',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                animation: 'toastIn 0.25s ease',
-                backdropFilter: 'blur(8px)',
+                fontSize: '0.9rem', fontWeight: '700',
+                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
+                animation: 'toastIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+                backdropFilter: 'blur(4px)',
+                minWidth: '280px'
               }}
             >
-              <span style={{ fontSize: '1rem', flexShrink: 0 }}>{conf.icon}</span>
-              <span style={{ flex: 1, color: '#f1f5f9' }}>{toast.message}</span>
+              <div style={{ 
+                width: '24px', height: '24px', borderRadius: '50%', 
+                background: 'rgba(255,255,255,0.2)', display: 'flex', 
+                alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' 
+              }}>
+                {conf.icon}
+              </div>
+              <span style={{ flex: 1 }}>{toast.message}</span>
               <button
                 onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
                 style={{
-                  background: 'none', border: 'none', color: '#94a3b8',
-                  cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: 0,
+                  background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
+                  cursor: 'pointer', width: '20px', height: '20px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.6rem', padding: 0,
                 }}
               >✕</button>
             </div>

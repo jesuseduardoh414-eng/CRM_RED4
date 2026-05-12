@@ -10,6 +10,7 @@ const { routerProyecto, routerTarea }   = require('./routes/tareas.routes');
 const usuariosRoutes                    = require('./routes/usuarios.routes');
 const notificacionesRoutes              = require('./routes/notificaciones.routes');
 const statsRoutes                       = require('./routes/stats.routes');
+const agendaRoutes                      = require('./routes/agenda.routes');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +31,7 @@ app.use('/api/tareas',                      routerTarea);    // PUT, DELETE, PAT
 app.use('/api/usuarios',                    usuariosRoutes);
 app.use('/api/notificaciones',              notificacionesRoutes);
 app.use('/api/stats',                       statsRoutes);
+app.use('/api/agenda',                      agendaRoutes);
 
 // Ruta de salud para verificar que el servidor está corriendo
 app.get('/api/health', (_req, res) => {

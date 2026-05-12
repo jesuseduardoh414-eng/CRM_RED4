@@ -86,7 +86,7 @@ const equipo = async (req, res) => {
 
 // ── POST /api/proyectos ─────────────────────────────────────────────────────
 const crear = async (req, res) => {
-  const { nombre, descripcion, estado, primerComentario, miembrosIds } = req.body;
+  const { nombre, descripcion, estado, area, fechaInicio, fechaFin, primerComentario, miembrosIds } = req.body;
   const archivos = req.files;
 
   if (!nombre || nombre.trim() === '') {
@@ -107,6 +107,9 @@ const crear = async (req, res) => {
         nombre:      nombre.trim(),
         descripcion: descripcion?.trim() || null,
         estado:      estado || 'ACTIVO',
+        area:        area || 'DESARROLLO',
+        fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date(),
+        fechaFin:    fechaFin ? new Date(fechaFin) : null,
         creadorId:   req.usuario.id,
         miembros: {
           connect: ids.map(id => ({ id: Number(id) }))
@@ -160,7 +163,7 @@ const crear = async (req, res) => {
 // ── PUT /api/proyectos/:id ──────────────────────────────────────────────────
 const editar = async (req, res) => {
   const id = parseInt(req.params.id);
-  const { nombre, descripcion, estado, miembrosIds } = req.body;
+  const { nombre, descripcion, estado, area, fechaInicio, fechaFin, miembrosIds } = req.body;
   if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
 
   try {

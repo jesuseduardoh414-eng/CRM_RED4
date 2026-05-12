@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { notificacionesService } from '../services/api';
+import { Bell, CheckCheck } from 'lucide-react';
 
 const NotificationCenter = () => {
   const [notificaciones, setNotificaciones] = useState([]);
@@ -87,7 +88,7 @@ const NotificationCenter = () => {
           }
         }}
       >
-        🔔
+        <Bell size={20} fill={unreadCount > 0 ? "currentColor" : "none"} />
         {unreadCount > 0 && (
           <span style={{
             position: 'absolute', top: '-5px', right: '-5px',
@@ -96,7 +97,7 @@ const NotificationCenter = () => {
             width: '20px', height: '20px', borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid var(--color-surface)',
-            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
+            boxShadow: '0 2px 8px rgba(255, 255, 255, 0.2)'
           }}>
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
@@ -130,10 +131,11 @@ const NotificationCenter = () => {
                 onClick={handleMarcarTodas}
                 style={{
                   background: 'none', border: 'none', color: 'var(--color-primary)',
-                  fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer'
+                  fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '0.25rem'
                 }}
               >
-                Marcar todas
+                <CheckCheck size={14} /> Marcar todas
               </button>
             )}
           </div>
@@ -151,7 +153,7 @@ const NotificationCenter = () => {
                   style={{
                     padding: '0.9rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.05)',
                     cursor: n.leida ? 'default' : 'pointer',
-                    background: n.leida ? 'transparent' : 'rgba(129,140,248,0.05)',
+                    background: n.leida ? 'transparent' : 'rgba(255,255,255,0.05)',
                     transition: 'background 0.2s',
                     position: 'relative'
                   }}
