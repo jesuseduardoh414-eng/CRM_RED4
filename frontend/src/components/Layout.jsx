@@ -118,7 +118,7 @@ const Layout = ({ children }) => {
         {/* Logo Branding (Centered & Large) */}
         <div style={{ padding: '3rem 1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
           <img 
-            src="/logo.png" 
+            src="/logo_favicon.png" 
             alt="Red 4 Design" 
             style={{ 
               width: '100%', maxWidth: '200px', height: 'auto',
