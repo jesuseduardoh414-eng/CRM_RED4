@@ -17,7 +17,7 @@ const routerTarea    = express.Router();
 routerProyecto.use(verificarToken);
 routerTarea.use(verificarToken);
 
-// ── Plantillas descargables ────────────────────────────────────────────────
+//  Plantillas descargables 
 routerTarea.get('/plantilla/json',  plantillaJSON);
 routerTarea.get('/plantilla/excel', plantillaExcel);
 
@@ -25,7 +25,7 @@ routerTarea.get('/plantilla/excel', plantillaExcel);
 routerProyecto.get('/',  listar);
 routerProyecto.post('/', upload.array('archivos', 5), crear);
 
-// ── Importación masiva ─────────────────────────────────────────────────────
+//  Importación masiva 
 routerProyecto.post('/importar', uploadImport.single('archivo'), importar);
 
 // Editar y cambiar estado (cualquier usuario autenticado)

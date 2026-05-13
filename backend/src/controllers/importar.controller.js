@@ -1,6 +1,6 @@
 /**
  * Controlador de Importación Masiva de Tareas
- * ────────────────────────────────────────────
+ * 
  * POST /api/proyectos/:proyectoId/tareas/importar
  * GET  /api/tareas/plantilla/json
  * GET  /api/tareas/plantilla/excel
@@ -17,7 +17,7 @@ const {
   generarPlantillaExcel,
 } = require('../utils/importador.utils');
 
-// ── POST /api/proyectos/:proyectoId/tareas/importar ─────────────────────────
+//  POST /api/proyectos/:proyectoId/tareas/importar 
 const importar = async (req, res) => {
   // El routerProyecto se monta en /api/proyectos/:id/tareas,
   // por lo que el parámetro del proyecto se llama 'id'
@@ -106,7 +106,7 @@ const importar = async (req, res) => {
   }
 };
 
-// ── GET /api/tareas/plantilla/json ──────────────────────────────────────────
+//  GET /api/tareas/plantilla/json 
 const plantillaJSON = (_req, res) => {
   const datos = generarPlantillaJSON();
   const json  = JSON.stringify(datos, null, 2);
@@ -116,7 +116,7 @@ const plantillaJSON = (_req, res) => {
   res.send(json);
 };
 
-// ── GET /api/tareas/plantilla/excel ─────────────────────────────────────────
+//  GET /api/tareas/plantilla/excel 
 const plantillaExcel = (_req, res) => {
   const buffer = generarPlantillaExcel();
 

@@ -11,7 +11,7 @@ const register = async (req, res) => {
   return res.status(403).json({ error: 'El registro pÃºblico estÃ¡ deshabilitado. Solicita una invitaciÃ³n al administrador.' });
 };
 
-// â”€â”€ GET /api/auth/verify/:token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ GET /api/auth/verify/:token €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const verifyAccount = async (req, res) => {
   const { token } = req.params;
 
@@ -48,7 +48,7 @@ const verifyAccount = async (req, res) => {
   }
 };
 
-// â”€â”€ POST /api/auth/login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ POST /api/auth/login €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const login = async (req, res) => {
   const { email, password } = req.body;
 
@@ -90,7 +90,7 @@ const login = async (req, res) => {
   }
 };
 
-// â”€â”€ POST /api/auth/forgot-password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ POST /api/auth/forgot-password €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email es requerido' });
@@ -126,7 +126,7 @@ const forgotPassword = async (req, res) => {
   }
 };
 
-// â”€â”€ POST /api/auth/reset-password/:token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ POST /api/auth/reset-password/:token €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const resetPassword = async (req, res) => {
   const { token } = req.params;
   const { password } = req.body;
@@ -183,7 +183,7 @@ const me = async (req, res) => {
   }
 };
 
-// â”€â”€ INVITACIONES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ INVITACIONES €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 
 const invitar = async (req, res) => {
   const { nombre, email, area, rol } = req.body;

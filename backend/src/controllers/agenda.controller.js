@@ -1,7 +1,7 @@
 // Controlador de Agenda Personal y Compartida
 const prisma = require('../lib/prisma');
 
-// â”€â”€ Utilidad: expandir evento recurrente en ocurrencias â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ Utilidad: expandir evento recurrente en ocurrencias €€€€€€€€€€€€€€€€€€€€€
 function expandirRecurrente(evento, desdeDate, hastaDate) {
   if (!evento.esRecurrente || !evento.patronRecurrencia) return [];
   try {
@@ -40,7 +40,7 @@ function expandirRecurrente(evento, desdeDate, hastaDate) {
   } catch { return []; }
 }
 
-// â”€â”€ GET /api/agenda â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ GET /api/agenda €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 // Listar eventos del usuario (propios + invitados)
 const listar = async (req, res) => {
   const { fecha_inicio, fecha_fin } = req.query;
@@ -102,7 +102,7 @@ const listar = async (req, res) => {
   }
 };
 
-// â”€â”€ PUT /api/agenda/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ PUT /api/agenda/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const editar = async (req, res) => {
   const { id } = req.params;
   const usuarioId = req.usuario.id;
@@ -289,7 +289,7 @@ const crear = async (req, res) => {
 };
 
 
-// â”€â”€ PATCH /api/agenda/:id/responder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ PATCH /api/agenda/:id/responder €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const responderInvitacion = async (req, res) => {
   const { id } = req.params;
   const { estado } = req.body; // 'aceptado', 'rechazado'
@@ -320,7 +320,7 @@ const responderInvitacion = async (req, res) => {
   }
 };
 
-// â”€â”€ GET /api/agenda/invitaciones/pendientes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ GET /api/agenda/invitaciones/pendientes €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const invitacionesPendientes = async (req, res) => {
   const usuarioId = req.usuario.id;
 
@@ -342,7 +342,7 @@ const invitacionesPendientes = async (req, res) => {
   }
 };
 
-// â”€â”€ DELETE /api/agenda/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ DELETE /api/agenda/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const eliminar = async (req, res) => {
   const { id } = req.params;
   const usuarioId = req.usuario.id;
@@ -372,7 +372,7 @@ const eliminar = async (req, res) => {
   }
 };
 
-// â”€â”€ GET /api/agenda/disponibilidad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ GET /api/agenda/disponibilidad €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const consultarDisponibilidad = async (req, res) => {
   const { usuarios_ids, inicio, fin } = req.query;
   if (!usuarios_ids || !inicio) return res.status(400).json({ error: 'Faltan parÃ¡metros' });
@@ -407,7 +407,7 @@ const consultarDisponibilidad = async (req, res) => {
   }
 };
 
-// â”€â”€ CALENDARIO LABORAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ CALENDARIO LABORAL €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 
 const getConfigLaboral = async (req, res) => {
   const usuarioId = req.usuario.id;
@@ -465,7 +465,7 @@ const updateConfigLaboral = async (req, res) => {
   }
 };
 
-// â”€â”€ DÃAS ESPECIALES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ DÃAS ESPECIALES €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 
 const listarDiasEspeciales = async (req, res) => {
   const usuarioId = req.usuario.id;

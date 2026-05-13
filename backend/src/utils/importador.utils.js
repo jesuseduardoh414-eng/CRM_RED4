@@ -3,7 +3,7 @@
  * ===========================================
  * 
  * ESTRUCTURA DE LA BASE DE DATOS (tabla "tareas"):
- * ─────────────────────────────────────────────────
+ * 
  *   id          Int       Auto-generado (no incluir en importación)
  *   titulo      String    OBLIGATORIO - Título descriptivo de la tarea
  *   descripcion String?   Opcional - Descripción detallada
@@ -16,11 +16,11 @@
  *   proyectoId  Int       Provisto por la URL, no incluir en el archivo
  * 
  * FORMATO EXCEL (primera fila = encabezados exactos):
- * ────────────────────────────────────────────────────
+ * 
  *   titulo | descripcion | estado | prioridad | venceEn | asignadoEmail
  * 
  * FORMATO JSON (array de objetos):
- * ─────────────────────────────────
+ * 
  *   [
  *     { "titulo": "...", "descripcion": "...", "estado": "...",
  *       "prioridad": "...", "venceEn": "YYYY-MM-DD", "asignadoEmail": "..." },
@@ -36,7 +36,7 @@ const path = require('path');
 const XLSX = require('xlsx');
 const prisma = require('../lib/prisma');
 
-// ── Constantes de validación ────────────────────────────────────────────────
+//  Constantes de validación 
 const ESTADOS_VALIDOS   = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 const PRIORIDADES_VALID = ['BAJA', 'MEDIA', 'ALTA'];
 const COLUMNS_EXCEL     = ['titulo', 'descripcion', 'estado', 'prioridad', 'fechaInicio', 'venceEn', 'asignadoEmail'];
@@ -109,7 +109,7 @@ const validarFila = (raw, indice) => {
 };
 
 
-// ── Procesador JSON ─────────────────────────────────────────────────────────
+//  Procesador JSON 
 const procesarJSON = async (filePath, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
   let raw;
   try {
@@ -126,7 +126,7 @@ const procesarJSON = async (filePath, proyectoId, miembros, registrarActividad, 
   return procesarFilas(raw, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
 };
 
-// ── Procesador Excel ────────────────────────────────────────────────────────
+//  Procesador Excel 
 const procesarExcel = async (filePath, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
   let workbook;
   try {
@@ -158,7 +158,7 @@ const procesarExcel = async (filePath, proyectoId, miembros, registrarActividad,
   return procesarFilas(filasValidas, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
 };
 
-// ── Procesamiento común ─────────────────────────────────────────────────────
+//  Procesamiento común 
 const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
   const errores = [];
   const tareasACrear = [];
@@ -214,7 +214,7 @@ const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, us
   return { creadas, errores };
 };
 
-// ── Generador de plantilla JSON ─────────────────────────────────────────────
+//  Generador de plantilla JSON 
 const generarPlantillaJSON = () => {
   return [
     {
@@ -245,7 +245,7 @@ const generarPlantillaJSON = () => {
   ];
 };
 
-// ── Generador de plantilla Excel ────────────────────────────────────────────
+//  Generador de plantilla Excel 
 const generarPlantillaExcel = () => {
   const datos = [
     {

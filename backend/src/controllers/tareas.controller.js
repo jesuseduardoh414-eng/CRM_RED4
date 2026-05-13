@@ -1,14 +1,14 @@
 // Controlador de Tareas
-// GET    /api/proyectos/:id/tareas  → listar tareas de un proyecto
-// POST   /api/proyectos/:id/tareas  → crear tarea
-// PUT    /api/tareas/:id            → editar tarea
-// DELETE /api/tareas/:id            → eliminar tarea
-// PATCH  /api/tareas/:id/estado     → actualizar solo el estado
+// GET    /api/proyectos/:id/tareas  †’ listar tareas de un proyecto
+// POST   /api/proyectos/:id/tareas  †’ crear tarea
+// PUT    /api/tareas/:id            †’ editar tarea
+// DELETE /api/tareas/:id            †’ eliminar tarea
+// PATCH  /api/tareas/:id/estado     †’ actualizar solo el estado
 
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
 
-// Selector común para incluir datos del asignado sin exponer password
+// Selector comÃºn para incluir datos del asignado sin exponer password
 const INCLUDE_ASIGNADO = {
   asignado: {
     select: { id: true, nombre: true, area: true },
@@ -32,12 +32,12 @@ const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
   }
 };
 
-// ── GET /api/proyectos/:id/tareas ───────────────────────────────────────────
-// ADMIN → ve todas las tareas del proyecto
-// MIEMBRO → ve únicamente sus tareas asignadas
+// €€ GET /api/proyectos/:id/tareas €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
+// ADMIN †’ ve todas las tareas del proyecto
+// MIEMBRO †’ ve Ãºnicamente sus tareas asignadas
 const listar = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
-  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
+  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto invÃ¡lido' });
 
   try {
     // Verificar que el proyecto existe
@@ -47,7 +47,7 @@ const listar = async (req, res) => {
     });
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
 
-    // Construir el filtro según el rol del usuario autenticado
+    // Construir el filtro segÃºn el rol del usuario autenticado
     const esAdmin = req.usuario.rol === 'ADMIN';
     const where = {
       proyectoId,
@@ -64,7 +64,7 @@ const listar = async (req, res) => {
     return res.json({
       proyecto,
       tareas,
-      // Indicar al frontend si la vista está filtrada
+      // Indicar al frontend si la vista estÃ¡ filtrada
       filtradoPorUsuario: !esAdmin,
     });
   } catch (error) {
@@ -73,16 +73,16 @@ const listar = async (req, res) => {
   }
 };
 
-// ── POST /api/proyectos/:id/tareas ──────────────────────────────────────────
+// €€ POST /api/proyectos/:id/tareas €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const crear = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
-  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
+  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto invÃ¡lido' });
 
   const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId, primerComentario } = req.body;
   const archivos = req.files;
 
   if (!titulo || titulo.trim() === '') {
-    return res.status(400).json({ error: 'El título de la tarea es requerido' });
+    return res.status(400).json({ error: 'El tÃ­tulo de la tarea es requerido' });
   }
 
   try {
@@ -161,7 +161,7 @@ const crear = async (req, res) => {
       req.usuario.id,
       proyectoId,
       'CREAR_TAREA',
-      `${req.usuario.nombre} creó la tarea "${tarea.titulo}"${archivos?.length ? ` con ${archivos.length} archivos` : ''}`
+      `${req.usuario.nombre} creÃ³ la tarea "${tarea.titulo}"${archivos?.length ? ` con ${archivos.length} archivos` : ''}`
     );
 
     return res.status(201).json({ mensaje: 'Tarea creada exitosamente', tarea });
@@ -171,10 +171,10 @@ const crear = async (req, res) => {
   }
 };
 
-// ── PUT /api/tareas/:id ─────────────────────────────────────────────────────
+// €€ PUT /api/tareas/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const editar = async (req, res) => {
   const id = parseInt(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
 
   const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId } = req.body;
 
@@ -203,9 +203,9 @@ const editar = async (req, res) => {
       if (existente.asignadoId !== tarea.asignadoId) {
         msg = `Te han asignado la tarea: "${tarea.titulo}"`;
       } else if (existente.estado !== tarea.estado) {
-        msg = `El estado de tu tarea "${tarea.titulo}" cambió a ${tarea.estado}`;
+        msg = `El estado de tu tarea "${tarea.titulo}" cambiÃ³ a ${tarea.estado}`;
       } else {
-        msg = `Se actualizó la información de tu tarea: "${tarea.titulo}"`;
+        msg = `Se actualizÃ³ la informaciÃ³n de tu tarea: "${tarea.titulo}"`;
       }
       
       await crearNotificacion(tarea.asignadoId, msg, 'URGENTE', tarea.id);
@@ -216,7 +216,7 @@ const editar = async (req, res) => {
       req.usuario.id,
       tarea.proyectoId,
       'EDITAR_TAREA',
-      `${req.usuario.nombre} editó la tarea "${tarea.titulo}"`
+      `${req.usuario.nombre} editÃ³ la tarea "${tarea.titulo}"`
     );
 
     return res.json({ mensaje: 'Tarea actualizada', tarea });
@@ -226,10 +226,13 @@ const editar = async (req, res) => {
   }
 };
 
-// ── DELETE /api/tareas/:id ──────────────────────────────────────────────────
+// €€ DELETE /api/tareas/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const eliminar = async (req, res) => {
   const id = parseInt(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (req.usuario.rol !== 'ADMIN') {
+    return res.status(403).json({ error: 'Solo los administradores pueden eliminar tareas' });
+  }
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
 
   try {
     const existente = await prisma.tarea.findUnique({ where: { id } });
@@ -242,7 +245,7 @@ const eliminar = async (req, res) => {
       req.usuario.id,
       existente.proyectoId,
       'ELIMINAR_TAREA',
-      `${req.usuario.nombre} eliminó la tarea "${existente.titulo}"`
+      `${req.usuario.nombre} eliminÃ³ la tarea "${existente.titulo}"`
     );
     return res.json({ mensaje: 'Tarea eliminada' });
   } catch (error) {
@@ -251,16 +254,16 @@ const eliminar = async (req, res) => {
   }
 };
 
-// ── PATCH /api/tareas/:id/estado ────────────────────────────────────────────
-// Solo actualiza el campo estado (acción rápida inline)
+// €€ PATCH /api/tareas/:id/estado €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
+// Solo actualiza el campo estado (acciÃ³n rÃ¡pida inline)
 const actualizarEstado = async (req, res) => {
   const id = parseInt(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
 
   const { estado } = req.body;
   const estadosValidos = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
   if (!estadosValidos.includes(estado)) {
-    return res.status(400).json({ error: `Estado inválido. Debe ser: ${estadosValidos.join(', ')}` });
+    return res.status(400).json({ error: `Estado invÃ¡lido. Debe ser: ${estadosValidos.join(', ')}` });
   }
 
   try {
@@ -273,7 +276,7 @@ const actualizarEstado = async (req, res) => {
     if (tarea.asignadoId && tarea.asignadoId !== req.usuario.id) {
       await crearNotificacion(
         tarea.asignadoId,
-        `El estado de tu tarea "${tarea.titulo}" cambió a ${tarea.estado}`,
+        `El estado de tu tarea "${tarea.titulo}" cambiÃ³ a ${tarea.estado}`,
         'ESTADO',
         tarea.id
       );
@@ -284,7 +287,7 @@ const actualizarEstado = async (req, res) => {
       req.usuario.id,
       tarea.proyectoId,
       'CAMBIO_ESTADO',
-      `${req.usuario.nombre} cambió el estado de "${tarea.titulo}" a ${tarea.estado}`
+      `${req.usuario.nombre} cambiÃ³ el estado de "${tarea.titulo}" a ${tarea.estado}`
     );
 
     return res.json({ mensaje: 'Estado actualizado', tarea });

@@ -1,6 +1,6 @@
 ﻿// Controlador de Proyectos
-// ADMIN â†’ ve todos los proyectos
-// MIEMBRO â†’ solo los proyectos donde tiene tareas asignadas
+// ADMIN †’ ve todos los proyectos
+// MIEMBRO †’ solo los proyectos donde tiene tareas asignadas
 
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
@@ -12,7 +12,7 @@ const INCLUDE_PROYECTO = {
   _count:  { select: { tareas: true } },
 };
 
-// â”€â”€ GET /api/proyectos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ GET /api/proyectos €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 // ADMIN: todos los proyectos
 // MIEMBRO: solo proyectos donde es miembro explÃ­cito
 const listar = async (req, res) => {
@@ -37,7 +37,7 @@ const listar = async (req, res) => {
   }
 };
 
-// â”€â”€ GET /api/proyectos/:id/equipo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ GET /api/proyectos/:id/equipo €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 // Devuelve los miembros asignados oficialmente al proyecto
 const equipo = async (req, res) => {
   const id = parseInt(req.params.id);
@@ -84,7 +84,7 @@ const equipo = async (req, res) => {
   }
 };
 
-// â”€â”€ POST /api/proyectos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ POST /api/proyectos €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const crear = async (req, res) => {
   const { nombre, descripcion, estado, area, fechaInicio, fechaFin, primerComentario, miembrosIds } = req.body;
   const archivos = req.files;
@@ -160,7 +160,7 @@ const crear = async (req, res) => {
   }
 };
 
-// â”€â”€ PUT /api/proyectos/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ PUT /api/proyectos/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const editar = async (req, res) => {
   const id = parseInt(req.params.id);
   const { nombre, descripcion, estado, area, fechaInicio, fechaFin, miembrosIds } = req.body;
@@ -205,7 +205,7 @@ const editar = async (req, res) => {
   }
 };
 
-// â”€â”€ DELETE /api/proyectos/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// €€ DELETE /api/proyectos/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const eliminar = async (req, res) => {
   const id = parseInt(req.params.id);
   if (req.usuario.rol !== 'ADMIN') {
