@@ -146,7 +146,6 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   };
 
   return (
-  return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4">
       <div className="bg-white w-full max-w-xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
         {/* Header */}
