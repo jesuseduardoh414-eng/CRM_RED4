@@ -306,7 +306,7 @@ const ProyectosPage = () => {
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const esAdmin = usuario?.rol === 'ADMIN';
+  const esAdmin = usuario?.rol?.toUpperCase() === 'ADMIN';
 
   const [proyectos, setProyectos] = useState([]);
   const [cargando, setCargando] = useState(true);
