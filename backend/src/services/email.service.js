@@ -1,7 +1,11 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Forzar al servidor a preferir IPv4 sobre IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
+  host: 'smtp.googlemail.com',
   port: 465,
   secure: true,
   auth: {
