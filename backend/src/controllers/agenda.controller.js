@@ -169,32 +169,31 @@ const editar = async (req, res) => {
 async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento, esGlobal = false) {
   try {
     if (!prisma) return;
-    const creatorInt = parseInt(creadorId);
-    console.log(`[agenda] Generando notificaciones. Global: ${esGlobal}, Invitados: ${invitadosIds.length}`);
-    
-    const creador = await prisma.usuario.findUnique({ where: { id: creatorInt }, select: { nombre: true } });
-    let targets = [];
+    const cid = parseInt(creadorId);
+    const creador = await prisma.usuario.findUnique({ where: { id: cid }, select: { nombre: true } });
+    const nombreCreador = creador?.nombre || 'Un miembro';
 
+    let ids = [];
     if (esGlobal) {
-      const todos = await prisma.usuario.findMany({ where: { id: { not: creatorInt } }, select: { id: true } });
-      targets = todos.map(u => u.id);
-    } else {
-      targets = (invitadosIds || []).map(id => parseInt(id)).filter(id => id !== creatorInt && !isNaN(id));
+      const u = await prisma.usuario.findMany({ where: { id: { not: cid } }, select: { id: true } });
+      ids = u.map(x => x.id);
+    } else if (invitadosIds && invitadosIds.length > 0) {
+      ids = invitadosIds.map(i => parseInt(i)).filter(i => i !== cid && !isNaN(i));
     }
 
-    const notifications = targets.map(id => ({
-      usuarioId: id,
+    if (ids.length === 0) return;
+
+    const data = ids.map(uid => ({
+      usuarioId: uid,
       tipo: 'recordatorio',
-      mensaje: `${creador?.nombre || 'Alguien'} te ha invitado al evento: ${tituloEvento}`,
+      mensaje: `${nombreCreador} te ha invitado a: ${tituloEvento}`,
       leida: false
     }));
 
-    if (notifications.length > 0) {
-      const result = await prisma.notificacion.createMany({ data: notifications });
-      console.log(`[agenda] Se guardaron ${result.count} notificaciones en DB.`);
-    }
-  } catch (error) {
-    console.error('[agenda.crearNotificacionesInvitados] ERROR:', error);
+    await prisma.notificacion.createMany({ data });
+    console.log(`[Notif] ${data.length} alertas enviadas.`);
+  } catch (err) {
+    console.error('[Notif] Error:', err.message);
   }
 }
 
