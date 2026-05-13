@@ -1,13 +1,16 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
-  secure: false, // true for 465, false for other ports
+  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.EMAIL_PORT || '587'),
+  secure: parseInt(process.env.EMAIL_PORT || '587') === 465, // true for 465, false for 587
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  tls: {
+    rejectUnauthorized: false // Helps with some SMTP server certificate issues
+  }
 });
 
 const sendResetEmail = async (email, token) => {
@@ -36,10 +39,15 @@ const sendResetEmail = async (email, token) => {
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`[Email] Correo de recuperación enviado a ${email}`);
+    console.log(`[Email Success] Correo de recuperación enviado a ${email}`);
   } catch (error) {
-    console.error('[Email Error]', error);
-    throw new Error('Error al enviar el correo de recuperación');
+    console.error('[Email Error Details]:', {
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      stack: error.stack
+    });
+    throw new Error(`Error al enviar el correo: ${error.message}`);
   }
 };
 

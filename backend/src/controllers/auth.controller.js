@@ -117,8 +117,12 @@ const forgotPassword = async (req, res) => {
 
     return res.json({ mensaje: 'Si el correo está registrado, recibirás un enlace de recuperación' });
   } catch (error) {
-    console.error('[forgotPassword]', error);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('[forgotPassword Error]:', error);
+    return res.status(500).json({ 
+      error: 'Error interno del servidor', 
+      details: error.message,
+      code: error.code
+    });
   }
 };
 
