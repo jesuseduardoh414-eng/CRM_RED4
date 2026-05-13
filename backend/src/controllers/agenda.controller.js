@@ -183,15 +183,18 @@ async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, t
 
     if (ids.length === 0) return;
 
-    const data = ids.map(uid => ({
-      usuarioId: uid,
-      tipo: 'recordatorio',
-      mensaje: `${nombreCreador} te ha invitado a: ${tituloEvento}`,
-      leida: false
-    }));
-
-    await prisma.notificacion.createMany({ data });
-    console.log(`[Notif] ${data.length} alertas enviadas.`);
+    // Enviar una por una para asegurar el trigger de Supabase Realtime
+    await Promise.all(ids.map(uid => 
+      prisma.notificacion.create({
+        data: {
+          usuarioId: uid,
+          tipo: 'recordatorio',
+          mensaje: `${nombreCreador} te ha invitado a: ${tituloEvento}`,
+          leida: false
+        }
+      })
+    ));
+    console.log(`[Notif] ${ids.length} alertas enviadas individualmente.`);
   } catch (err) {
     console.error('[Notif] Error:', err.message);
   }

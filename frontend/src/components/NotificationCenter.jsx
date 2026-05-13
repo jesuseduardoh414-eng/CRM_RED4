@@ -32,26 +32,24 @@ const NotificationCenter = () => {
     if (!supabase) return;
 
     const channel = supabase
-      .channel(`notificaciones-usuario-${usuario.id}`)
+      .channel(`user-notifs-${usuario.id}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notificaciones'
-        },
+        { event: 'INSERT', schema: 'public', table: 'notificaciones' },
         (payload) => {
-          if (payload.new && payload.new.usuarioId === usuario.id) {
-            console.log('✅ [Realtime] Nueva notificación:', payload.new);
+          console.log('🔔 [Realtime] Cambio detectado:', payload);
+          // Comparación flexible (==) para evitar fallos de tipo string/number
+          if (payload.new && payload.new.usuarioId == usuario.id) {
+            console.log('✅ [Realtime] Es para mí! Actualizando lista...');
             setNotificaciones(prev => [payload.new, ...prev]);
+            
+            // Sonido o vibración ligera si es posible
+            if ('vibrate' in navigator) navigator.vibrate(50);
           }
         }
       )
       .subscribe((status) => {
-        console.log(`📡 [Realtime] Estado de conexión: ${status}`);
-        if (status === 'CHANNEL_ERROR') {
-          console.error('❌ [Realtime] Error de conexión. Verifica la VITE_SUPABASE_KEY y que Realtime esté activo en la tabla.');
-        }
+        console.log(`📡 [Realtime] Estado: ${status}`);
       });
 
     return () => {
