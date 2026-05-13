@@ -280,49 +280,53 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
             </div>
           </div>
 
-          {/* Colores */}
-          <div className="form-group">
-            <label className="form-label" style={{ letterSpacing: '0.05em' }}>IDENTIFICADOR VISUAL</label>
-            <div style={{ display: 'flex', gap: '1rem', padding: '0.5rem 0', flexWrap: 'wrap' }}>
-              {COLORES.map(c => (
-                <button 
-                  key={c.hex} 
-                  type="button" 
-                  onClick={() => esDuenio && setForm({...form, color: c.hex})} 
-                  style={{ 
-                    width: '32px', height: '32px', borderRadius: '10px', background: c.hex, 
-                    border: form.color === c.hex ? '3px solid #fff' : 'none', 
-                    boxShadow: form.color === c.hex ? `0 0 0 2px ${c.hex}, 0 4px 12px ${c.hex}66` : 'none', 
-                    cursor: esDuenio ? 'pointer' : 'default', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    transform: form.color === c.hex ? 'scale(1.1)' : 'scale(1)'
-                  }} 
-                />
-              ))}
+          {/* Colores - Solo dueño */}
+          {esDuenio && (
+            <div className="form-group">
+              <label className="form-label" style={{ letterSpacing: '0.05em' }}>IDENTIFICADOR VISUAL</label>
+              <div style={{ display: 'flex', gap: '1rem', padding: '0.5rem 0', flexWrap: 'wrap' }}>
+                {COLORES.map(c => (
+                  <button 
+                    key={c.hex} 
+                    type="button" 
+                    onClick={() => esDuenio && setForm({...form, color: c.hex})} 
+                    style={{ 
+                      width: '32px', height: '32px', borderRadius: '10px', background: c.hex, 
+                      border: form.color === c.hex ? '3px solid #fff' : 'none', 
+                      boxShadow: form.color === c.hex ? `0 0 0 2px ${c.hex}, 0 4px 12px ${c.hex}66` : 'none', 
+                      cursor: esDuenio ? 'pointer' : 'default', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      transform: form.color === c.hex ? 'scale(1.1)' : 'scale(1)'
+                    }} 
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--color-border-light)', margin: '0.5rem 0' }} />
 
           {/* COMPARTIR */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px solid var(--color-border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.1)', borderRadius: '12px' }}>
-                <Users size={22} color="var(--color-primary)" />
+          {esDuenio && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.1)', borderRadius: '12px' }}>
+                  <Users size={22} color="var(--color-primary)" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.01em' }}>Colaboración</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>Define quién puede ver este evento</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.01em' }}>Colaboración</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>Define quién puede ver este evento</div>
-              </div>
+              <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px' }}>
+                <input type="checkbox" checked={form.es_compartido} onChange={e => setForm({...form, es_compartido: e.target.checked})} style={{ opacity: 0, width: 0, height: 0 }} disabled={!esDuenio} />
+                <span className="slider" style={{ position: 'absolute', cursor: esDuenio ? 'pointer' : 'default', top: 0, left: 0, right: 0, bottom: 0, background: form.es_compartido ? 'var(--color-primary)' : '#cbd5e1', transition: '.4s', borderRadius: '34px' }}>
+                  <span style={{ position: 'absolute', height: '20px', width: '20px', left: form.es_compartido ? '26px' : '4px', bottom: '4px', background: 'white', transition: '.4s', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}></span>
+                </span>
+              </label>
             </div>
-            <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px' }}>
-              <input type="checkbox" checked={form.es_compartido} onChange={e => setForm({...form, es_compartido: e.target.checked})} style={{ opacity: 0, width: 0, height: 0 }} disabled={!esDuenio} />
-              <span className="slider" style={{ position: 'absolute', cursor: esDuenio ? 'pointer' : 'default', top: 0, left: 0, right: 0, bottom: 0, background: form.es_compartido ? 'var(--color-primary)' : '#cbd5e1', transition: '.4s', borderRadius: '34px' }}>
-                <span style={{ position: 'absolute', height: '20px', width: '20px', left: form.es_compartido ? '26px' : '4px', bottom: '4px', background: 'white', transition: '.4s', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}></span>
-              </span>
-            </label>
-          </div>
+          )}
 
-          {form.es_compartido && (
+          {esDuenio && form.es_compartido && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem', border: '1px solid var(--color-border)', borderRadius: '1.5rem', background: 'var(--color-surface)' }}>
               
               <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--color-bg-base)', padding: '0.5rem', borderRadius: '14px', border: '1px solid var(--color-border)' }}>

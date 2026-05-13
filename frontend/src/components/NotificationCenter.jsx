@@ -87,17 +87,17 @@ const NotificationCenter = () => {
       <button
         onClick={() => setOpen(!open)}
         style={{
-          background: open ? 'var(--color-surface-3)' : 'rgba(255,255,255,0.03)',
+          background: open ? 'var(--color-surface-3)' : 'var(--color-bg-base)',
           border: '1px solid var(--color-border)',
           cursor: 'pointer',
-          width: '45px', height: '45px',
+          width: '42px', height: '42px',
           borderRadius: '12px',
           position: 'relative',
           fontSize: '1.2rem',
           color: unreadCount > 0 ? 'var(--color-primary)' : 'var(--color-text-muted)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          boxShadow: open ? 'inset 0 2px 4px rgba(0,0,0,0.2)' : 'none',
+          boxShadow: open ? 'inset 0 2px 4px rgba(0,0,0,0.05)' : 'var(--shadow-sm)',
         }}
         onMouseOver={e => {
           e.currentTarget.style.background = 'var(--color-surface-3)';
@@ -105,7 +105,7 @@ const NotificationCenter = () => {
         }}
         onMouseOut={e => {
           if (!open) {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+            e.currentTarget.style.background = 'var(--color-bg-base)';
             e.currentTarget.style.borderColor = 'var(--color-border)';
           }
         }}
@@ -129,17 +129,17 @@ const NotificationCenter = () => {
       {/* Dropdown - Abre hacia ARRIBA porque está al fondo del sidebar */}
       {open && (
         <div style={{
-          position: 'absolute', bottom: '120%', left: '0',
+          position: 'absolute', top: '120%', right: '0',
           width: '320px', background: 'var(--color-surface-2)',
           border: '1px solid var(--color-border)', borderRadius: '1.25rem',
           boxShadow: '0 15px 50px rgba(0,0,0,0.5)',
-          zIndex: 100, overflow: 'hidden',
+          zIndex: 1000, overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
-          animation: 'slideUp 0.2s ease-out'
+          animation: 'slideDown 0.2s ease-out'
         }}>
           <style>{`
-            @keyframes slideUp {
-              from { opacity: 0; transform: translateY(10px); }
+            @keyframes slideDown {
+              from { opacity: 0; transform: translateY(-10px); }
               to { opacity: 1; transform: translateY(0); }
             }
           `}</style>
