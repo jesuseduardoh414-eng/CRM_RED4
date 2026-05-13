@@ -7,7 +7,7 @@ import { ToastProvider } from './context/ToastContext';
 import RutaProtegida  from './components/RutaProtegida';
 import Layout         from './components/Layout';
 import LoginPage      from './pages/LoginPage';
-import RegisterPage   from './pages/RegisterPage';
+import InvitationPage from './pages/InvitationPage';
 import DashboardPage  from './pages/DashboardPage';
 import ProyectosPage         from './pages/ProyectosPage';
 import ProyectoDetallePage   from './pages/ProyectoDetallePage';
@@ -39,7 +39,7 @@ const AppRoutes = () => (
 
     {/* Rutas públicas */}
     <Route path="/login"    element={<RutaPublica><LoginPage /></RutaPublica>} />
-    <Route path="/register" element={<RutaPublica><RegisterPage /></RutaPublica>} />
+    <Route path="/invitacion/:token" element={<InvitationPage />} />
     <Route path="/forgot-password" element={<RutaPublica><ForgotPasswordPage /></RutaPublica>} />
     <Route path="/reset-password/:token" element={<RutaPublica><ResetPasswordPage /></RutaPublica>} />
     <Route path="/verify/:token" element={<VerifyAccountPage />} />

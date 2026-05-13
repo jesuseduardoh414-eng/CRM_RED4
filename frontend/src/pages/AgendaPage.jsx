@@ -58,6 +58,13 @@ const AgendaPage = () => {
   const [showInvitaciones, setShowInvitaciones] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [prefillData, setPrefillData] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -75,7 +82,7 @@ const AgendaPage = () => {
       setInvitaciones(resI.invitaciones || []);
       setConfigLaboral(resC.config || null);
       setDiasEspeciales(resD.dias || []);
-    } catch (error) {
+    } catch (err) {
       showToast('Error al cargar la agenda', 'error');
     } finally {
       setCargando(false);
@@ -83,7 +90,10 @@ const AgendaPage = () => {
   }, [currentDate, showToast]);
 
   useEffect(() => {
-    cargarDatos();
+    const fetch = async () => {
+      await cargarDatos();
+    };
+    fetch();
   }, [cargarDatos]);
 
   const nav = {
@@ -132,57 +142,59 @@ const AgendaPage = () => {
     <div className="page-container" style={{ padding: '2rem' }}>
       
       {/* Header con Navegación y Vistas */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '2rem', flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: isMobile ? '1.5rem' : '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
             {view === 'MES' ? formatMesAnio(currentDate).toUpperCase() : formatFechaLarga(currentDate)}
           </h1>
-          <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.35rem', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
             <div style={{ display: 'flex', gap: '2px' }}>
-              <button onClick={nav.prev} className="btn-icon-sm"><ChevronLeft size={18} /></button>
-              <button onClick={nav.hoy} style={{ padding: '0 0.75rem', fontSize: '0.75rem', fontWeight: '800', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text)' }}>HOY</button>
-              <button onClick={nav.next} className="btn-icon-sm"><ChevronRight size={18} /></button>
+              <button onClick={nav.prev} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronLeft size={16} /></button>
+              <button onClick={nav.hoy} style={{ padding: '0 0.5rem', fontSize: '0.7rem', fontWeight: '800', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text)' }}>HOY</button>
+              <button onClick={nav.next} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronRight size={16} /></button>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <button 
             onClick={() => setShowInvitaciones(!showInvitaciones)}
-            style={{ position: 'relative', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer' }}
+            style={{ position: 'relative', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: '0.6rem', borderRadius: '10px', cursor: 'pointer' }}
           >
-            <Mail size={20} color={invitaciones.length > 0 ? 'var(--color-primary)' : 'var(--color-text-dim)'} />
+            <Mail size={18} color={invitaciones.length > 0 ? 'var(--color-primary)' : 'var(--color-text-dim)'} />
             {invitaciones.length > 0 && (
-              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--color-error)', color: '#fff', fontSize: '0.65rem', fontWeight: '900', padding: '2px 6px', borderRadius: '10px', border: '2px solid var(--color-surface)' }}>
+              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--color-error)', color: '#fff', fontSize: '0.6rem', fontWeight: '900', padding: '1px 5px', borderRadius: '10px', border: '2px solid var(--color-surface)' }}>
                 {invitaciones.length}
               </span>
             )}
           </button>
 
-          <button 
-            onClick={() => setModalConfigOpen(true)}
-            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer' }}
-          >
-            <Settings size={20} color="var(--color-text-dim)" />
-          </button>
+          {!isMobile && (
+            <button 
+              onClick={() => setModalConfigOpen(true)}
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: '0.6rem', borderRadius: '10px', cursor: 'pointer' }}
+            >
+              <Settings size={18} color="var(--color-text-dim)" />
+            </button>
+          )}
 
-          <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.4rem', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
             {VISTAS.map(v => (
-              <button key={v.id} onClick={() => setView(v.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer', background: view === v.id ? 'var(--color-primary)' : 'transparent', color: view === v.id ? '#fff' : 'var(--color-text-muted)', transition: 'all 0.2s' }}>
-                {v.icon} {v.label}
+              <button key={v.id} onClick={() => setView(v.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', background: view === v.id ? 'var(--color-primary)' : 'transparent', color: view === v.id ? '#fff' : 'var(--color-text-muted)', transition: 'all 0.2s' }}>
+                {v.icon} {!isMobile && v.label}
               </button>
             ))}
           </div>
           
-          <button onClick={() => { setSelectedEvent(null); setPrefillData(null); setModalOpen(true); }} className="btn-primary" style={{ padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Plus size={20} /> Nuevo evento
+          <button onClick={() => { setSelectedEvent(null); setPrefillData(null); setModalOpen(true); }} className="btn-primary" style={{ padding: '0.6rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Plus size={18} /> {!isMobile && "Nuevo evento"}
           </button>
         </div>
       </div>
 
       {/* Invitaciones Pendientes (Panel Lateral) */}
       {showInvitaciones && (
-        <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: '400px', background: 'var(--color-surface)', boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', zIndex: 1100, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: isMobile ? '100%' : '400px', background: 'var(--color-surface)', boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', zIndex: 1100, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontWeight: '900', fontSize: '1.5rem' }}>Invitaciones</h2>
             <button onClick={() => setShowInvitaciones(false)} className="btn-icon-sm"><X size={20} /></button>
@@ -210,10 +222,10 @@ const AgendaPage = () => {
       )}
 
       {/* Grid Calendario */}
-      <div className="card" style={{ padding: '0', borderRadius: '2rem', overflow: 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
-        {view === 'MES' && <VistaMensual date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} />}
-        {view === 'SEMANA' && <VistaSemanal date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} />}
-        {view === 'DIA' && <VistaDiaria date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} onEliminar={handleEliminar} />}
+      <div className="card" style={{ padding: '0', borderRadius: isMobile ? '1rem' : '2rem', overflow: 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
+        {view === 'MES' && <VistaMensual date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} />}
+        {view === 'SEMANA' && <VistaSemanal date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} />}
+        {view === 'DIA' && <VistaDiaria date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} onEliminar={handleEliminar} />}
       </div>
 
       {modalOpen && (() => {
@@ -244,7 +256,7 @@ const AgendaPage = () => {
 
 // ── VISTAS (MENSUAL, SEMANAL, DIARIA) ────────────────────────────────────────
 
-const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, onSelectEvent, onSelectDate }) => {
+const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, isMobile, onSelectEvent, onSelectDate }) => {
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
@@ -256,9 +268,9 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
   for (let i = 1; i <= totalDays; i++) dias.push(i);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', overflowX: isMobile ? 'auto' : 'hidden' }}>
       {DIAS_SEMANA.map(d => (
-        <div key={d} style={{ padding: '1rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>{d.toUpperCase()}</div>
+        <div key={d} style={{ padding: isMobile ? '0.5rem' : '1rem', textAlign: 'center', fontSize: '0.65rem', fontWeight: '800', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>{isMobile ? d.charAt(0).toUpperCase() : d.toUpperCase()}</div>
       ))}
       {dias.map((dia, i) => {
         const dObj = dia ? new Date(year, month, dia) : null;
@@ -283,7 +295,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
         const circleColor = esHoy ? '#fff' : (dia ? (esLaboral ? '#3b82f6' : '#ef4444') : 'var(--color-text)');
 
         return (
-          <div key={i} onClick={() => dia && onSelectDate({ fechaInicio: dObj })} style={{ minHeight: '120px', padding: '0.5rem', borderRight: '1px solid var(--color-border-light)', borderBottom: '1px solid var(--color-border-light)', position: 'relative', cursor: dia ? 'pointer' : 'default', background: dia && !esLaboral ? 'rgba(239, 68, 68, 0.02)' : 'transparent' }}>
+          <div key={i} onClick={() => dia && onSelectDate({ fechaInicio: dObj })} style={{ minHeight: isMobile ? '70px' : '120px', padding: '0.25rem', borderRight: '1px solid var(--color-border-light)', borderBottom: '1px solid var(--color-border-light)', position: 'relative', cursor: dia ? 'pointer' : 'default', background: dia && !esLaboral ? 'rgba(239, 68, 68, 0.02)' : 'transparent' }}>
             {dia && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -410,7 +422,7 @@ const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEve
   );
 };
 
-const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, onSelectEvent, onSelectDate, onEliminar }) => {
+const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, onSelectEvent, onSelectDate, onEliminar }) => {
   const hStart = 6;
   const hEnd = 18;
   const horas = getHoras(hStart, hEnd);
@@ -427,10 +439,10 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, onSelectEven
   const colorHeader = esLaboral ? 'var(--color-primary)' : '#ef4444';
 
   return (
-    <div style={{ display: 'flex', height: '650px' }}>
+    <div style={{ display: 'flex', height: '650px', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, display: 'flex', overflowY: 'auto' }}>
-        <div style={{ width: '80px', borderRight: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
-          {horas.map(h => <div key={h} style={{ height: '80px', padding: '1rem', fontSize: '0.8rem', fontWeight: '800', color: 'var(--color-text-dim)', textAlign: 'right', borderBottom: '1px solid var(--color-border-light)' }}>{h}</div>)}
+        <div style={{ width: isMobile ? '50px' : '80px', borderRight: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
+          {horas.map(h => <div key={h} style={{ height: '80px', padding: '0.5rem', fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-text-dim)', textAlign: 'right', borderBottom: '1px solid var(--color-border-light)' }}>{h}</div>)}
         </div>
         <div style={{ flex: 1, position: 'relative', background: !esLaboral ? 'rgba(239, 68, 68, 0.03)' : 'transparent' }}>
           {horas.map(h => {
@@ -465,7 +477,7 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, onSelectEven
           })}
         </div>
       </div>
-      <div style={{ width: '350px', background: 'var(--color-surface-2)', padding: '1.5rem', borderLeft: '1px solid var(--color-border)', overflowY: 'auto' }}>
+      <div style={{ width: isMobile ? '100%' : '350px', background: 'var(--color-surface-2)', padding: '1.5rem', borderLeft: isMobile ? 'none' : '1px solid var(--color-border)', borderTop: isMobile ? '1px solid var(--color-border)' : 'none', overflowY: 'auto' }}>
          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: colorHeader, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: '900' }}>
              {date.getDate()}

@@ -1,6 +1,6 @@
 // Dashboard — adaptado según el rol del usuario
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { proyectosService, tareasService, statsService } from '../services/api';
 import Spinner from '../components/Spinner';
@@ -40,18 +40,18 @@ const saludo = () => {
 // ─── Tarjeta stat (Premium) ──────────────────────────────────────────────────
 const StatCard = ({ value, sub, icon, color, bg }) => (
   <div className="card" style={{ 
-    padding: '1.75rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     border: 'none', borderRadius: '24px', background: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.03)',
-    minHeight: '140px'
+    minHeight: '120px'
   }}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-      <div style={{ fontSize: '2.75rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.05em', lineHeight: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+      <div style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.05em', lineHeight: 1 }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '500' }}>{sub}</div>}
+      {sub && <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>{sub}</div>}
     </div>
     <div style={{ 
-      width: '64px', height: '64px', borderRadius: '20px', background: bg || `${color}10`, 
+      width: '48px', height: '48px', borderRadius: '16px', background: bg || `${color}10`, 
       color: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
     }}>
       {icon}
@@ -93,36 +93,36 @@ const DashboardMiembro = ({ usuario }) => {
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
       {/* Saludo y Branding Personal */}
-      <div style={{ marginBottom: '3rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+      <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <div style={{
-          width: '64px', height: '64px', borderRadius: '18px', flexShrink: 0,
+          width: '56px', height: '56px', borderRadius: '16px', flexShrink: 0,
           background: area.bg, border: `2px solid ${area.color}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '900', fontSize: '1.5rem', color: area.color,
+          fontWeight: '900', fontSize: '1.25rem', color: area.color,
           boxShadow: `0 8px 24px ${area.color}22`
         }}>
           {usuario?.nombre?.charAt(0).toUpperCase()}
         </div>
         <div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1.1 }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1.1 }}>
             {saludo()}, {usuario?.nombre?.split(' ')[0]}
           </h1>
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: area.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{area.icon} {area.label}</span>
-            <span style={{ color: 'var(--color-text-dim)', fontSize: '0.75rem' }}>●</span>
-            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MIEMBRO ACTIVO</span>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: area.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{area.icon} {area.label}</span>
+            <span style={{ color: 'var(--color-text-dim)', fontSize: '0.7rem' }}>●</span>
+            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MIEMBRO ACTIVO</span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '3rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
         <StatCard value={proyectos.length} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub="mis proyectos" />
         <StatCard value={pendientes.length} icon={<IconTasks />} color="#64748b" bg="#f8fafc" sub="pendientes" />
         <StatCard value={enProgreso.length} icon={<IconTasks />} color="#8b5cf6" bg="#f5f3ff" sub="en progreso" />
         <StatCard value={hechas.length} icon={<IconCheck />} color="#10b981" bg="#f0fdf4" sub="finalizadas" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2.5rem', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', alignItems: 'start' }}>
         {/* Mis Proyectos List */}
         <div>
           <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>Proyectos en los que participas</h3>
@@ -180,24 +180,24 @@ const DashboardAdmin = () => {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '2.75rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1 }}>Control Central</h1>
-          <p style={{ fontSize: '1.1rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Supervisión estratégica del equipo CRM RED 4</p>
+          <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1 }}>Control Central</h1>
+          <p style={{ fontSize: '0.95rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Supervisión estratégica del equipo CRM RED 4</p>
         </div>
-        <div style={{ textAlign: 'right', color: 'var(--color-primary-light)', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.85rem' }}>
+        <div style={{ textAlign: 'right', color: 'var(--color-primary-light)', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.75rem' }}>
           {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '3rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
         <StatCard value={proyectos.total} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub={`de ${proyectos.total} totales`} />
         <StatCard value={tareas.estados.find(e => e.estado === 'HECHO')?._count || 0} icon={<IconTasks />} color="#10b981" bg="#f0fdf4" sub={`de ${tareas.total} totales`} />
         <StatCard value={topUsuarios.length} icon={<IconTeam />} color="#8b5cf6" bg="#f5f3ff" sub="usuarios activos" />
         <StatCard value={`${Math.round(((tareas.estados.find(e => e.estado === 'HECHO')?._count || 0) / (tareas.total || 1)) * 100)}%`} icon={<IconChart />} color="#f59e0b" bg="#fffbeb" sub="todos los proyectos" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2.5rem', marginBottom: '3rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', marginBottom: '3rem' }}>
         <div className="card" style={{ padding: '2rem' }}>
           <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>Progreso de Proyectos</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>

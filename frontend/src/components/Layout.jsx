@@ -227,38 +227,50 @@ const Layout = ({ children }) => {
       <main style={{ flex: 1, minWidth: 0, position: 'relative', height: '100vh', overflowY: 'auto', background: 'var(--color-bg-base)' }}>
         {/* Top Header (Figma Style) */}
         <header style={{
-          height: '70px', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)',
-          display: 'flex', alignItems: 'center', padding: '0 2.5rem', gap: '2rem', position: 'sticky', top: 0, zIndex: 90
+          height: isMobile ? '60px' : '70px', 
+          background: 'var(--color-surface)', 
+          borderBottom: '1px solid var(--color-border)',
+          display: 'flex', 
+          alignItems: 'center', 
+          padding: isMobile ? '0 1rem' : '0 2.5rem', 
+          gap: isMobile ? '1rem' : '2rem', 
+          position: 'sticky', 
+          top: 0, 
+          zIndex: 90
         }}>
           {isMobile && (
-            <button onClick={() => setOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--color-text)', cursor: 'pointer' }}>
+            <button onClick={() => setOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--color-text)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
               <IconMenu />
             </button>
           )}
           
-          {/* Barra de Búsqueda */}
+          {/* Barra de Búsqueda - Ocultar texto largo en móviles */}
           <div style={{ position: 'relative', flex: 1, maxWidth: '600px' }}>
-            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+            <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
             <input 
-              type="text" placeholder="Buscar proyectos, tareas o miembros..."
+              type="text" 
+              placeholder={isMobile ? "Buscar..." : "Buscar proyectos, tareas o miembros..."}
               style={{
-                width: '100%', padding: '0.75rem 1rem 0.75rem 2.75rem', borderRadius: '12px',
-                background: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
-                fontSize: '0.9rem', outline: 'none', transition: 'var(--transition-base)'
+                width: '100%', 
+                padding: isMobile ? '0.5rem 0.75rem 0.5rem 2rem' : '0.75rem 1rem 0.75rem 2.75rem', 
+                borderRadius: '10px',
+                background: 'var(--color-bg-base)', 
+                border: '1px solid var(--color-border)',
+                fontSize: isMobile ? '0.8rem' : '0.9rem', 
+                outline: 'none', 
+                transition: 'var(--transition-base)'
               }}
-              onFocus={e => e.target.style.borderColor = 'var(--color-primary)'}
-              onBlur={e => e.target.style.borderColor = 'var(--color-border)'}
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginLeft: 'auto' }}>
-            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Bell size={20} /></div>
-            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Calendar size={20} /></div>
-            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : '1.25rem', marginLeft: 'auto' }}>
+            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Bell size={isMobile ? 18 : 20} /></div>
+            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Calendar size={isMobile ? 18 : 20} /></div>
+            {!isMobile && <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)' }} />}
           </div>
         </header>
 
-        <div style={{ padding: isMobile ? '1.5rem' : '3rem', maxWidth: '1600px', margin: '0 auto' }}>
+        <div style={{ padding: isMobile ? '1rem' : '3rem', maxWidth: '1600px', margin: '0 auto' }}>
           {children}
         </div>
       </main>

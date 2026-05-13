@@ -12,7 +12,8 @@ const listar = async (_req, res) => {
         email:  true,
         area:   true,
         rol:    true,
-        creadoEn: true
+        creadoEn: true,
+        estado: true
       },
     });
     return res.json({ usuarios });
@@ -157,4 +158,31 @@ const eliminar = async (req, res) => {
   }
 };
 
-module.exports = { listar, crear, editar, eliminar };
+// Cambiar estado de usuario (solo ADMIN)
+const toggleEstado = async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { estado } = req.body; // 'activo' o 'inactivo'
+
+  if (!['activo', 'inactivo'].includes(estado)) {
+    return res.status(400).json({ error: 'Estado inválido' });
+  }
+
+  try {
+    if (id === req.usuario.id) {
+      return res.status(400).json({ error: 'No puedes desactivar tu propia cuenta' });
+    }
+
+    const usuario = await prisma.usuario.update({
+      where: { id },
+      data: { estado },
+      select: { id: true, nombre: true, estado: true }
+    });
+
+    return res.json({ mensaje: `Usuario marcado como ${estado}`, usuario });
+  } catch (error) {
+    console.error('[usuarios.toggleEstado]', error);
+    return res.status(500).json({ error: 'Error al cambiar estado del usuario' });
+  }
+};
+
+module.exports = { listar, crear, editar, eliminar, toggleEstado };

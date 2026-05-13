@@ -6,31 +6,48 @@ import Spinner from '../components/Spinner';
 import { 
   Pencil, 
   Trash2, 
-  UserPlus
+  UserPlus,
+  Mail,
+  Send,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  RefreshCcw,
+  UserX,
+  UserCheck
 } from 'lucide-react';
 
 const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION'];
 const ROLES = ['MIEMBRO', 'ADMIN'];
 
 const UsuariosPage = () => {
+  const [tab, setTab] = useState('activos'); // 'activos' o 'invitaciones'
   const [usuarios, setUsuarios] = useState([]);
+  const [invitaciones, setInvitaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [modalAbierto, setModal] = useState(false);
+  const [modalInvitar, setModalInvitar] = useState(false);
+  const [modalEditar, setModalEditar] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const { showToast } = useToast();
 
-  const fetchUsuarios = useCallback(async () => {
+  const fetchData = useCallback(async () => {
+    setCargando(true);
     try {
-      const data = await usuariosService.listar();
-      setUsuarios(data.usuarios);
+      if (tab === 'activos') {
+        const data = await usuariosService.listar();
+        setUsuarios(data.usuarios);
+      } else {
+        const data = await usuariosService.listarInvitaciones();
+        setInvitaciones(data);
+      }
     } catch (error) {
       showToast(error.message, 'error');
     } finally {
       setCargando(false);
     }
-  }, [showToast]);
+  }, [tab, showToast]);
 
-  useEffect(() => { fetchUsuarios(); }, [fetchUsuarios]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleEliminar = async (id) => {
     if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;
@@ -41,111 +58,351 @@ const UsuariosPage = () => {
     } catch (error) { showToast(error.message, 'error'); }
   };
 
-  const handleGuardar = () => {
-    setModal(false);
-    setUsuarioEditando(null);
-    fetchUsuarios();
+  const handleToggleEstado = async (u) => {
+    const nuevoEstado = u.estado === 'activo' ? 'inactivo' : 'activo';
+    const msg = nuevoEstado === 'activo' ? 'activado' : 'desactivado';
+    try {
+      await usuariosService.toggleEstado(u.id, nuevoEstado);
+      setUsuarios(prev => prev.map(item => item.id === u.id ? { ...item, estado: nuevoEstado } : item));
+      showToast(`Usuario ${msg}`, 'success');
+    } catch (error) { showToast(error.message, 'error'); }
   };
 
-  if (cargando) return <Spinner texto="Cargando equipo..." />;
+  const handleReenviarInvitacion = async (email) => {
+    try {
+      await usuariosService.reenviarInvitacion(email);
+      showToast('Invitación reenviada', 'success');
+      fetchData();
+    } catch (error) { showToast(error.message, 'error'); }
+  };
+
+  if (cargando && (usuarios.length === 0 && invitaciones.length === 0)) return <Spinner texto="Cargando..." />;
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '3rem', flexWrap: 'wrap', gap: '2rem' }}>
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
         <div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '0.75rem' }}>Gestión de Equipo</h1>
-          <p style={{ fontSize: '1.1rem', color: 'var(--color-text-muted)' }}>Administra los miembros, roles y accesos del sistema.</p>
+          <h1 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">Gestión de Usuarios</h1>
+          <p className="text-sm text-slate-500 mt-1">Administra el acceso y las invitaciones del equipo.</p>
         </div>
         <button 
-          onClick={() => { setUsuarioEditando(null); setModal(true); }}
-          className="btn-primary"
-          style={{ padding: '0.8rem 1.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          onClick={() => setModalInvitar(true)}
+          className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl md:rounded-2xl font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
         >
-          <UserPlus size={18} /> Nuevo Miembro
+          <UserPlus size={18} />
+          <span className="text-sm">+ Invitar usuario</span>
         </button>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MIEMBRO</th>
-              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ÁREA</th>
-              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ROL</th>
-              <th style={{ textAlign: 'left', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>REGISTRO</th>
-              <th style={{ textAlign: 'right', padding: '1.25rem 1.5rem', color: 'var(--color-text-dim)', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACCIONES</th>
-            </tr>
-          </thead>
-          <tbody>
-            {usuarios.map(u => (
-              <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background 0.2s' }}>
-                <td style={{ padding: '1.25rem 1.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ 
-                      width: '40px', height: '40px', borderRadius: '12px', 
-                      background: 'var(--color-surface-3)', border: '1px solid var(--color-border)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: '800', color: 'var(--color-primary-light)', fontSize: '1rem'
-                    }}>
-                      {u.nombre.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>{u.nombre}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{u.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td style={{ padding: '1.25rem 1.5rem' }}>
-                  <span style={{ 
-                    fontSize: '0.7rem', fontWeight: '800', padding: '0.25rem 0.75rem', borderRadius: '6px',
-                    background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary-light)', textTransform: 'uppercase'
-                  }}>{u.area}</span>
-                </td>
-                <td style={{ padding: '1.25rem 1.5rem' }}>
-                  <span style={{ 
-                    fontSize: '0.7rem', fontWeight: '800', padding: '0.25rem 0.75rem', borderRadius: '6px',
-                    background: u.rol === 'ADMIN' ? 'rgba(255,145,0,0.1)' : 'rgba(0,209,102,0.1)',
-                    color: u.rol === 'ADMIN' ? '#ff9100' : '#00d166', textTransform: 'uppercase'
-                  }}>{u.rol}</span>
-                </td>
-                <td style={{ padding: '1.25rem 1.5rem', fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '500' }}>
-                  {new Date(u.creadoEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </td>
-                <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                    <button 
-                      onClick={() => { setUsuarioEditando(u); setModal(true); }}
-                      style={{ background: 'var(--color-surface-3)', border: 'none', borderRadius: '0.5rem', padding: '0.5rem', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text)' }}
-                    ><Pencil size={14} /></button>
-                    <button 
-                      onClick={() => handleEliminar(u.id)}
-                      style={{ background: 'rgba(244,63,94,0.05)', border: 'none', borderRadius: '0.5rem', padding: '0.5rem', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-accent-error)' }}
-                    ><Trash2 size={14} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 bg-slate-100 p-1.5 rounded-2xl w-fit">
+        <button 
+          onClick={() => setTab('activos')}
+          className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${tab === 'activos' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Miembros activos
+        </button>
+        <button 
+          onClick={() => setTab('invitaciones')}
+          className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${tab === 'invitaciones' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Invitaciones
+        </button>
       </div>
 
-      {modalAbierto && (
-        <ModalUsuario 
-          key={usuarioEditando?.id || 'nuevo'}
-          usuario={usuarioEditando} 
-          onClose={() => { setModal(false); setUsuarioEditando(null); }}
-          onGuardar={handleGuardar}
+      {/* Content */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        {tab === 'activos' ? (
+          <TablaActivos 
+            usuarios={usuarios} 
+            onEdit={(u) => { setUsuarioEditando(u); setModalEditar(true); }}
+            onDelete={handleEliminar}
+            onToggleStatus={handleToggleEstado}
+          />
+        ) : (
+          <TablaInvitaciones 
+            invitaciones={invitaciones} 
+            onResend={handleReenviarInvitacion}
+          />
+        )}
+      </div>
+
+      {/* Modales */}
+      {modalInvitar && (
+        <ModalInvitar 
+          onClose={() => setModalInvitar(false)} 
+          onSuccess={() => { setModalInvitar(false); setTab('invitaciones'); fetchData(); }}
+        />
+      )}
+
+      {modalEditar && (
+        <ModalEditar 
+          usuario={usuarioEditando}
+          onClose={() => { setModalEditar(false); setUsuarioEditando(null); }} 
+          onSuccess={() => { setModalEditar(false); setUsuarioEditando(null); fetchData(); }}
         />
       )}
     </div>
   );
 };
 
-const ModalUsuario = ({ usuario, onClose, onGuardar }) => {
+const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
+  if (usuarios.length === 0) return <div className="p-12 text-center text-slate-400">No hay miembros activos.</div>;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead className="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Miembro</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Área</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Rol</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Registro</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Estado</th>
+            <th className="px-6 py-4 text-right text-xs font-black text-slate-400 uppercase tracking-wider">Acciones</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {usuarios.map(u => (
+            <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+              <td className="px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                    {u.nombre.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900">{u.nombre}</div>
+                    <div className="text-xs text-slate-400">{u.email}</div>
+                  </div>
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <span className="text-[10px] font-black tracking-widest uppercase px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg border border-slate-200">
+                  {u.area}
+                </span>
+              </td>
+              <td className="px-6 py-4">
+                <span className={`text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-lg border ${
+                  u.rol === 'ADMIN' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                }`}>
+                  {u.rol}
+                </span>
+              </td>
+              <td className="px-6 py-4 text-sm text-slate-500 font-medium">
+                {new Date(u.creadoEn).toLocaleDateString()}
+              </td>
+              <td className="px-6 py-4">
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${u.estado === 'activo' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${u.estado === 'activo' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                  {u.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                </span>
+              </td>
+              <td className="px-6 py-4 text-right">
+                <div className="flex justify-end gap-2">
+                  <button 
+                    onClick={() => onToggleStatus(u)}
+                    title={u.estado === 'activo' ? 'Desactivar' : 'Activar'}
+                    className={`p-2 rounded-xl transition-all ${u.estado === 'activo' ? 'text-slate-400 hover:text-red-500 hover:bg-red-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
+                  >
+                    {u.estado === 'activo' ? <UserX size={18} /> : <UserCheck size={18} />}
+                  </button>
+                  <button 
+                    onClick={() => onEdit(u)}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                  >
+                    <Pencil size={18} />
+                  </button>
+                  <button 
+                    onClick={() => onDelete(u.id)}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const TablaInvitaciones = ({ invitaciones, onResend }) => {
+  if (invitaciones.length === 0) return <div className="p-12 text-center text-slate-400">No hay invitaciones enviadas.</div>;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead className="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Invitado</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Área / Rol</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Estado</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Envío / Expira</th>
+            <th className="px-6 py-4 text-right text-xs font-black text-slate-400 uppercase tracking-wider">Acciones</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {invitaciones.map(inv => (
+            <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+              <td className="px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                    <Mail size={18} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900">{inv.nombre}</div>
+                    <div className="text-xs text-slate-400">{inv.email}</div>
+                  </div>
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <div className="flex flex-col gap-1">
+                   <span className="text-[9px] font-bold text-slate-500 uppercase">{inv.area}</span>
+                   <span className="text-[9px] font-bold text-slate-400 uppercase">{inv.rol}</span>
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                {inv.estado === 'pendiente' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100">
+                    <Clock size={12} /> Pendiente
+                  </span>
+                )}
+                {inv.estado === 'aceptada' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-100">
+                    <CheckCircle2 size={12} /> Aceptada
+                  </span>
+                )}
+                {inv.estado === 'expirada' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-bold border border-red-100">
+                    <AlertTriangle size={12} /> Expirada
+                  </span>
+                )}
+              </td>
+              <td className="px-6 py-4">
+                <div className="text-xs font-medium text-slate-500">Enviada: {new Date(inv.creadoEn).toLocaleDateString()}</div>
+                <div className="text-[10px] text-slate-400">Expira: {new Date(inv.expiraEn).toLocaleDateString()}</div>
+              </td>
+              <td className="px-6 py-4 text-right">
+                {inv.estado !== 'aceptada' && (
+                  <button 
+                    onClick={() => onResend(inv.email)}
+                    className="flex items-center gap-1.5 ml-auto text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <RefreshCcw size={12} /> Reenviar
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const ModalInvitar = ({ onClose, onSuccess }) => {
+  const [form, setForm] = useState({ nombre: '', email: '', area: 'DESARROLLO', rol: 'MIEMBRO' });
+  const [cargando, setCargando] = useState(false);
+  const { showToast } = useToast();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setCargando(true);
+    try {
+      await usuariosService.invitar(form);
+      showToast('Invitación enviada');
+      onSuccess();
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
+        <div className="p-8 pb-0">
+          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4">
+            <Mail size={20} />
+          </div>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">Invitar Usuario</h2>
+          <p className="text-slate-500 text-xs mt-1">Se enviará un correo con el enlace de registro.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-8 space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre del usuario</label>
+            <input 
+              required
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              value={form.nombre}
+              onChange={e => setForm({...form, nombre: e.target.value})}
+              placeholder="Ej. Juan Pérez"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Correo electrónico</label>
+            <input 
+              required
+              type="email"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              value={form.email}
+              onChange={e => setForm({...form, email: e.target.value})}
+              placeholder="juan@empresa.com"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                value={form.area}
+                onChange={e => setForm({...form, area: e.target.value})}
+              >
+                {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rol</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                value={form.rol}
+                onChange={e => setForm({...form, rol: e.target.value})}
+              >
+                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button 
+              type="button" 
+              onClick={onClose}
+              className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button 
+              disabled={cargando}
+              className="flex-1.5 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95 disabled:bg-slate-200"
+            >
+              {cargando ? 'Enviando...' : <><Send size={18} /> Enviar invitación</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const ModalEditar = ({ usuario, onClose, onSuccess }) => {
   const [form, setForm] = useState({
     nombre: usuario?.nombre || '',
     email: usuario?.email || '',
-    password: '',
     area: usuario?.area || 'DESARROLLO',
     rol: usuario?.rol || 'MIEMBRO'
   });
@@ -156,59 +413,72 @@ const ModalUsuario = ({ usuario, onClose, onGuardar }) => {
     e.preventDefault();
     setCargando(true);
     try {
-      if (usuario) {
-        await usuariosService.editar(usuario.id, form);
-        showToast('Usuario actualizado');
-      } else {
-        await usuariosService.crear(form);
-        showToast('Usuario creado');
-      }
-      onGuardar();
-    } catch (error) { showToast(error.message, 'error'); }
-    finally { setCargando(false); }
+      await usuariosService.editar(usuario.id, form);
+      showToast('Usuario actualizado');
+      onSuccess();
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      setCargando(false);
+    }
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-      <div className="card" style={{ width: '100%', maxWidth: '500px', background: 'var(--color-surface-2)', padding: '2.5rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem', letterSpacing: '-0.02em' }}>
-          {usuario ? 'Editar Miembro' : 'Nuevo Miembro'}
-        </h2>
-        
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <div className="form-group">
-            <label className="form-label">NOMBRE COMPLETO</label>
-            <input className="form-input" required value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Ej. Juan Pérez" />
-          </div>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
+        <div className="p-8 pb-0">
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">Editar Miembro</h2>
+          <p className="text-slate-500 text-xs mt-1">Actualiza la información del usuario.</p>
+        </div>
 
-          <div className="form-group">
-            <label className="form-label">CORREO ELECTRÓNICO</label>
-            <input type="email" className="form-input" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="juan@empresa.com" />
+        <form onSubmit={handleSubmit} className="p-8 space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre</label>
+            <input 
+              required
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              value={form.nombre}
+              onChange={e => setForm({...form, nombre: e.target.value})}
+            />
           </div>
-
-          <div className="form-group">
-            <label className="form-label">{usuario ? 'NUEVA CONTRASEÑA (OPCIONAL)' : 'CONTRASEÑA'}</label>
-            <input type="password" className="form-input" required={!usuario} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</label>
+            <input 
+              required
+              type="email"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              value={form.email}
+              onChange={e => setForm({...form, email: e.target.value})}
+            />
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-            <div className="form-group">
-              <label className="form-label">ÁREA</label>
-              <select className="form-input form-select" value={form.area} onChange={e => setForm({...form, area: e.target.value})}>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                value={form.area}
+                onChange={e => setForm({...form, area: e.target.value})}
+              >
                 {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label">ROL</label>
-              <select className="form-input form-select" value={form.rol} onChange={e => setForm({...form, rol: e.target.value})}>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rol</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                value={form.rol}
+                onChange={e => setForm({...form, rol: e.target.value})}
+              >
                 {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: '0.8rem', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '700', cursor: 'pointer' }}>CANCELAR</button>
-            <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 1.5 }}>{cargando ? 'GUARDANDO...' : 'GUARDAR'}</button>
+          <div className="flex gap-3 pt-4">
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 transition-colors">Cancelar</button>
+            <button disabled={cargando} className="flex-1.5 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all active:scale-95 disabled:bg-slate-200">
+              {cargando ? 'Guardando...' : 'Guardar cambios'}
+            </button>
           </div>
         </form>
       </div>

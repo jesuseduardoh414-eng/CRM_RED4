@@ -59,13 +59,20 @@
 
 body {
   font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--color-surface);
+  background-color: var(--color-bg-base);
   color: var(--color-text);
   min-height: 100vh;
-  font-size: 1rem;
+  font-size: 0.875rem; /* Reducido de 1rem a 0.875rem (~14px) */
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 0.8rem; /* Aún más pequeño en móviles si es necesario */
+  }
 }
 
 /* Scrollbars Modernos */

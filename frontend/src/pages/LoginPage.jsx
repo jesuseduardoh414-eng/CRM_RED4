@@ -143,12 +143,6 @@ const LoginPage = () => {
             </button>
           </form>
 
-          <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-            ¿No tienes cuenta?{' '}
-            <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: '500', textDecoration: 'none' }}>
-              Regístrate
-            </Link>
-          </p>
         </div>
       </div>
     </div>

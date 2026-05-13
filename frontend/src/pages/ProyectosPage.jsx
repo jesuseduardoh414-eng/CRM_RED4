@@ -10,14 +10,10 @@ import {
   BarChart3, 
   Mail, 
   Folder,
-  ArrowRight,
-  MoreVertical,
-  Edit,
-  Trash2,
+  Trash2, 
   Plus,
-  ExternalLink,
-  FolderOpen,
-  ChevronRight,
+  FolderOpen, 
+  ChevronRight, 
   Pencil
 } from 'lucide-react';
 
@@ -279,7 +275,12 @@ const ProyectosPage = () => {
     finally { setCargando(false); }
   }, [showToast]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    const fetch = async () => {
+      await cargar();
+    };
+    fetch();
+  }, [cargar]);
 
   const handleEliminar = async (p) => {
     if (!window.confirm(`¿Eliminar "${p.nombre}"?`)) return;
@@ -298,12 +299,12 @@ const ProyectosPage = () => {
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
       <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '2rem' }}>
         <div>
-          <h1 style={{ fontSize: '3rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1 }}>Proyectos</h1>
-          <p style={{ fontSize: '1.1rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Gestión estratégica y operativa del equipo</p>
+          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight" style={{ fontSize: '2.5rem', lineHeight: 1 }}>Proyectos</h1>
+          <p style={{ fontSize: '0.95rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Gestión estratégica y operativa del equipo</p>
         </div>
         {esAdmin && (
-          <button onClick={() => { setEditando(null); setModal(true); }} className="btn-primary" style={{ padding: '0.9rem 2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Plus size={20} /> Nuevo Proyecto
+          <button onClick={() => { setEditando(null); setModal(true); }} className="btn-primary" style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', maxWidth: '240px', justifyContent: 'center' }}>
+            <Plus size={18} /> Nuevo Proyecto
           </button>
         )}
       </div>
@@ -332,7 +333,7 @@ const ProyectosPage = () => {
           <p style={{ color: 'var(--color-text-muted)' }}>Comienza creando uno nuevo o cambia el filtro.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '2rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
           {filtrados.map(p => (
             <ProyectoCard 
               key={p.id} proyecto={p} esAdmin={esAdmin} 

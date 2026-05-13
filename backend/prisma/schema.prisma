@@ -20,20 +20,41 @@ model Usuario {
   verificado               Boolean        @default(false)
   verificationToken        String?
   verificationTokenExpires DateTime?
+  estado                   String?        @default("pendiente")
+  tokenInvitacion          String?        @unique @map("token_invitacion")
+  tokenExpiraEn            DateTime?      @map("token_expira_en")
+  passwordHash             String?        @map("password_hash")
   adjuntos                 Adjunto[]      @relation("AutorAdjunto")
   comentarios              Comentario[]   @relation("AutorComentario")
   actividades              LogActividad[] @relation("AutorActividad")
   eventos                  Evento[]       @relation("UsuarioEvento")
   eventosCreados           Evento[]       @relation("EventosCreados")
-  invitaciones             EventoInvitado[]
+  invitacionesEventos      EventoInvitado[]
   configLaboral            ConfiguracionLaboral?
   diasEspeciales           DiaEspecial[]
   notificaciones           Notificacion[] @relation("DestinatarioNotificacion")
   proyectosCreados         Proyecto[]     @relation("CreadorProyecto")
   tareasAsignadas          Tarea[]        @relation("AsignadoTarea")
   proyectosMiembro         Proyecto[]     @relation("ProyectoMiembro")
+  invitacionesEnviadas     Invitacion[]   @relation("CreadorInvitacion")
 
   @@map("usuarios")
+}
+
+model Invitacion {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String
+  nombre    String
+  area      String
+  rol       String   @default("miembro")
+  token     String   @unique
+  estado    String   @default("pendiente")
+  creadoPor Int?     @map("creado_por")
+  creadoEn  DateTime @default(now()) @map("creado_en")
+  expiraEn  DateTime @map("expira_en")
+  creador   Usuario? @relation("CreadorInvitacion", fields: [creadoPor], references: [id])
+
+  @@map("invitaciones")
 }
 
 model Proyecto {

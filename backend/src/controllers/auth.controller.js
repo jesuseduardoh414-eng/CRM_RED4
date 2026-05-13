@@ -4,55 +4,11 @@ const prisma  = require('../lib/prisma');
 const crypto  = require('crypto');
 const { validarPassword } = require('../utils/security.utils');
 const { sendResetEmail, sendVerificationEmail } = require('../services/email.service');
+const { enviarInvitacion } = require('../services/correo');
 
-// ── POST /api/auth/register ─────────────────────────────────────────────────
+// POST /api/auth/register - DESHABILITADO (Solo por invitación)
 const register = async (req, res) => {
-  const { nombre, email, password, area } = req.body;
-
-  if (!nombre || !email || !password || !area) {
-    return res.status(400).json({ error: 'Todos los campos son requeridos' });
-  }
-
-  const validation = validarPassword(password);
-  if (!validation.valido) {
-    return res.status(400).json({ 
-      error: 'La contraseña no cumple los requisitos de seguridad',
-      detalles: validation.errores 
-    });
-  }
-
-  try {
-    const usuarioExistente = await prisma.usuario.findUnique({ where: { email: email.toLowerCase().trim() } });
-    if (usuarioExistente) {
-      return res.status(409).json({ error: 'El email ya está registrado' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12);
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-
-    await prisma.usuario.create({
-      data: {
-        nombre: nombre.trim(),
-        email: email.toLowerCase().trim(),
-        password: passwordHash,
-        area,
-        rol: 'MIEMBRO',
-        verificado: false,
-        verificationToken,
-        verificationTokenExpires: new Date(Date.now() + 15 * 60 * 1000) // 15 minutos
-      }
-    });
-
-    // Enviar email de verificación
-    await sendVerificationEmail(email.toLowerCase().trim(), verificationToken);
-
-    return res.status(201).json({
-      mensaje: 'Registro exitoso. Por favor revisa tu correo para verificar tu cuenta.',
-    });
-  } catch (error) {
-    console.error('[register]', error);
-    return res.status(500).json({ error: 'Error interno del servidor' });
-  }
+  return res.status(403).json({ error: 'El registro público está deshabilitado. Solicita una invitación al administrador.' });
 };
 
 // ── GET /api/auth/verify/:token ─────────────────────────────────────────────
@@ -107,9 +63,9 @@ const login = async (req, res) => {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    // VERIFICAR SI ESTÁ VERIFICADO (Solo para MIEMBROS)
-    if (usuario.rol !== 'ADMIN' && !usuario.verificado) {
-      return res.status(403).json({ error: 'Debes verificar tu cuenta por correo antes de iniciar sesión' });
+    // VERIFICAR SI ESTÁ ACTIVO
+    if (usuario.estado && usuario.estado !== 'activo') {
+      return res.status(403).json({ error: 'Tu cuenta no está activa, contacta al administrador' });
     }
 
     const passwordValida = await bcrypt.compare(password, usuario.password);
@@ -223,4 +179,189 @@ const me = async (req, res) => {
   }
 };
 
-module.exports = { register, login, me, forgotPassword, resetPassword, verifyAccount };
+// ── INVITACIONES ───────────────────────────────────────────────────────────
+
+const invitar = async (req, res) => {
+  const { nombre, email, area, rol } = req.body;
+
+  if (!nombre || !email || !area || !rol) {
+    return res.status(400).json({ error: 'Todos los campos son requeridos' });
+  }
+
+  try {
+    const usuarioExistente = await prisma.usuario.findUnique({ where: { email: email.toLowerCase().trim() } });
+    if (usuarioExistente) {
+      return res.status(409).json({ error: 'El email ya está registrado' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiraEn = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 horas
+
+    await prisma.invitacion.create({
+      data: {
+        nombre: nombre.trim(),
+        email: email.toLowerCase().trim(),
+        area,
+        rol: rol.toLowerCase(),
+        token,
+        expiraEn,
+        creadoPor: req.usuario.id
+      }
+    });
+
+    await enviarInvitacion({ nombre, email, token });
+
+    return res.json({ mensaje: `Invitación enviada a ${email}` });
+  } catch (error) {
+    console.error('[invitar]', error);
+    return res.status(500).json({ error: 'Error al enviar invitación' });
+  }
+};
+
+const verificarInvitacion = async (req, res) => {
+  const { token } = req.params;
+
+  try {
+    const invitacion = await prisma.invitacion.findUnique({ where: { token } });
+
+    if (!invitacion) {
+      return res.status(404).json({ error: 'Invitación no válida' });
+    }
+
+    if (invitacion.estado === 'aceptada') {
+      return res.status(409).json({ error: 'Invitación ya utilizada' });
+    }
+
+    if (invitacion.expiraEn < new Date() || invitacion.estado === 'expirada') {
+      return res.status(410).json({ error: 'Invitación expirada' });
+    }
+
+    return res.json({
+      nombre: invitacion.nombre,
+      email: invitacion.email,
+      area: invitacion.area
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Error al verificar invitación' });
+  }
+};
+
+const aceptarInvitacion = async (req, res) => {
+  const { token } = req.params;
+  const { password, confirmar_password } = req.body;
+
+  if (!password || !confirmar_password) {
+    return res.status(400).json({ error: 'La contraseña es requerida' });
+  }
+
+  if (password !== confirmar_password) {
+    return res.status(400).json({ error: 'Las contraseñas no coinciden' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+  }
+
+  try {
+    const invitacion = await prisma.invitacion.findUnique({ where: { token } });
+
+    if (!invitacion || invitacion.estado !== 'pendiente' || invitacion.expiraEn < new Date()) {
+      return res.status(400).json({ error: 'Invitación inválida o expirada' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Crear el usuario
+    const nuevoUsuario = await prisma.usuario.create({
+      data: {
+        nombre: invitacion.nombre,
+        email: invitacion.email,
+        password: passwordHash,
+        area: invitacion.area,
+        rol: invitacion.rol.toUpperCase() === 'ADMIN' ? 'ADMIN' : 'MIEMBRO',
+        estado: 'activo',
+        verificado: true
+      }
+    });
+
+    // Marcar invitación como aceptada
+    await prisma.invitacion.update({
+      where: { id: invitacion.id },
+      data: { estado: 'aceptada' }
+    });
+
+    // Generar JWT
+    const jwtToken = jwt.sign(
+      { id: nuevoUsuario.id, email: nuevoUsuario.email, nombre: nuevoUsuario.nombre, area: nuevoUsuario.area, rol: nuevoUsuario.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    return res.json({
+      mensaje: 'Cuenta activada correctamente',
+      token: jwtToken,
+      usuario: { id: nuevoUsuario.id, nombre: nuevoUsuario.nombre, email: nuevoUsuario.email, area: nuevoUsuario.area, rol: nuevoUsuario.rol }
+    });
+  } catch (error) {
+    console.error('[aceptarInvitacion]', error);
+    return res.status(500).json({ error: 'Error al aceptar invitación' });
+  }
+};
+
+const reenviarInvitacion = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const invitacion = await prisma.invitacion.findFirst({
+      where: { email: email.toLowerCase().trim(), estado: { not: 'aceptada' } }
+    });
+
+    if (!invitacion) {
+      return res.status(404).json({ error: 'No se encontró una invitación pendiente para este email' });
+    }
+
+    const nuevoToken = crypto.randomBytes(32).toString('hex');
+    const nuevaExpiracion = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+    await prisma.invitacion.update({
+      where: { id: invitacion.id },
+      data: {
+        token: nuevoToken,
+        expiraEn: nuevaExpiracion,
+        estado: 'pendiente'
+      }
+    });
+
+    await enviarInvitacion({ nombre: invitacion.nombre, email: invitacion.email, token: nuevoToken });
+
+    return res.json({ mensaje: 'Invitación reenviada correctamente' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Error al reenviar invitación' });
+  }
+};
+
+const listarInvitaciones = async (req, res) => {
+  try {
+    const invitaciones = await prisma.invitacion.findMany({
+      orderBy: { creadoEn: 'desc' },
+      include: { creador: { select: { nombre: true } } }
+    });
+    return res.json(invitaciones);
+  } catch (error) {
+    return res.status(500).json({ error: 'Error al listar invitaciones' });
+  }
+};
+
+module.exports = { 
+  register, 
+  login, 
+  me, 
+  forgotPassword, 
+  resetPassword, 
+  verifyAccount,
+  invitar,
+  verificarInvitacion,
+  aceptarInvitacion,
+  reenviarInvitacion,
+  listarInvitaciones
+};

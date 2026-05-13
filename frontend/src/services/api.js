@@ -62,6 +62,19 @@ export const authService = {
     const res = await fetch(`${API_URL}/auth/verify/${token}`);
     return handleResponse(res);
   },
+  
+  // Invitaciones
+  verificarInvitacion: async (token) => {
+    const res = await fetch(`${API_URL}/auth/invitacion/${token}`);
+    return handleResponse(res);
+  },
+  
+  aceptarInvitacion: async (token, datos) => {
+    const res = await fetch(`${API_URL}/auth/invitacion/${token}/aceptar`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
+    });
+    return handleResponse(res);
+  },
 };
 
 // ── Proyectos ─────────────────────────────────────────────────────────────
@@ -195,6 +208,30 @@ export const usuariosService = {
     const res = await fetch(`${API_URL}/usuarios/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
+    return handleResponse(res);
+  },
+  toggleEstado: async (id, estado) => {
+    const res = await fetch(`${API_URL}/usuarios/${id}/estado`, {
+      method: 'PUT', headers: getHeaders(), body: JSON.stringify({ estado }),
+    });
+    return handleResponse(res);
+  },
+  
+  // Invitaciones (Solo Admin)
+  invitar: async (datos) => {
+    const res = await fetch(`${API_URL}/auth/invitar`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
+    });
+    return handleResponse(res);
+  },
+  reenviarInvitacion: async (email) => {
+    const res = await fetch(`${API_URL}/auth/invitar/reenviar`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ email }),
+    });
+    return handleResponse(res);
+  },
+  listarInvitaciones: async () => {
+    const res = await fetch(`${API_URL}/auth/invitaciones`, { headers: getHeaders() });
     return handleResponse(res);
   },
 };
