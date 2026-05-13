@@ -1,31 +1,23 @@
 const nodemailer = require('nodemailer');
 const dns = require('dns');
 
-// Forzar IPv4 para evitar el error ENETUNREACH de IPv6 en Render
+// Forzar IPv4 para mayor compatibilidad
 dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
-  pool: true, // Habilitar agrupación de conexiones según la documentación
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // Uso de TLS desde el inicio (Puerto 465)
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASS || 'tncnkjwkwtlenkws', // Fallback con tu nueva contraseña
   },
   tls: {
-    // Aceptar certificados incluso si hay problemas de resolución de nombre en el proxy
-    rejectUnauthorized: false,
-  },
-  // Tiempos de espera extendidos para evitar ETIMEDOUT en Render
-  connectionTimeout: 20000, // 20 segundos para conectar
-  greetingTimeout: 20000,   // 20 segundos para el saludo inicial
-  socketTimeout: 30000,     // 30 segundos de inactividad
+    rejectUnauthorized: false
+  }
 });
 
 const enviarInvitacion = async ({ nombre, email, token }) => {
   const enlace = `${process.env.FRONTEND_URL}/invitacion/${token}`;
-  console.log(`[Nodemailer-Pool]: Intentando enviar invitación a ${email}...`);
+  console.log(`[Gmail-Auth]: Intentando enviar invitación a ${email}...`);
 
   await transporter.sendMail({
     from: `"CRM Equipos" <${process.env.EMAIL_USER}>`,
