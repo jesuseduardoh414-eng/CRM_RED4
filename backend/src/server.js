@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 3000;
 // Confiar en el proxy de Render para que express-rate-limit funcione bien
 app.set('trust proxy', 1);
 
-// ── Middlewares globales ────────────────────────────────────────────────────
+// Middlewares globales
 app.use(helmet()); // Seguridad de headers
 app.use(cors({
   origin: true,
@@ -26,7 +26,7 @@ app.use(cors({
 }));
 app.use(express.json()); // Parsear cuerpo JSON de las peticiones
 
-// ── Rutas ───────────────────────────────────────────────────────────────────
+// Rutas
 app.use('/api/auth',                        authRoutes);
 app.use('/api/proyectos',                   proyectosRoutes);
 app.use('/api/proyectos/:id/tareas',        routerProyecto); // GET y POST de tareas
@@ -41,7 +41,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, mensaje: 'Servidor CRM funcionando' });
 });
 
-// ── Inicio del servidor ─────────────────────────────────────────────────────
+// Inicio del servidor
 app.listen(PORT, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
 });
