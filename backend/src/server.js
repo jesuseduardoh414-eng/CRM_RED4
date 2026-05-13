@@ -21,7 +21,7 @@ app.set('trust proxy', 1);
 // ── Middlewares globales ────────────────────────────────────────────────────
 app.use(helmet()); // Seguridad de headers
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // URL del frontend en desarrollo o producción
+  origin: true,
   credentials: true,
 }));
 app.use(express.json()); // Parsear cuerpo JSON de las peticiones
