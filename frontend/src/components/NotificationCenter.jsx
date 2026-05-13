@@ -41,14 +41,18 @@ const NotificationCenter = () => {
           table: 'notificaciones'
         },
         (payload) => {
-          // Filtro manual en el cliente para mayor seguridad
           if (payload.new && payload.new.usuarioId === usuario.id) {
-            console.log('[Realtime]: Nueva notificación para ti:', payload.new);
+            console.log('✅ [Realtime] Nueva notificación:', payload.new);
             setNotificaciones(prev => [payload.new, ...prev]);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`📡 [Realtime] Estado de conexión: ${status}`);
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ [Realtime] Error de conexión. Verifica la VITE_SUPABASE_KEY y que Realtime esté activo en la tabla.');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
