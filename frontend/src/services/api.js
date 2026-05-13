@@ -1,7 +1,7 @@
 // Servicio de comunicación con el backend
 // Centraliza la URL base y el manejo del JWT en cada petición
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://crm-red4.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://crmred4-production.up.railway.app/api';
 
 // ── Helpers internos ──────────────────────────────────────────────────────
 
