@@ -230,14 +230,20 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
               <label className="form-label" style={{ letterSpacing: '0.05em' }}>TÍTULO DEL EVENTO</label>
-              <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required placeholder="¿De qué trata la reunión?" disabled={!esDuenio} />
+              {esDuenio ? (
+                <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required placeholder="¿De qué trata la reunión?" />
+              ) : (
+                <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--color-text)', padding: '0.5rem 0' }}>{form.titulo}</div>
+              )}
             </div>
-            <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>CATEGORÍA</label>
-              <select className="form-input form-select" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} disabled={!esDuenio}>
-                {TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-            </div>
+            {esDuenio && (
+              <div className="form-group">
+                <label className="form-label" style={{ letterSpacing: '0.05em' }}>CATEGORÍA</label>
+                <select className="form-input form-select" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} disabled={!esDuenio}>
+                  {TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Fechas */}
@@ -247,15 +253,23 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                    <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DÍA</span>
-                   <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_inicio} onChange={e => setForm({...form, fecha_inicio: e.target.value})} required />
+                   {esDuenio ? (
+                     <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_inicio} onChange={e => setForm({...form, fecha_inicio: e.target.value})} required />
+                   ) : (
+                     <div style={{ fontWeight: '700' }}>{new Date(form.fecha_inicio).toLocaleDateString()}</div>
+                   )}
                 </div>
                 {form.tipo === 'evento' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
-                      <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_inicio} onChange={e => setForm({...form, hora_inicio: e.target.value})} disabled={!esDuenio} />
-                      <Clock size={14} color="var(--color-text-dim)" />
-                    </div>
+                    {esDuenio ? (
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
+                        <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_inicio} onChange={e => setForm({...form, hora_inicio: e.target.value})} disabled={!esDuenio} />
+                        <Clock size={14} color="var(--color-text-dim)" />
+                      </div>
+                    ) : (
+                      <div style={{ fontWeight: '700' }}>{form.hora_inicio}</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -265,15 +279,23 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                    <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DÍA</span>
-                   <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_fin} onChange={e => setForm({...form, fecha_fin: e.target.value})} />
+                   {esDuenio ? (
+                     <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_fin} onChange={e => setForm({...form, fecha_fin: e.target.value})} />
+                   ) : (
+                     <div style={{ fontWeight: '700' }}>{new Date(form.fecha_fin).toLocaleDateString()}</div>
+                   )}
                 </div>
                 {form.tipo === 'evento' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
-                      <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_fin} onChange={e => setForm({...form, hora_fin: e.target.value})} disabled={!esDuenio} />
-                      <Clock size={14} color="var(--color-text-dim)" />
-                    </div>
+                    {esDuenio ? (
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
+                        <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_fin} onChange={e => setForm({...form, hora_fin: e.target.value})} disabled={!esDuenio} />
+                        <Clock size={14} color="var(--color-text-dim)" />
+                      </div>
+                    ) : (
+                      <div style={{ fontWeight: '700' }}>{form.hora_fin}</div>
+                    )}
                   </div>
                 )}
               </div>

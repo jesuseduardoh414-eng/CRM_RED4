@@ -38,7 +38,7 @@ const NotificationCenter = () => {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'Notificacion',
+          table: 'notificaciones',
           filter: `usuarioId=eq.${usuario.id}`
         },
         (payload) => {

@@ -243,12 +243,41 @@ const crear = async (req, res) => {
       });
     }
 
+    // Crear notificaciones en segundo plano
+    if (listadoInvitados.length > 1) {
+      const idsFinales = listadoInvitados.map(i => i.usuarioId);
+      crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo);
+    }
+
     return res.status(201).json({ evento });
   } catch (error) {
     console.error('[agenda.crear]', error);
     return res.status(500).json({ error: 'Error al crear el evento' });
   }
 };
+
+// ── Notificar a invitados (Interno) ──────────────────────────────────────────
+async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento) {
+  try {
+    console.log(`[agenda] Iniciando notificaciones para ${invitadosIds.length} invitados. Evento: ${tituloEvento}`);
+    const creador = await prisma.usuario.findUnique({ where: { id: creadorId }, select: { nombre: true } });
+    const notifications = invitadosIds
+      .filter(id => id !== creadorId)
+      .map(id => ({
+        usuarioId: id,
+        tipo: 'recordatorio',
+        mensaje: `${creador?.nombre || 'Alguien'} te ha invitado al evento: ${tituloEvento}`,
+        leida: false
+      }));
+
+    if (notifications.length > 0) {
+      const result = await prisma.notificacion.createMany({ data: notifications });
+      console.log(`[agenda] ${result.count} notificaciones creadas exitosamente.`);
+    }
+  } catch (error) {
+    console.error('[agenda.crearNotificacionesInvitados] ERROR:', error);
+  }
+}
 
 // ── PATCH /api/agenda/:id/responder ──────────────────────────────────────────
 const responderInvitacion = async (req, res) => {
