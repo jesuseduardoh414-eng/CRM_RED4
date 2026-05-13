@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/api';
 
@@ -11,6 +12,7 @@ const LoginPage = () => {
   const { login }      = useAuth();
 
   const [form, setForm]       = useState({ email: '', password: '' });
+  const [verPassword, setVerPassword] = useState(false);
   const [error, setError]     = useState('');
   const [cargando, setCargando] = useState(false);
 
@@ -92,7 +94,7 @@ const LoginPage = () => {
             </div>
 
             {/* Password */}
-            <div className="form-group">
+            <div className="form-group" style={{ position: 'relative' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label className="form-label" htmlFor="password">Contraseña</label>
                 <Link to="/forgot-password" style={{ fontSize: '0.8rem', color: 'var(--color-primary)', textDecoration: 'none' }}>
@@ -102,14 +104,33 @@ const LoginPage = () => {
               <input
                 id="password"
                 name="password"
-                type="password"
+                type={verPassword ? "text" : "password"}
                 autoComplete="current-password"
                 required
                 placeholder="••••••••"
                 className="form-input"
+                style={{ paddingRight: '2.5rem' }}
                 value={form.password}
                 onChange={handleChange}
               />
+              <button
+                type="button"
+                onClick={() => setVerPassword(!verPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '2.4rem',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-dim)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0.25rem'
+                }}
+              >
+                {verPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
 
             <button

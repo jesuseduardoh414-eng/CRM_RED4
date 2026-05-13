@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
 
 const AREAS = [
@@ -20,6 +21,7 @@ const RegisterPage = () => {
     password: '',
     area:     '',
   });
+  const [verPassword, setVerPassword] = useState(false);
   const [error, setError]       = useState('');
   const [exito, setExito]       = useState('');
   const [cargando, setCargando] = useState(false);
@@ -65,11 +67,15 @@ const RegisterPage = () => {
         {/* Encabezado */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: '56px', height: '56px', background: 'var(--color-primary)',
-            borderRadius: '14px', marginBottom: '1rem', fontSize: '1.5rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            maxWidth: '220px',
+            height: 'auto',
+            marginBottom: '1rem',
           }}>
-            🏢
+            <img src="/logo_login.jpeg" alt="Logo" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
           </div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: '700' }}>Crear cuenta</h1>
           <p style={{ color: 'var(--color-text-muted)', marginTop: '0.4rem', fontSize: '0.9rem' }}>
@@ -118,14 +124,34 @@ const RegisterPage = () => {
             </div>
 
             {/* Password */}
-            <div className="form-group">
+            <div className="form-group" style={{ position: 'relative' }}>
               <label className="form-label" htmlFor="reg-password">Contraseña segura</label>
               <input
-                id="reg-password" name="password" type="password"
+                id="reg-password" name="password" 
+                type={verPassword ? "text" : "password"}
                 required minLength={8} placeholder="Crea una contraseña fuerte"
                 className="form-input"
+                style={{ paddingRight: '2.5rem' }}
                 value={form.password} onChange={handleChange}
               />
+              <button
+                type="button"
+                onClick={() => setVerPassword(!verPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '2.4rem',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-dim)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0.25rem'
+                }}
+              >
+                {verPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
               <div style={{ 
                 marginTop: '0.65rem', padding: '0.75rem', 
                 background: 'rgba(255,255,255,0.03)', borderRadius: '0.75rem',
