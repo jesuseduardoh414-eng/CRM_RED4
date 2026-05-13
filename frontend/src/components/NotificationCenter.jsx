@@ -38,13 +38,15 @@ const NotificationCenter = () => {
         { event: 'INSERT', schema: 'public', table: 'notificaciones' },
         (payload) => {
           console.log('🔔 [Realtime] Cambio detectado:', payload);
-          // Comparación flexible (==) para evitar fallos de tipo string/number
-          if (payload.new && payload.new.usuarioId == usuario.id) {
-            console.log('✅ [Realtime] Es para mí! Actualizando lista...');
-            setNotificaciones(prev => [payload.new, ...prev]);
+          if (payload.new) {
+            // Verificar ambos posibles nombres (DB vs Prisma)
+            const targetId = payload.new.usuario_id || payload.new.usuarioId;
             
-            // Sonido o vibración ligera si es posible
-            if ('vibrate' in navigator) navigator.vibrate(50);
+            if (targetId == usuario.id) {
+              console.log('✅ [Realtime] ¡Es para mí! Actualizando lista...');
+              setNotificaciones(prev => [payload.new, ...prev]);
+              if ('vibrate' in navigator) navigator.vibrate(50);
+            }
           }
         }
       )
