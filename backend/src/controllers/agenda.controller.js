@@ -243,10 +243,10 @@ const crear = async (req, res) => {
       });
     }
 
-    // Crear notificaciones en segundo plano
+    // Crear notificaciones de forma síncrona para asegurar el envío
     if (listadoInvitados.length > 1) {
       const idsFinales = listadoInvitados.map(i => i.usuarioId);
-      crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo);
+      await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo);
     }
 
     return res.status(201).json({ evento });
