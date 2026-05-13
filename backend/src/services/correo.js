@@ -17,7 +17,7 @@ const enviarInvitacion = async ({ nombre, email, token }) => {
   
   try {
     const info = await transporter.sendMail({
-      from: `"CRM Equipos" <${process.env.CORREO_USUARIO || process.env.EMAIL_USER}>`,
+      from: `"CRM Equipos" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Te han invitado al CRM',
       html: `
