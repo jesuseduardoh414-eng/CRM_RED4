@@ -235,14 +235,7 @@ const eliminar = async (req, res) => {
     const existente = await prisma.tarea.findUnique({ where: { id } });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 
-    // Permitir si es ADMIN o si es el ASIGNADO de la tarea
-    const esAdmin = req.usuario.rol === 'ADMIN';
-    const esAsignado = existente.asignadoId === req.usuario.id;
-
-    if (!esAdmin && !esAsignado) {
-      return res.status(403).json({ error: 'No tienes permiso para eliminar esta tarea' });
-    }
-
+    // Sin restricciones: cualquier usuario autenticado puede borrar
     await prisma.tarea.delete({ where: { id } });
 
     // Registrar en el Log de Actividad
