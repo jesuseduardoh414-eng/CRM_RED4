@@ -244,9 +244,9 @@ const crear = async (req, res) => {
     }
 
     // Crear notificaciones de forma síncrona para asegurar el envío
-    if (listadoInvitados.length > 1) {
+    if (es_global || listadoInvitados.length > 1) {
       const idsFinales = listadoInvitados.map(i => i.usuarioId);
-      await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo);
+      await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo, !!es_global);
     }
 
     return res.status(201).json({ evento });
@@ -257,25 +257,34 @@ const crear = async (req, res) => {
 };
 
 // ── Notificar a invitados (Interno) ──────────────────────────────────────────
-async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento) {
+async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento, esGlobal = false) {
   try {
-    console.log(`[agenda] Iniciando notificaciones para ${invitadosIds.length} invitados. Evento: ${tituloEvento}`);
-    const creador = await prisma.usuario.findUnique({ where: { id: creadorId }, select: { nombre: true } });
-    const notifications = invitadosIds
-      .filter(id => id !== creadorId)
-      .map(id => ({
-        usuarioId: id,
-        tipo: 'recordatorio',
-        mensaje: `${creador?.nombre || 'Alguien'} te ha invitado al evento: ${tituloEvento}`,
-        leida: false
-      }));
+    const creatorInt = parseInt(creadorId);
+    console.log(`[agenda] Generando notificaciones. Global: ${esGlobal}, Invitados: ${invitadosIds.length}`);
+    
+    const creador = await prisma.usuario.findUnique({ where: { id: creatorInt }, select: { nombre: true } });
+    let targets = [];
+
+    if (esGlobal) {
+      const todos = await prisma.usuario.findMany({ where: { id: { not: creatorInt } }, select: { id: true } });
+      targets = todos.map(u => u.id);
+    } else {
+      targets = invitadosIds.map(id => parseInt(id)).filter(id => id !== creatorInt);
+    }
+
+    const notifications = targets.map(id => ({
+      usuarioId: id,
+      tipo: 'recordatorio',
+      mensaje: `${creador?.nombre || 'Alguien'} te ha invitado al evento: ${tituloEvento}`,
+      leida: false
+    }));
 
     if (notifications.length > 0) {
       const result = await prisma.notificacion.createMany({ data: notifications });
-      console.log(`[agenda] ${result.count} notificaciones creadas exitosamente.`);
+      console.log(`[agenda] Se guardaron ${result.count} notificaciones en DB.`);
     }
   } catch (error) {
-    console.error('[agenda.crearNotificacionesInvitados] ERROR:', error);
+    console.error('[agenda.crearNotificacionesInvitados] ERROR FATAL:', error);
   }
 }
 
