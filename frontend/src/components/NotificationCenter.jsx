@@ -32,26 +32,36 @@ const NotificationCenter = () => {
     if (!supabase) return;
 
     const channel = supabase
-      .channel(`user-notifs-${usuario.id}`)
+      .channel('public:notificaciones')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notificaciones' },
         (payload) => {
-          console.log('🔔 [Realtime] Cambio detectado:', payload);
+          console.log('🔔 [Realtime] ¡Mensaje recibido!', payload);
           if (payload.new) {
-            // Verificar ambos posibles nombres (DB vs Prisma)
             const targetId = payload.new.usuario_id || payload.new.usuarioId;
-            
             if (targetId == usuario.id) {
-              console.log('✅ [Realtime] ¡Es para mí! Actualizando lista...');
-              setNotificaciones(prev => [payload.new, ...prev]);
+              console.log('✅ [Realtime] Alerta para el usuario actual. Actualizando...');
+              setNotificaciones(prev => {
+                // Evitar duplicados si por algún motivo llega dos veces
+                if (prev.some(n => n.id === payload.new.id)) return prev;
+                return [payload.new, ...prev];
+              });
               if ('vibrate' in navigator) navigator.vibrate(50);
             }
           }
         }
       )
-      .subscribe((status) => {
-        console.log(`📡 [Realtime] Estado: ${status}`);
+      .subscribe((status, err) => {
+        console.log(`📡 [Realtime] Estado de conexión: ${status}`);
+        if (err) console.error('❌ [Realtime] Error de suscripción:', err);
+        
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('⚠️ [Realtime] Error de canal. Reintentando en 5 segundos...');
+          setTimeout(() => {
+            if (usuario) fetchNotificaciones();
+          }, 5000);
+        }
       });
 
     return () => {
