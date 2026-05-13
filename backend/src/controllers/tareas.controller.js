@@ -229,14 +229,19 @@ const editar = async (req, res) => {
 // €€ DELETE /api/tareas/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const eliminar = async (req, res) => {
   const id = parseInt(req.params.id);
-  if (req.usuario.rol !== 'ADMIN') {
-    return res.status(403).json({ error: 'Solo los administradores pueden eliminar tareas' });
-  }
-  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invalido' });
 
   try {
     const existente = await prisma.tarea.findUnique({ where: { id } });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
+
+    // Permitir si es ADMIN o si es el ASIGNADO de la tarea
+    const esAdmin = req.usuario.rol === 'ADMIN';
+    const esAsignado = existente.asignadoId === req.usuario.id;
+
+    if (!esAdmin && !esAsignado) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar esta tarea' });
+    }
 
     await prisma.tarea.delete({ where: { id } });
 
