@@ -34,88 +34,67 @@ const ESTADOS = [
 const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
   const area = AREA_CONF[proyecto.area] || { label: proyecto.area, color: '#94a3b8', bg: 'rgba(255,255,255,0.05)', icon: <Folder size={14} /> };
   const estado = ESTADOS.find(e => e.value === proyecto.estado) || ESTADOS[0];
-  
-  // Calcular progreso real basado en tareas HECHO
   const total = proyecto._count?.tareas || 0;
-  // Nota: necesitamos que el backend nos devuelva el conteo de hechas o calcularlo aquí si tenemos las tareas
-  // Por ahora simularemos un porcentaje o usaremos el dato si estuviera disponible. 
-  // En este punto el listado de proyectos usualmente solo trae _count.
   const progreso = proyecto.progreso || 0; 
 
   return (
     <div 
       onClick={onVerDetalle}
-      className="card" 
-      style={{ 
-        padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '1.25rem',
-        border: '1px solid var(--color-border)', transition: 'var(--transition-base)',
-        background: 'var(--color-surface)', borderRadius: '16px'
-      }}
-      onMouseOver={e => {
-        e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-        e.currentTarget.style.borderColor = 'var(--color-primary-light)';
-      }}
-      onMouseOut={e => {
-        e.currentTarget.style.transform = 'none';
-        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-        e.currentTarget.style.borderColor = 'var(--color-border)';
-      }}
+      className="bg-white border border-slate-100 p-5 lg:p-6 rounded-2xl flex flex-col gap-5 hover:-translate-y-1 transition-all cursor-pointer shadow-sm hover:shadow-md"
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--color-text)', marginBottom: '0.25rem' }}>{proyecto.nombre}</h3>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: estado.color, background: estado.bg, padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+      <div className="flex justify-between items-start gap-4">
+        <div className="min-w-0">
+          <h3 className="text-lg lg:text-xl font-black text-slate-900 truncate mb-1">{proyecto.nombre}</h3>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md" style={{ color: estado.color, background: estado.bg }}>
               {estado.label}
             </span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
               {area.label}
             </span>
           </div>
         </div>
-        <div style={{ color: 'var(--color-primary)', opacity: 0.6, display: 'flex' }}>
+        <div className="text-slate-300">
           <ChevronRight size={20} />
         </div>
       </div>
 
-      <p style={{ fontSize: '0.9rem', color: 'var(--color-text-dim)', lineHeight: 1.5, minHeight: '2.7rem' }}>
+      <p className="text-sm text-slate-500 font-medium line-clamp-2 min-h-[40px]">
         {proyecto.descripcion || 'Gestión operativa del proyecto y seguimiento de hitos.'}
       </p>
 
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: '700' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>Progreso</span>
-          <span style={{ color: 'var(--color-text)' }}>{progreso}%</span>
+      <div className="space-y-2">
+        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+          <span className="text-slate-400">Progreso</span>
+          <span className="text-slate-900">{progreso}%</span>
         </div>
-        <div style={{ height: '8px', background: 'var(--color-bg-base)', borderRadius: '10px', overflow: 'hidden' }}>
-          <div style={{ 
-            height: '100%', width: `${progreso}%`, 
-            background: 'var(--color-primary)', borderRadius: '10px',
-            transition: 'width 1s ease-in-out'
-          }} />
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-blue-600 rounded-full transition-all duration-1000" 
+            style={{ width: `${progreso}%` }} 
+          />
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--color-border-light)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--color-surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: '800', border: '1px solid var(--color-border)' }}>
+      <div className="flex justify-between items-center pt-4 border-t border-slate-50 mt-auto">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500">
             {proyecto.creador?.nombre?.charAt(0)}
           </div>
-          <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--color-text-dim)' }}>{total} Tareas</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{total} Tareas</span>
         </div>
         
         {esAdmin && (
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <div className="flex gap-2">
             <button 
               onClick={(e) => { e.stopPropagation(); onEditar(proyecto); }}
-              style={{ padding: '0.4rem 0.75rem', borderRadius: '8px', background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--color-text)' }}
+              className="p-2 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
             >
-              <Pencil size={12} /> Editar
+              <Pencil size={14} />
             </button>
             <button 
               onClick={(e) => { e.stopPropagation(); onEliminar(proyecto); }}
-              style={{ padding: '0.4rem', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', border: 'none', color: 'var(--color-accent-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
             >
               <Trash2 size={14} />
             </button>
@@ -167,89 +146,90 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div className="card" style={{ width: '100%', maxWidth: '550px', background: 'var(--color-surface)', padding: '2.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem' }}>{proyecto ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="form-group">
-            <label className="form-label">NOMBRE DEL PROYECTO</label>
-            <input className="form-input" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required placeholder="Ej: Rediseño de Marca" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">DESCRIPCIÓN</label>
-            <textarea className="form-input" rows="3" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Objetivos y alcance..." />
-          </div>
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4">
+      <div className="bg-white w-full max-w-xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">{proyecto ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <Plus size={24} className="rotate-45" />
+          </button>
+        </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div className="form-group">
-              <label className="form-label">ESTADO</label>
-              <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
-                {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-              </select>
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">NOMBRE DEL PROYECTO</label>
+              <input className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required placeholder="Ej: Rediseño de Marca" />
             </div>
-            <div className="form-group">
-              <label className="form-label">ÁREA RESPONSABLE</label>
-              <select 
-                className="form-input form-select" 
-                value={form.area} 
-                onChange={e => setForm({...form, area: e.target.value, miembrosIds: []})}
-              >
-                {Object.keys(AREA_CONF).map(k => <option key={k} value={k}>{AREA_CONF[k].label}</option>)}
-              </select>
-            </div>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div className="form-group">
-              <label className="form-label">FECHA INICIO</label>
-              <input type="date" className="form-input" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} required />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DESCRIPCIÓN</label>
+              <textarea className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all resize-none" rows="3" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Objetivos y alcance..." />
             </div>
-            <div className="form-group">
-              <label className="form-label">FECHA FIN (OPCIONAL)</label>
-              <input type="date" className="form-input" value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})} />
-            </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">SELECCIONAR RESPONSABLES ({form.area})</label>
-            <div style={{ 
-              display: 'flex', flexWrap: 'wrap', gap: '0.5rem', 
-              padding: '1rem', background: 'var(--color-surface-2)', 
-              borderRadius: '1rem', border: '1px solid var(--color-border)',
-              minHeight: '60px'
-            }}>
-              {usuariosFiltrados.length === 0 ? (
-                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)' }}>No hay usuarios en esta área</span>
-              ) : (
-                usuariosFiltrados.map(u => {
-                  const isSelected = form.miembrosIds.includes(u.id);
-                  return (
-                    <button
-                      key={u.id} type="button"
-                      onClick={() => toggleMiembro(u.id)}
-                      style={{
-                        padding: '0.4rem 0.8rem', borderRadius: '0.6rem', border: '1px solid',
-                        borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
-                        background: isSelected ? 'var(--color-primary)' : 'transparent',
-                        color: isSelected ? '#fff' : 'var(--color-text)',
-                        fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
-                      }}
-                    >
-                      {isSelected ? '✓ ' : '+ '}{u.nombre}
-                    </button>
-                  );
-                })
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ESTADO</label>
+                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
+                  {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ÁREA RESPONSABLE</label>
+                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.area} onChange={e => setForm({...form, area: e.target.value, miembrosIds: []})}>
+                  {Object.keys(AREA_CONF).map(k => <option key={k} value={k}>{AREA_CONF[k].label}</option>)}
+                </select>
+              </div>
             </div>
-          </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--color-border-light)' }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-dim)', padding: '0.8rem', borderRadius: '0.85rem', cursor: 'pointer', fontWeight: '700' }}>CANCELAR</button>
-            <button type="submit" className="btn-primary" style={{ flex: 2 }} disabled={cargando}>{cargando ? 'GUARDANDO...' : 'GUARDAR PROYECTO'}</button>
-          </div>
-        </form>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA INICIO</label>
+                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA FIN</label>
+                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">SELECCIONAR RESPONSABLES ({form.area})</label>
+              <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 min-h-[60px]">
+                {usuariosFiltrados.length === 0 ? (
+                  <span className="text-[10px] font-black text-slate-400 uppercase">Sin usuarios en esta área</span>
+                ) : (
+                  usuariosFiltrados.map(u => {
+                    const isSelected = form.miembrosIds.includes(u.id);
+                    return (
+                      <button
+                        key={u.id} type="button"
+                        onClick={() => toggleMiembro(u.id)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                      >
+                        {isSelected ? '✓ ' : '+ '}{u.nombre}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse lg:flex-row gap-3">
+          <button onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">Cancelar</button>
+          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
+            {cargando ? 'Guardando...' : 'Guardar Proyecto'}
+          </button>
+        </div>
       </div>
     </div>
+  );
+};
   );
 };
 
@@ -296,30 +276,32 @@ const ProyectosPage = () => {
   if (cargando) return <Spinner texto="Sincronizando proyectos..." />;
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '2rem' }}>
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-10 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6">
         <div>
-          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight" style={{ fontSize: '2.5rem', lineHeight: 1 }}>Proyectos</h1>
-          <p style={{ fontSize: '0.95rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Gestión estratégica y operativa del equipo</p>
+          <h1 className="text-3xl lg:text-5xl font-black text-slate-900 tracking-tight leading-none mb-2">Proyectos</h1>
+          <p className="text-sm lg:text-base text-slate-500 font-medium">Gestión estratégica y operativa del equipo</p>
         </div>
         {esAdmin && (
-          <button onClick={() => { setEditando(null); setModal(true); }} className="btn-primary" style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', maxWidth: '240px', justifyContent: 'center' }}>
+          <button 
+            onClick={() => { setEditando(null); setModal(true); }} 
+            className="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+          >
             <Plus size={18} /> Nuevo Proyecto
           </button>
         )}
       </div>
 
       {/* Filtros */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2.5rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+      <div className="flex gap-2 mb-10 overflow-x-auto pb-2 snap-x snap-mandatory no-scrollbar">
         {['TODOS', 'ACTIVO', 'EN_PAUSA', 'CERRADO'].map(f => (
           <button
-            key={f} onClick={() => setFiltro(f)}
-            style={{
-              padding: '0.6rem 1.25rem', borderRadius: '999px', border: '1px solid var(--color-border)',
-              background: filtro === f ? 'var(--color-primary)' : 'var(--color-surface-2)',
-              color: filtro === f ? '#fff' : 'var(--color-text-muted)',
-              fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
-            }}
+            key={f} 
+            onClick={() => setFiltro(f)}
+            className={`
+              whitespace-nowrap px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all snap-start
+              ${filtro === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
+            `}
           >
             {f === 'TODOS' ? 'Todos' : ESTADOS.find(e => e.value === f)?.label}
           </button>
@@ -327,13 +309,17 @@ const ProyectosPage = () => {
       </div>
 
       {filtrados.length === 0 ? (
-        <div className="card" style={{ padding: '5rem', textAlign: 'center', border: '2px dashed var(--color-border)', background: 'transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ color: 'var(--color-text-dim)' }}><FolderOpen size={48} /></div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-text-dim)' }}>No se encontraron proyectos</h3>
-          <p style={{ color: 'var(--color-text-muted)' }}>Comienza creando uno nuevo o cambia el filtro.</p>
+        <div className="bg-white border-2 border-dashed border-slate-100 rounded-[32px] p-16 flex flex-col items-center justify-center text-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-200">
+            <FolderOpen size={40} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900 mb-1">No se encontraron proyectos</h3>
+            <p className="text-sm text-slate-500 font-medium">Comienza creando uno nuevo o cambia el filtro.</p>
+          </div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtrados.map(p => (
             <ProyectoCard 
               key={p.id} proyecto={p} esAdmin={esAdmin} 

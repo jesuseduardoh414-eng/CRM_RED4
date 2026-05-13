@@ -152,7 +152,8 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
+      {/* Desktop Table View */}
+      <table className="hidden md:table w-full">
         <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
             <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Miembro</th>
@@ -225,6 +226,69 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
           ))}
         </tbody>
       </table>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden flex flex-col gap-4 p-4">
+        {usuarios.map(u => (
+          <div key={u.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+                  {u.nombre.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="font-black text-slate-900">{u.nombre}</div>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">{u.email}</div>
+                </div>
+              </div>
+              <div className={`px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest ${
+                u.rol === 'ADMIN' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+              }`}>
+                {u.rol}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-200/50">
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Área</span>
+                <span className="text-xs font-bold text-slate-700">{u.area}</span>
+              </div>
+              <div className="flex flex-col gap-1 text-right">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado</span>
+                <span className={`text-xs font-black uppercase ${u.estado === 'activo' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {u.estado}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] text-slate-400 font-medium italic">
+                Reg: {new Date(u.creadoEn).toLocaleDateString()}
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => onToggleStatus(u)}
+                  className={`p-2.5 rounded-xl border transition-all ${u.estado === 'activo' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-emerald-50 text-emerald-500 border-emerald-100'}`}
+                >
+                  {u.estado === 'activo' ? <UserX size={16} /> : <UserCheck size={16} />}
+                </button>
+                <button 
+                  onClick={() => onEdit(u)}
+                  className="p-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button 
+                  onClick={() => onDelete(u.id)}
+                  className="p-2.5 bg-red-50 text-red-500 border border-red-100 rounded-xl"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -234,7 +298,8 @@ const TablaInvitaciones = ({ invitaciones, onResend }) => {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
+      {/* Desktop Table View */}
+      <table className="hidden md:table w-full">
         <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
             <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Invitado</th>
@@ -299,6 +364,48 @@ const TablaInvitaciones = ({ invitaciones, onResend }) => {
           ))}
         </tbody>
       </table>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden flex flex-col gap-4 p-4">
+        {invitaciones.map(inv => (
+          <div key={inv.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                <Mail size={18} />
+              </div>
+              <div className="flex-1">
+                <div className="font-black text-slate-900 leading-tight">{inv.nombre}</div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase">{inv.email}</div>
+              </div>
+              <div className="text-right">
+                {inv.estado === 'pendiente' && <div className="text-[9px] font-black text-blue-500 uppercase px-2 py-0.5 bg-blue-50 border border-blue-100 rounded-md">Pendiente</div>}
+                {inv.estado === 'aceptada' && <div className="text-[9px] font-black text-emerald-500 uppercase px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-md">Aceptada</div>}
+                {inv.estado === 'expirada' && <div className="text-[9px] font-black text-red-500 uppercase px-2 py-0.5 bg-red-50 border border-red-100 rounded-md">Expirada</div>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-200/50">
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Área / Rol</span>
+                <span className="text-[10px] font-bold text-slate-700">{inv.area} / {inv.rol}</span>
+              </div>
+              <div className="flex flex-col gap-1 text-right">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Expira</span>
+                <span className="text-xs font-bold text-slate-500">{new Date(inv.expiraEn).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            {inv.estado !== 'aceptada' && (
+              <button 
+                onClick={() => onResend(inv.email)}
+                className="w-full flex items-center justify-center gap-2 text-xs font-black text-blue-600 bg-blue-50 hover:bg-blue-100 py-3 rounded-xl transition-all border border-blue-100"
+              >
+                <RefreshCcw size={14} /> Reenviar invitación
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

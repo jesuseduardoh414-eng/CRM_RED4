@@ -32,14 +32,11 @@ const navLinks = [
   { to: '/equipo',     label: 'Comunidad', Icon: IconEquipo },
 ];
 
-const SIDEBAR_W = 280;
-
 const Layout = ({ children }) => {
   const { usuario, logout } = useAuth();
   const { showToast }       = useToast();
   const navigate            = useNavigate();
   const [open, setOpen]     = useState(false);
-  const [isMobile, setMobile] = useState(window.innerWidth < 1024);
   const [recordatoriosCount, setRecordatoriosCount] = useState(0);
 
   // Sistema de Alertas de Agenda
@@ -86,11 +83,10 @@ const Layout = ({ children }) => {
     return () => clearInterval(interval);
   }, [usuario, showToast]);
 
+  // Cerrar sidebar al cambiar de ruta en móvil
   useEffect(() => {
-    const onResize = () => setMobile(window.innerWidth < 1024);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+    setOpen(false);
+  }, [navigate]);
 
   const handleLogout = () => {
     logout();
@@ -99,65 +95,43 @@ const Layout = ({ children }) => {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-surface)', position: 'relative' }}>
+    <div className="flex min-h-screen bg-[var(--color-surface)] relative overflow-hidden">
 
       {/* ── Sidebar ─────────────────────────────────────────────────── */}
-      <aside style={{
-        width: SIDEBAR_W,
-        flexShrink: 0,
-        background: 'var(--color-sidebar)',
-        display: 'flex',
-        flexDirection: 'column',
-        position: isMobile ? 'fixed' : 'sticky',
-        top: 0,
-        left: isMobile ? (open ? 0 : -SIDEBAR_W) : 0,
-        height: '100vh',
-        zIndex: 100,
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      }}>
-        {/* Logo Branding (Centered & Large) */}
-        <div style={{ padding: '3rem 1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+      <aside 
+        className={`
+          fixed lg:sticky top-0 h-screen z-[100] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
+          bg-[var(--color-sidebar)] flex flex-col w-[280px]
+          ${open ? 'left-0' : '-left-[280px] lg:left-0'}
+        `}
+      >
+        {/* Logo Branding */}
+        <div className="p-8 lg:p-12 pb-8 flex flex-col items-center gap-4">
           <img 
             src="/logo.png" 
             alt="Red 4 Design" 
-            style={{ 
-              width: '100%', maxWidth: '200px', height: 'auto',
-              objectFit: 'contain'
-            }} 
+            className="w-full max-w-[180px] lg:max-w-[200px] h-auto object-contain"
           />
-          <div style={{ 
-            fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontWeight: '800', 
-            textTransform: 'uppercase', letterSpacing: '0.15em', textAlign: 'center' 
-          }}>
+          <div className="text-[10px] lg:text-xs text-white/40 font-black uppercase tracking-[0.15em] text-center">
             Panel Interno
           </div>
         </div>
 
         {/* Navegación */}
-        <nav style={{ flex: 1, padding: '0 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          <div style={{ fontSize: '0.65rem', fontWeight: '800', color: 'rgba(255,255,255,0.3)', padding: '1rem 0.75rem 0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Menú Principal</div>
+        <nav className="flex-1 px-4 flex flex-col gap-1 overflow-y-auto">
+          <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest">Menú Principal</div>
           {navLinks.map(({ to, label, Icon, badge }) => (
             <NavLink
-              key={to} to={to} onClick={() => isMobile && setOpen(false)}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: '1rem',
-                padding: '0.9rem 1.25rem', borderRadius: '12px',
-                textDecoration: 'none', fontSize: '0.95rem',
-                fontWeight: isActive ? '700' : '500',
-                background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
-                color: isActive ? '#fff' : 'rgba(255,255,255,0.5)',
-                transition: 'var(--transition-base)'
-              })}
+              key={to} to={to} onClick={() => setOpen(false)}
+              className={({ isActive }) => `
+                flex items-center gap-4 px-5 py-3.5 rounded-xl text-sm font-bold transition-all
+                ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
+              `}
             >
               <Icon /> 
-              <span style={{ flex: 1 }}>{label}</span>
+              <span className="flex-1">{label}</span>
               {badge && recordatoriosCount > 0 && (
-                <span style={{
-                  background: 'var(--color-error)', color: '#fff',
-                  fontSize: '0.65rem', fontWeight: '900',
-                  padding: '0.1rem 0.4rem', borderRadius: '6px',
-                  boxShadow: '0 2px 4px rgba(239,68,68,0.3)'
-                }}>
+                <span className="bg-[var(--color-error)] text-white text-[10px] font-black px-2 py-0.5 rounded-lg shadow-lg shadow-red-500/20">
                   {recordatoriosCount}
                 </span>
               )}
@@ -166,18 +140,13 @@ const Layout = ({ children }) => {
 
           {usuario?.rol === 'ADMIN' && (
             <>
-              <div style={{ fontSize: '0.65rem', fontWeight: '800', color: 'rgba(255,255,255,0.3)', padding: '2rem 0.75rem 0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Administración</div>
+              <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest">Administración</div>
               <NavLink
-                to="/usuarios" onClick={() => isMobile && setOpen(false)}
-                style={({ isActive }) => ({
-                  display: 'flex', alignItems: 'center', gap: '1rem',
-                  padding: '0.9rem 1.25rem', borderRadius: '12px',
-                  textDecoration: 'none', fontSize: '0.95rem',
-                  fontWeight: isActive ? '700' : '500',
-                  background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  color: isActive ? '#fff' : 'rgba(255,255,255,0.5)',
-                  transition: 'var(--transition-base)'
-                })}
+                to="/usuarios" onClick={() => setOpen(false)}
+                className={({ isActive }) => `
+                  flex items-center gap-4 px-5 py-3.5 rounded-xl text-sm font-bold transition-all
+                  ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
+                `}
               >
                 <IconGestion /> Usuarios
               </NavLink>
@@ -185,38 +154,24 @@ const Layout = ({ children }) => {
           )}
         </nav>
 
-        {/* User Profile Card (Figma Style) */}
-        <div style={{ padding: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ 
-            display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem'
-          }}>
-            <div style={{ 
-              width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '1rem', color: '#fff',
-              border: '2px solid rgba(255,255,255,0.1)'
-            }}>
+        {/* User Profile Card */}
+        <div className="p-6 border-t border-white/5">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center font-black text-white border-2 border-white/10">
               {usuario?.nombre?.charAt(0).toUpperCase()}
             </div>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{usuario?.nombre}</div>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontWeight: '500' }}>{usuario?.email?.split('@')[0]}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-white truncate">{usuario?.nombre}</div>
+              <div className="text-[11px] text-white/40 font-medium truncate">{usuario?.email?.split('@')[0]}</div>
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>
+            <div className="text-white/40">
                <NotificationCenter />
             </div>
           </div>
           
           <button
             onClick={handleLogout}
-            style={{
-              width: '100%', padding: '0.75rem', borderRadius: '10px',
-              background: 'rgba(239, 68, 68, 0.1)', border: 'none',
-              color: '#f87171', fontSize: '0.85rem', fontWeight: '700',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-            onMouseOut={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+            className="w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-bold hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
           >
             <IconLogout /> Salir
           </button>
@@ -224,64 +179,51 @@ const Layout = ({ children }) => {
       </aside>
 
       {/* ── Content Area ───────────────────────────────────────────── */}
-      <main style={{ flex: 1, minWidth: 0, position: 'relative', height: '100vh', overflowY: 'auto', background: 'var(--color-bg-base)' }}>
-        {/* Top Header (Figma Style) */}
-        <header style={{
-          height: isMobile ? '60px' : '70px', 
-          background: 'var(--color-surface)', 
-          borderBottom: '1px solid var(--color-border)',
-          display: 'flex', 
-          alignItems: 'center', 
-          padding: isMobile ? '0 1rem' : '0 2.5rem', 
-          gap: isMobile ? '1rem' : '2rem', 
-          position: 'sticky', 
-          top: 0, 
-          zIndex: 90
-        }}>
-          {isMobile && (
-            <button onClick={() => setOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--color-text)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <IconMenu />
-            </button>
-          )}
+      <main className="flex-1 min-w-0 flex flex-col h-screen bg-[var(--color-bg-base)]">
+        {/* Top Header */}
+        <header className="h-16 lg:h-[70px] bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center px-4 lg:px-10 gap-4 lg:gap-8 sticky top-0 z-[90]">
+          <button 
+            onClick={() => setOpen(true)} 
+            className="lg:hidden p-2 -ml-2 text-[var(--color-text)] hover:bg-slate-100 rounded-xl transition-colors"
+          >
+            <IconMenu />
+          </button>
           
-          {/* Barra de Búsqueda - Ocultar texto largo en móviles */}
-          <div style={{ position: 'relative', flex: 1, maxWidth: '600px' }}>
-            <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+          {/* Barra de Búsqueda */}
+          <div className="relative flex-1 max-w-xl group">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-50 transition-opacity">🔍</span>
             <input 
               type="text" 
-              placeholder={isMobile ? "Buscar..." : "Buscar proyectos, tareas o miembros..."}
-              style={{
-                width: '100%', 
-                padding: isMobile ? '0.5rem 0.75rem 0.5rem 2rem' : '0.75rem 1rem 0.75rem 2.75rem', 
-                borderRadius: '10px',
-                background: 'var(--color-bg-base)', 
-                border: '1px solid var(--color-border)',
-                fontSize: isMobile ? '0.8rem' : '0.9rem', 
-                outline: 'none', 
-                transition: 'var(--transition-base)'
-              }}
+              placeholder="Buscar..."
+              className="w-full pl-10 pr-4 py-2.5 lg:py-3 rounded-xl bg-[var(--color-bg-base)] border border-[var(--color-border)] text-xs lg:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
+            <span className="hidden lg:block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-sm">⌘K</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : '1.25rem', marginLeft: 'auto' }}>
-            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Bell size={isMobile ? 18 : 20} /></div>
-            <div style={{ color: 'var(--color-text-dim)', cursor: 'pointer' }}><Calendar size={isMobile ? 18 : 20} /></div>
-            {!isMobile && <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)' }} />}
+          <div className="flex items-center gap-2 lg:gap-5 ml-auto">
+            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all">
+              <Bell size={20} />
+            </button>
+            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all">
+              <Calendar size={20} />
+            </button>
+            <div className="hidden lg:block w-8 h-8 rounded-full bg-[var(--color-surface-3)] border border-[var(--color-border)] shadow-sm" />
           </div>
         </header>
 
-        <div style={{ padding: isMobile ? '1rem' : '3rem', maxWidth: '1600px', margin: '0 auto' }}>
+        <div className="flex-1 overflow-y-auto p-4 lg:p-12 max-w-[1600px] w-full mx-auto">
           {children}
         </div>
       </main>
 
       {/* Overlay Móvil */}
-      {isMobile && open && (
-        <div 
-          onClick={() => setOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 99 }} 
-        />
-      )}
+      <div 
+        className={`
+          fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99] transition-opacity duration-300
+          ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}
+        `}
+        onClick={() => setOpen(false)}
+      />
     </div>
   );
 };

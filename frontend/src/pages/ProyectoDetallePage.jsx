@@ -64,100 +64,58 @@ const TareaCard = ({ tarea, onClick, onEditar, onEliminar, onCambiarEstado }) =>
   return (
     <div 
       onClick={() => onClick(tarea)}
-      style={{
-        background: 'var(--color-surface-2)',
-        border: '1px solid var(--color-border)',
-        borderRadius: '1rem',
-        padding: '1.25rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1.5rem',
-        transition: 'all 0.2s',
-        cursor: 'pointer',
-        boxShadow: 'var(--shadow-sm)'
-      }}
-      onMouseOver={e => {
-        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-        e.currentTarget.style.transform = 'translateX(4px)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-      }}
-      onMouseOut={e => {
-        e.currentTarget.style.borderColor = 'var(--color-border)';
-        e.currentTarget.style.transform = 'none';
-        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-      }}
+      className="bg-white border border-slate-100 p-4 lg:p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 hover:translate-x-1 transition-all cursor-pointer shadow-sm hover:shadow-md"
     >
-      {/* Icono de Estado */}
-      <div style={{ 
-        width: '12px', height: '12px', borderRadius: '50%', background: estado.color, 
-        boxShadow: `0 0 10px ${estado.color}55`, flexShrink: 0 
-      }} />
-
-      {/* Info Principal */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
-          <h4 style={{ 
-            fontSize: '1.05rem', fontWeight: '700', 
-            textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none',
-            opacity: tarea.estado === 'HECHO' ? 0.5 : 1
-          }}>
-            {tarea.titulo}
-          </h4>
-          <span style={{ fontSize: '0.65rem', fontWeight: '800', background: prio.bg, color: prio.color, padding: '0.15rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase' }}>
-            {prio.label}
-          </span>
-        </div>
-        <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {tarea.descripcion || 'Sin descripción'}
-        </p>
-      </div>
-
-      {/* Asignado */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '160px' }}>
-        <div style={{ 
-          width: '32px', height: '32px', borderRadius: '10px', background: 'var(--color-surface-3)', 
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-primary-light)'
-        }}>
-          {tarea.asignado?.nombre?.charAt(0) || '?'}
-        </div>
-        <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>
-          {tarea.asignado?.nombre?.split(' ')[0] || 'S/A'}
+      {/* Icono de Estado y Título */}
+      <div className="flex items-start gap-4 flex-1 min-w-0">
+        <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded-full shrink-0 mt-1.5" 
+          style={{ background: estado.color, boxShadow: `0 0 10px ${estado.color}55` }} 
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h4 className={`text-sm lg:text-base font-bold text-slate-900 truncate ${tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}`}>
+              {tarea.titulo}
+            </h4>
+            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md" style={{ background: prio.bg, color: prio.color }}>
+              {prio.label}
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 truncate font-medium">
+            {tarea.descripcion || 'Sin descripción'}
+          </p>
         </div>
       </div>
 
-      {/* Fecha */}
-      <div style={{ width: '100px', textAlign: 'right', fontSize: '0.85rem', color: vencido ? 'var(--color-error)' : 'var(--color-text-muted)', fontWeight: '600' }}>
-        {tarea.venceEn ? (vencido ? '⚠️ ' : '') + formatFecha(tarea.venceEn) : '—'}
-      </div>
+      <div className="flex items-center justify-between lg:justify-end gap-4 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-50">
+        {/* Asignado */}
+        <div className="flex items-center gap-2 lg:w-32 shrink-0">
+          <div className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500">
+            {tarea.asignado?.nombre?.charAt(0) || '?'}
+          </div>
+          <div className="text-xs font-bold text-slate-600 hidden lg:block">
+            {tarea.asignado?.nombre?.split(' ')[0] || 'S/A'}
+          </div>
+        </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
-          style={{ 
-            background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', 
-            color: 'var(--color-text)', padding: '0.5rem', borderRadius: '0.5rem', 
-            cursor: 'pointer', transition: 'var(--transition-base)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}
-          title="Avanzar estado"
-          onMouseOver={e => e.currentTarget.style.background = 'var(--color-bg-base)'}
-          onMouseOut={e => e.currentTarget.style.background = 'var(--color-surface-3)'}
-        >
-          {tarea.estado === 'HECHO' ? <RotateCcw size={16} /> : <ArrowRight size={16} />}
-        </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEliminar(tarea); }}
-          style={{ 
-            background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', 
-            color: 'var(--color-accent-error)', padding: '0.5rem', borderRadius: '0.5rem', 
-            cursor: 'pointer', transition: 'var(--transition-base)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}
-          onMouseOver={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
-          onMouseOut={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)'}
-        >
-          <Trash2 size={16} />
-        </button>
+        {/* Fecha */}
+        <div className={`text-[10px] lg:text-xs font-black shrink-0 ${vencido ? 'text-red-500' : 'text-slate-400'}`}>
+          {tarea.venceEn ? (vencido ? '⚠️ ' : '') + formatFecha(tarea.venceEn) : '—'}
+        </div>
+
+        <div className="flex gap-2 ml-4">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
+            className="p-2 lg:p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
+          >
+            {tarea.estado === 'HECHO' ? <RotateCcw size={14} /> : <ArrowRight size={14} />}
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEliminar(tarea); }}
+            className="p-2 lg:p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -165,9 +123,7 @@ const TareaCard = ({ tarea, onClick, onEditar, onEliminar, onCambiarEstado }) =>
 
 // ── Toggle Vista (Material) ─────────────────────────────────────────────────
 const ToggleVista = ({ vista, onChange }) => (
-  <div style={{ 
-    display: 'flex', background: 'var(--color-surface-2)', padding: '0.35rem', borderRadius: '1rem', border: '1px solid var(--color-border)', gap: '0.25rem' 
-  }}>
+  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 w-full lg:w-auto">
     {[
       { k: 'lista',  l: 'Lista', i: <List size={16} /> },
       { k: 'kanban', l: 'Kanban', i: <LayoutGrid size={16} /> },
@@ -175,15 +131,12 @@ const ToggleVista = ({ vista, onChange }) => (
     ].map(v => (
       <button 
         key={v.k} onClick={() => onChange(v.k)}
-        style={{
-          padding: '0.5rem 1rem', borderRadius: '0.75rem', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '700',
-          background: vista === v.k ? 'var(--color-primary)' : 'transparent',
-          color: vista === v.k ? '#fff' : 'var(--color-text-muted)',
-          transition: 'all 0.2s',
-          display: 'flex', alignItems: 'center', gap: '0.5rem'
-        }}
+        className={`
+          flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs lg:text-sm font-black transition-all
+          ${vista === v.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500 hover:bg-white'}
+        `}
       >
-        {v.i} {v.l}
+        {v.i} <span className="hidden lg:inline">{v.l}</span>
       </button>
     ))}
   </div>
@@ -246,67 +199,54 @@ const ProyectoDetallePage = () => {
   if (cargando) return <Spinner texto="Cargando entorno..." />;
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div className="max-w-7xl mx-auto">
       
       {/* Header Premium */}
-      <div style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '2rem' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-            <Link to="/proyectos" style={{ color: 'var(--color-primary)', fontWeight: '700', textDecoration: 'none', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              <ChevronLeft size={16} /> PROYECTOS
+      <div className="mb-10 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-8">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-4">
+            <Link to="/proyectos" className="text-blue-600 font-black text-[10px] lg:text-xs tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
+              <ChevronLeft size={14} /> PROYECTOS
             </Link>
-            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-dim)' }}>/</span>
-            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase' }}>ID #{proyecto?.id}</span>
+            <span className="text-slate-300">/</span>
+            <span className="text-[10px] font-black text-slate-400 tracking-widest truncate max-w-[200px]">ID #{proyecto?.id}</span>
           </div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '0.75rem' }}>{proyecto?.nombre}</h1>
-          <p style={{ fontSize: '1.1rem', color: 'var(--color-text-muted)', maxWidth: '600px' }}>{proyecto?.descripcion}</p>
+          <h1 className="text-2xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-2">
+            {proyecto?.nombre}
+          </h1>
+          <p className="text-sm lg:text-base text-slate-500 font-medium max-w-2xl">{proyecto?.descripcion}</p>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div className="flex gap-2 w-full lg:w-auto">
           <button 
             onClick={() => setModalImportar(true)} 
-            style={{ 
-              background: 'var(--color-surface)', border: '1px solid var(--color-border)', 
-              color: 'var(--color-text)', borderRadius: '12px', padding: '0.75rem 1.25rem',
-              fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
-              transition: 'var(--transition-base)', boxShadow: 'var(--shadow-sm)'
-            }}
-            onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.background = 'var(--color-bg-base)'; }}
-            onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-surface)'; }}
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-white border border-slate-200 rounded-xl text-xs lg:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
           >
             <Download size={18} /> Importar
           </button>
-          <button onClick={() => { setTareaEditando(null); setModal(true); }} className="btn-primary" style={{ borderRadius: '12px', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button 
+            onClick={() => { setTareaEditando(null); setModal(true); }} 
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-blue-600 text-white rounded-xl text-xs lg:text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+          >
             <Plus size={18} /> Nueva Tarea
           </button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '3rem' }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 overflow-x-auto pb-2 lg:pb-0">
         {[
-          { l: 'Progreso General', v: `${stats.pct}%`, i: <Target size={24} />, c: 'var(--color-primary)', bg: '#eff6ff' },
+          { l: 'Progreso', v: `${stats.pct}%`, i: <Target size={24} />, c: '#2563eb', bg: '#eff6ff' },
           { l: 'Por Hacer', v: stats.pendientes, i: <ListTodo size={24} />, c: '#64748b', bg: '#f8fafc' },
           { l: 'En Marcha', v: stats.progreso, i: <Zap size={24} />, c: '#8b5cf6', bg: '#f5f3ff' },
-          { l: 'Finalizadas', v: stats.hechas, i: <CheckCircle2 size={24} />, c: '#10b981', bg: '#f0fdf4' }
+          { l: 'Hechas', v: stats.hechas, i: <CheckCircle2 size={24} />, c: '#10b981', bg: '#f0fdf4' }
         ].map((s, i) => (
-          <div key={i} className="card" style={{ 
-            padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            border: 'none', borderRadius: '24px', background: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.03)'
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0f172a', lineHeight: 1 }}>{s.v}</div>
-              <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.l}</div>
-              {s.l === 'Progreso General' && (
-                <div style={{ width: '80px', height: '6px', background: '#f1f5f9', borderRadius: '10px', marginTop: '0.5rem', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${stats.pct}%`, background: 'var(--color-primary)', transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)' }} />
-                </div>
-              )}
+          <div key={i} className="bg-white p-5 lg:p-6 rounded-[24px] shadow-sm border border-slate-50 flex items-center justify-between min-w-[140px]">
+            <div className="flex flex-col gap-0.5">
+              <div className="text-xl lg:text-2xl font-black text-slate-900 leading-none">{s.v}</div>
+              <div className="text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.l}</div>
             </div>
-            <div style={{ 
-              width: '52px', height: '52px', borderRadius: '14px', background: s.bg, 
-              color: s.c, display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.bg, color: s.c }}>
               {s.i}
             </div>
           </div>
@@ -396,59 +336,82 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div className="card" style={{ width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface-2)', padding: '2.5rem' }}>
-        <h2 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '2rem' }}>{tarea ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4 transition-all">
+      <div className="bg-white w-full max-w-2xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
+        {/* Modal Header */}
+        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">{tarea ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-white rounded-xl text-slate-400 transition-colors border border-transparent hover:border-slate-100">
+            <Zap size={20} className="rotate-45" />
+          </button>
+        </div>
         
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">TÍTULO DE LA TAREA</label>
-            <input className="form-input" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required placeholder="¿Qué hay que hacer?" />
-          </div>
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">TÍTULO DE LA TAREA</label>
+              <input 
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" 
+                value={form.titulo} 
+                onChange={e => setForm({...form, titulo: e.target.value})} 
+                required 
+                placeholder="¿Qué hay que hacer?" 
+              />
+            </div>
 
-          <div className="form-group">
-            <label className="form-label">DESCRIPCIÓN</label>
-            <textarea className="form-input" rows="3" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Detalles adicionales..." />
-          </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DESCRIPCIÓN</label>
+              <textarea 
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none resize-none" 
+                rows="3" 
+                value={form.descripcion} 
+                onChange={e => setForm({...form, descripcion: e.target.value})} 
+                placeholder="Detalles adicionales..." 
+              />
+            </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-            <div className="form-group">
-              <label className="form-label">ASIGNADO A</label>
-              <select className="form-input form-select" value={form.asignadoId} onChange={e => setForm({...form, asignadoId: e.target.value})}>
-                <option value="">Sin asignar</option>
-                {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ASIGNADO A</label>
+                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none appearance-none" value={form.asignadoId} onChange={e => setForm({...form, asignadoId: e.target.value})}>
+                  <option value="">Sin asignar</option>
+                  {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PRIORIDAD</label>
+                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
+                  {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">PRIORIDAD</label>
-              <select className="form-input form-select" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
-                {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-            <div className="form-group">
-              <label className="form-label">ESTADO</label>
-              <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
-                {ESTADOS_TAREA.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ESTADO</label>
+                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
+                  {ESTADOS_TAREA.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA INICIO</label>
+                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA LÍMITE</label>
+                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.venceEn} onChange={e => setForm({...form, venceEn: e.target.value})} />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">FECHA INICIO</label>
-              <input type="date" className="form-input" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} style={{ colorScheme: 'dark' }} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">FECHA LÍMITE</label>
-              <input type="date" className="form-input" value={form.venceEn} onChange={e => setForm({...form, venceEn: e.target.value})} style={{ colorScheme: 'dark' }} />
-            </div>
-          </div>
+          </form>
+        </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', padding: '0.8rem', borderRadius: '0.85rem', cursor: 'pointer', fontWeight: '700' }}>CANCELAR</button>
-            <button type="submit" className="btn-primary" style={{ flex: 2 }} disabled={cargando}>{cargando ? 'GUARDANDO...' : 'GUARDAR TAREA'}</button>
-          </div>
-        </form>
+        {/* Modal Footer */}
+        <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse lg:flex-row gap-3">
+          <button onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest">Cancelar</button>
+          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
+            {cargando ? 'Guardando...' : 'Guardar Tarea'}
+          </button>
+        </div>
       </div>
     </div>
   );

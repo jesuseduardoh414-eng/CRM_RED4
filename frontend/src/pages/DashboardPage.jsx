@@ -39,21 +39,17 @@ const saludo = () => {
 
 // ─── Tarjeta stat (Premium) ──────────────────────────────────────────────────
 const StatCard = ({ value, sub, icon, color, bg }) => (
-  <div className="card" style={{ 
-    padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    border: 'none', borderRadius: '24px', background: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.03)',
-    minHeight: '120px'
-  }}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-      <div style={{ fontSize: '2.25rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.05em', lineHeight: 1 }}>
+  <div className="bg-white p-5 lg:p-6 rounded-[24px] shadow-sm border border-slate-50 flex items-center justify-between min-w-[140px] h-[110px] lg:h-[120px]">
+    <div className="flex flex-col gap-0.5">
+      <div className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-none">
         {value}
       </div>
-      {sub && <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>{sub}</div>}
+      {sub && <div className="text-[10px] lg:text-xs text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">{sub}</div>}
     </div>
-    <div style={{ 
-      width: '48px', height: '48px', borderRadius: '16px', background: bg || `${color}10`, 
-      color: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-    }}>
+    <div 
+      className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110"
+      style={{ background: bg || `${color}10`, color: color }}
+    >
       {icon}
     </div>
   </div>
@@ -91,35 +87,34 @@ const DashboardMiembro = ({ usuario }) => {
     .slice(0, 5);
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div className="max-w-7xl mx-auto">
       {/* Saludo y Branding Personal */}
-      <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-        <div style={{
-          width: '56px', height: '56px', borderRadius: '16px', flexShrink: 0,
-          background: area.bg, border: `2px solid ${area.color}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '900', fontSize: '1.25rem', color: area.color,
-          boxShadow: `0 8px 24px ${area.color}22`
-        }}>
+      <div className="mb-8 flex items-center gap-4">
+        <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-2xl shrink-0 flex items-center justify-center font-black text-lg lg:text-xl shadow-xl shadow-slate-200/50"
+          style={{ background: area.bg, border: `2px solid ${area.color}`, color: area.color }}
+        >
           {usuario?.nombre?.charAt(0).toUpperCase()}
         </div>
         <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1.1 }}>
+          <h1 className="text-xl lg:text-3xl font-black tracking-tight text-slate-900 leading-tight">
             {saludo()}, {usuario?.nombre?.split(' ')[0]}
           </h1>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: area.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{area.icon} {area.label}</span>
-            <span style={{ color: 'var(--color-text-dim)', fontSize: '0.7rem' }}>●</span>
-            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MIEMBRO ACTIVO</span>
+          <div className="flex flex-wrap gap-2 mt-1">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">
+              {area.label}
+            </span>
+            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest px-2 py-0.5 bg-blue-50 rounded-md border border-blue-100">
+              Activo
+            </span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
-        <StatCard value={proyectos.length} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub="mis proyectos" />
-        <StatCard value={pendientes.length} icon={<IconTasks />} color="#64748b" bg="#f8fafc" sub="pendientes" />
-        <StatCard value={enProgreso.length} icon={<IconTasks />} color="#8b5cf6" bg="#f5f3ff" sub="en progreso" />
-        <StatCard value={hechas.length} icon={<IconCheck />} color="#10b981" bg="#f0fdf4" sub="finalizadas" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
+        <StatCard value={proyectos.length} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub="PROYECTOS" />
+        <StatCard value={pendientes.length} icon={<IconTasks />} color="#64748b" bg="#f8fafc" sub="PENDIENTES" />
+        <StatCard value={enProgreso.length} icon={<IconTasks />} color="#8b5cf6" bg="#f5f3ff" sub="EN MARCHA" />
+        <StatCard value={hechas.length} icon={<IconCheck />} color="#10b981" bg="#f0fdf4" sub="HECHAS" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', alignItems: 'start' }}>
@@ -179,22 +174,22 @@ const DashboardAdmin = () => {
   const { proyectos, tareas, topUsuarios, actividadReciente, proyectosProgreso } = stats;
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4">
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.04em', lineHeight: 1 }}>Control Central</h1>
-          <p style={{ fontSize: '0.95rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Supervisión estratégica del equipo CRM RED 4</p>
+          <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">Control Central</h1>
+          <p className="text-sm lg:text-base text-slate-500 mt-1">Supervisión estratégica del equipo CRM RED 4</p>
         </div>
-        <div style={{ textAlign: 'right', color: 'var(--color-primary-light)', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+        <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
           {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
-        <StatCard value={proyectos.total} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub={`de ${proyectos.total} totales`} />
-        <StatCard value={tareas.estados.find(e => e.estado === 'HECHO')?._count || 0} icon={<IconTasks />} color="#10b981" bg="#f0fdf4" sub={`de ${tareas.total} totales`} />
-        <StatCard value={topUsuarios.length} icon={<IconTeam />} color="#8b5cf6" bg="#f5f3ff" sub="usuarios activos" />
-        <StatCard value={`${Math.round(((tareas.estados.find(e => e.estado === 'HECHO')?._count || 0) / (tareas.total || 1)) * 100)}%`} icon={<IconChart />} color="#f59e0b" bg="#fffbeb" sub="todos los proyectos" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
+        <StatCard value={proyectos.total} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub="PROYECTOS" />
+        <StatCard value={tareas.estados.find(e => e.estado === 'HECHO')?._count || 0} icon={<IconTasks />} color="#10b981" bg="#f0fdf4" sub="FINALIZADAS" />
+        <StatCard value={topUsuarios.length} icon={<IconTeam />} color="#8b5cf6" bg="#f5f3ff" sub="EQUIPO" />
+        <StatCard value={`${Math.round(((tareas.estados.find(e => e.estado === 'HECHO')?._count || 0) / (tareas.total || 1)) * 100)}%`} icon={<IconChart />} color="#f59e0b" bg="#fffbeb" sub="EFICIENCIA" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', marginBottom: '3rem' }}>

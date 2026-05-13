@@ -268,9 +268,11 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
   for (let i = 1; i <= totalDays; i++) dias.push(i);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', overflowX: isMobile ? 'auto' : 'hidden' }}>
+    <div className="grid grid-cols-7 border-t border-slate-100">
       {DIAS_SEMANA.map(d => (
-        <div key={d} style={{ padding: isMobile ? '0.5rem' : '1rem', textAlign: 'center', fontSize: '0.65rem', fontWeight: '800', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>{isMobile ? d.charAt(0).toUpperCase() : d.toUpperCase()}</div>
+        <div key={d} className="p-3 lg:p-4 text-center text-[10px] font-black text-slate-400 border-b border-slate-100 bg-slate-50 uppercase tracking-widest">
+          {isMobile ? d.charAt(0) : d}
+        </div>
       ))}
       {dias.map((dia, i) => {
         const dObj = dia ? new Date(year, month, dia) : null;
@@ -295,27 +297,50 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
         const circleColor = esHoy ? '#fff' : (dia ? (esLaboral ? '#3b82f6' : '#ef4444') : 'var(--color-text)');
 
         return (
-          <div key={i} onClick={() => dia && onSelectDate({ fechaInicio: dObj })} style={{ minHeight: isMobile ? '70px' : '120px', padding: '0.25rem', borderRight: '1px solid var(--color-border-light)', borderBottom: '1px solid var(--color-border-light)', position: 'relative', cursor: dia ? 'pointer' : 'default', background: dia && !esLaboral ? 'rgba(239, 68, 68, 0.02)' : 'transparent' }}>
+          <div 
+            key={i} 
+            onClick={() => dia && onSelectDate({ fechaInicio: dObj })} 
+            className={`
+              min-h-[70px] lg:min-h-[120px] p-1.5 lg:p-2 border-r border-b border-slate-50 relative cursor-pointer transition-colors
+              ${dia ? 'hover:bg-blue-50/30' : 'bg-slate-50/30'}
+              ${dia && !esLaboral ? 'bg-red-50/10' : ''}
+            `}
+          >
             {dia && (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div className="flex justify-between items-start mb-1">
+                  <span className={`
+                    w-6 h-6 lg:w-7 lg:h-7 flex items-center justify-center rounded-lg text-[10px] lg:text-xs font-black
+                    ${esHoy ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-600'}
+                  `}>
+                    {dia}
+                  </span>
                   {diaEsp && (
                     <div 
+                      className="w-2 h-2 lg:w-2.5 lg:h-2.5 rounded-full mt-1.5 mr-0.5"
                       style={{ 
-                        width: '8px', height: '8px', borderRadius: '50%', 
                         background: diaEsp.tipo === 'festivo' ? '#ef4444' : diaEsp.tipo === 'vacacion' ? '#10b981' : diaEsp.tipo === 'homeoffice' ? '#3b82f6' : '#f59e0b' 
                       }} 
                       title={diaEsp.descripcion} 
                     />
                   )}
-                  <span style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontSize: '0.8rem', fontWeight: '900', background: circleBg, color: circleColor }}>{dia}</span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {diaEventos.slice(0, 4).map(e => (
-                    <div key={e.id} onClick={(ev) => { ev.stopPropagation(); onSelectEvent(e); }} style={{ fontSize: '0.65rem', padding: '2px 4px', borderRadius: '3px', background: e.color, color: '#fff', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', border: e.usuarioId !== currentUserId ? '1px dashed rgba(255,255,255,0.8)' : 'none' }}>
-                      {e.esGlobal ? <Globe size={8} style={{ marginRight: '2px' }} /> : e.esCompartido ? <Users size={8} style={{ marginRight: '2px' }} /> : null}{e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
+                <div className="flex flex-col gap-1">
+                  {diaEventos.slice(0, 3).map(e => (
+                    <div 
+                      key={e.id} 
+                      onClick={(ev) => { ev.stopPropagation(); onSelectEvent(e); }} 
+                      className="text-[9px] lg:text-[10px] px-1.5 py-0.5 rounded-md font-bold truncate text-white"
+                      style={{ background: e.color }}
+                    >
+                      {e.titulo}
                     </div>
                   ))}
+                  {diaEventos.length > 3 && (
+                    <div className="text-[8px] lg:text-[9px] font-black text-slate-400 pl-1">
+                      + {diaEventos.length - 3} más
+                    </div>
+                  )}
                 </div>
               </>
             )}

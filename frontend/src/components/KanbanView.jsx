@@ -187,13 +187,13 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
   const [dragOver, setDragOver] = useState(false);
 
   return (
-    <div style={{ flex: 1, minWidth: '300px', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 0.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '1.1rem' }}>{col.icon}</span>
-          <h3 style={{ fontSize: '1rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: col.color }}>{col.label}</h3>
+    <div className="flex-1 min-w-[300px] w-[85vw] md:w-auto md:max-w-[400px] flex flex-col gap-4">
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{col.icon}</span>
+          <h3 className="text-sm font-black uppercase tracking-widest" style={{ color: col.color }}>{col.label}</h3>
         </div>
-        <span style={{ background: 'var(--color-surface-3)', padding: '0.15rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--color-text-muted)' }}>
+        <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-500">
           {tareas.length}
         </span>
       </div>
@@ -202,18 +202,11 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, col.key); }}
-        style={{
-          flex: 1,
-          background: dragOver ? 'rgba(255,255,255,0.02)' : 'transparent',
-          border: dragOver ? `2px dashed ${col.color}` : '2px dashed transparent',
-          borderRadius: '1.25rem',
-          padding: '0.5rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-          transition: 'all 0.2s ease',
-          minHeight: '400px'
-        }}
+        className={`
+          flex-1 rounded-2xl p-2 flex flex-col gap-4 transition-all duration-200 min-h-[500px]
+          ${dragOver ? 'bg-slate-50 border-2 border-dashed' : 'bg-transparent border-2 border-transparent'}
+        `}
+        style={{ borderColor: dragOver ? col.color : 'transparent' }}
       >
         {tareas.map(t => (
           <KanbanCard 
@@ -261,50 +254,44 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado }) 
     : tareas;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div className="flex flex-col gap-6">
       {/* Filtro de día */}
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+      <div className="flex flex-wrap gap-2 lg:gap-4 items-center">
         <button 
           onClick={() => setSoloHoy(false)}
-          style={{
-            padding: '0.5rem 1.25rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', cursor: 'pointer',
-            background: !soloHoy ? 'var(--color-primary)' : 'var(--color-surface)',
-            color: !soloHoy ? '#fff' : 'var(--color-text)',
-            fontSize: '0.85rem', fontWeight: '700', transition: 'all 0.2s',
-            boxShadow: 'var(--shadow-sm)'
-          }}
+          className={`
+            px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+            ${!soloHoy ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
+          `}
         >
           Todas las tareas
         </button>
         <button 
           onClick={() => setSoloHoy(true)}
-          style={{
-            padding: '0.5rem 1.25rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', cursor: 'pointer',
-            background: soloHoy ? 'var(--color-primary)' : 'var(--color-surface)',
-            color: soloHoy ? '#fff' : 'var(--color-text)',
-            fontSize: '0.85rem', fontWeight: '700', transition: 'all 0.2s',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex', alignItems: 'center', gap: '0.5rem'
-          }}
+          className={`
+            px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2
+            ${soloHoy ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
+          `}
         >
-          Solo para hoy <Calendar size={16} />
+          Solo hoy <Calendar size={14} />
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: '1.5rem', overflowX: 'auto', paddingBottom: '2rem' }}>
+      <div className="flex gap-4 lg:gap-8 overflow-x-auto pb-8 snap-x snap-mandatory lg:snap-none">
         {COLUMNAS.map(col => (
-          <KanbanColumna 
-            key={col.key}
-            col={col}
-            tareas={tareasFiltradas.filter(t => t.estado === col.key)}
-            actualizando={actualizando}
-            onClick={onClick}
-            onEditar={onEditar}
-            onEliminar={onEliminar}
-            onCambiarEstado={onCambiarEstado}
-            onDragStart={handleDragStart}
-            onDrop={handleDrop}
-          />
+          <div key={col.key} className="snap-center">
+            <KanbanColumna 
+              col={col}
+              tareas={tareasFiltradas.filter(t => t.estado === col.key)}
+              actualizando={actualizando}
+              onClick={onClick}
+              onEditar={onEditar}
+              onEliminar={onEliminar}
+              onCambiarEstado={onCambiarEstado}
+              onDragStart={handleDragStart}
+              onDrop={handleDrop}
+            />
+          </div>
         ))}
       </div>
     </div>

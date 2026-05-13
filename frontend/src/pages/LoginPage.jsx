@@ -39,47 +39,36 @@ const LoginPage = () => {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1.5rem',
-      background: '#ffffff',
-    }}>
-      <div style={{ width: '100%', maxWidth: '420px' }}>
+    <div className="min-h-screen flex items-center justify-center bg-white p-4 lg:p-8">
+      <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
 
         {/* Logo / Título */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            maxWidth: '220px',
-            height: 'auto',
-            marginBottom: '1.5rem',
-          }}>
-            <img src="/logo_login.jpeg" alt="Logo" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-full max-w-[180px] lg:max-w-[220px] mb-6">
+            <img src="/logo_login.jpeg" alt="Logo" className="w-full h-auto object-contain" />
           </div>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: '700', color: 'var(--color-text)' }}>
+          <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
             Panel Interno
           </h1>
-          <p style={{ color: 'var(--color-text-muted)', marginTop: '0.4rem', fontSize: '0.9rem' }}>
+          <p className="text-slate-400 font-medium mt-1 text-sm lg:text-base">
             Inicia sesión para continuar
           </p>
         </div>
 
         {/* Tarjeta del formulario */}
-        <div className="card" style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.5)' }}>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div className="bg-white p-8 lg:p-10 rounded-[32px] shadow-2xl shadow-slate-200 border border-slate-50">
+          <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* Error global */}
-            {error && <div className="alert-error">{error}</div>}
+            {error && (
+              <div className="bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-center animate-shake">
+                {error}
+              </div>
+            )}
 
             {/* Email */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="email">Correo electrónico</label>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="email">Correo electrónico</label>
               <input
                 id="email"
                 name="email"
@@ -87,62 +76,50 @@ const LoginPage = () => {
                 autoComplete="email"
                 required
                 placeholder="tu@empresa.com"
-                className="form-input"
+                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
                 value={form.email}
                 onChange={handleChange}
               />
             </div>
 
             {/* Password */}
-            <div className="form-group" style={{ position: 'relative' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="form-label" htmlFor="password">Contraseña</label>
-                <Link to="/forgot-password" style={{ fontSize: '0.8rem', color: 'var(--color-primary)', textDecoration: 'none' }}>
+            <div className="space-y-2 relative">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest" htmlFor="password">Contraseña</label>
+                <Link to="/forgot-password" size={18} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-700 transition-colors">
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
-              <input
-                id="password"
-                name="password"
-                type={verPassword ? "text" : "password"}
-                autoComplete="current-password"
-                required
-                placeholder="••••••••"
-                className="form-input"
-                style={{ paddingRight: '2.5rem' }}
-                value={form.password}
-                onChange={handleChange}
-              />
-              <button
-                type="button"
-                onClick={() => setVerPassword(!verPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '0.75rem',
-                  top: '2.4rem',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-text-dim)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0.25rem'
-                }}
-              >
-                {verPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={verPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  placeholder="••••••••"
+                  className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none pr-12"
+                  value={form.password}
+                  onChange={handleChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => setVerPassword(!verPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors p-1"
+                >
+                  {verPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
-              className="btn-primary"
+              className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 mt-2"
               disabled={cargando}
-              style={{ marginTop: '0.5rem' }}
             >
               {cargando ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </button>
           </form>
-
         </div>
       </div>
     </div>

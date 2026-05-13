@@ -177,33 +177,23 @@ const GanttView = ({ proyecto, tareas }) => {
           }}>
             
             {/* ── HEADER ────────────────────────────────────────────────── */}
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)', position: 'sticky', top: 0, zIndex: 10 }}>
-              <div style={{ width: NAME_WIDTH, padding: '1rem', borderRight: '1px solid var(--color-border)', fontWeight: '700', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                TAREAS DEL PROYECTO
+            <div className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-20">
+              <div className="w-[180px] lg:w-[220px] shrink-0 p-4 border-r border-slate-200 font-black text-[10px] text-slate-400 uppercase tracking-widest sticky left-0 bg-slate-50 z-30">
+                Tareas
               </div>
-              <div style={{ flex: 1 }}>
+              <div className="flex-1">
                 {/* Meses */}
-                <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border-light)' }}>
+                <div className="flex border-b border-slate-100">
                   {months.map((m, i) => (
-                    <div key={i} style={{ 
-                      width: `${(m.count / totalDays) * 100}%`,
-                      padding: '0.5rem', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase',
-                      textAlign: 'center', color: 'var(--color-primary-light)',
-                      borderRight: '1px solid var(--color-border-light)'
-                    }}>
+                    <div key={i} className="p-2 text-[10px] font-black uppercase tracking-widest text-blue-600 text-center border-r border-slate-100" style={{ width: `${(m.count / totalDays) * 100}%` }}>
                       {m.label}
                     </div>
                   ))}
                 </div>
                 {/* Días */}
-                <div style={{ display: 'flex' }}>
+                <div className="flex">
                   {days.map((d, i) => (
-                    <div key={i} style={{ 
-                      width: `${(1 / totalDays) * 100}%`,
-                      textAlign: 'center', padding: '0.4rem 0', fontSize: '0.65rem',
-                      fontWeight: '600', color: d.getDay() === 0 || d.getDay() === 6 ? 'var(--color-error)' : 'var(--color-text-muted)',
-                      borderRight: '1px solid var(--color-border-light)'
-                    }}>
+                    <div key={i} className={`flex-1 text-center py-2 text-[9px] font-bold border-r border-slate-50 ${d.getDay() === 0 || d.getDay() === 6 ? 'text-red-400 bg-red-50/30' : 'text-slate-400'}`}>
                       {d.getDate()}
                     </div>
                   ))}
@@ -232,61 +222,27 @@ const GanttView = ({ proyecto, tareas }) => {
                 const widthPct = Math.max(2, endPct - startPct);
                 
                 return (
-                  <div key={tarea.id} style={{ 
-                    display: 'flex', 
-                    borderBottom: '1px solid var(--color-border-light)',
-                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
-                    transition: 'background 0.2s'
-                  }}>
-                    {/* Nombre Tarea */}
-                    <div style={{ 
-                      width: NAME_WIDTH, padding: '0.75rem 1rem', 
-                      borderRight: '1px solid var(--color-border)',
-                      fontSize: '0.85rem', fontWeight: '500',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      display: 'flex', alignItems: 'center'
-                    }}>
-                      <span style={{ 
-                        opacity: tarea.estado === 'HECHO' ? 0.4 : 1,
-                        textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none'
-                      }}>
+                  <div key={tarea.id} className={`flex border-b border-slate-50 transition-colors hover:bg-slate-50/50 ${idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/20'}`}>
+                    {/* Nombre Tarea (Sticky) */}
+                    <div className="w-[180px] lg:w-[220px] shrink-0 p-4 border-r border-slate-100 text-xs font-bold text-slate-700 truncate sticky left-0 bg-white lg:bg-transparent z-10">
+                      <span className={tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}>
                         {tarea.titulo}
                       </span>
                     </div>
 
                     {/* Timeline Cell */}
-                    <div style={{ flex: 1, position: 'relative', height: '48px' }}>
+                    <div className="flex-1 relative h-14">
                       <div 
                         onMouseEnter={(e) => setHoveredTask({ tarea, rect: e.currentTarget.getBoundingClientRect() })}
                         onMouseLeave={() => setHoveredTask(null)}
+                        className="absolute top-1/2 -translate-y-1/2 h-7 rounded-full shadow-lg cursor-pointer z-0 border-2 border-white/20 transition-transform hover:scale-[1.02]"
                         style={{
-                          position: 'absolute',
                           left: `${startPct}%`,
                           width: `${widthPct}%`,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '24px',
-                          borderRadius: '12px',
                           background: color.bar,
                           boxShadow: `0 4px 12px ${color.bar}44`,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '0 10px',
-                          zIndex: 2,
-                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                          border: '2px solid rgba(255,255,255,0.1)'
                         }}
-                      >
-                        {widthPct > 5 && (
-                          <span style={{ 
-                            fontSize: '0.65rem', fontWeight: '800', color: '#fff', 
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' 
-                          }}>
-                            {tarea.asignado?.nombre || 'S/A'}
-                          </span>
-                        )}
-                      </div>
+                      />
                     </div>
                   </div>
                 );
