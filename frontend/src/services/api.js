@@ -101,8 +101,11 @@ export const proyectosService = {
   },
 
   editar: async (id, datos) => {
+    const isMultipart = datos instanceof FormData;
     const res = await fetch(`${API_URL}/proyectos/${id}`, {
-      method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos),
+      method: 'PUT',
+      headers: getHeaders(isMultipart),
+      body: isMultipart ? datos : JSON.stringify(datos),
     });
     return handleResponse(res);
   },

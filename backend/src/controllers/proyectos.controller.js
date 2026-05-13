@@ -1,6 +1,6 @@
-// Controlador de Proyectos
-// ADMIN → ve todos los proyectos
-// MIEMBRO → solo los proyectos donde tiene tareas asignadas
+﻿// Controlador de Proyectos
+// ADMIN â†’ ve todos los proyectos
+// MIEMBRO â†’ solo los proyectos donde tiene tareas asignadas
 
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
@@ -12,14 +12,14 @@ const INCLUDE_PROYECTO = {
   _count:  { select: { tareas: true } },
 };
 
-// ── GET /api/proyectos ──────────────────────────────────────────────────────
+// â”€â”€ GET /api/proyectos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ADMIN: todos los proyectos
-// MIEMBRO: solo proyectos donde es miembro explícito
+// MIEMBRO: solo proyectos donde es miembro explÃ­cito
 const listar = async (req, res) => {
   try {
     const esAdmin = req.usuario.rol === 'ADMIN';
 
-    // Para miembro: filtrar por la relación miembros
+    // Para miembro: filtrar por la relaciÃ³n miembros
     const where = esAdmin
       ? {}
       : { miembros: { some: { id: req.usuario.id } } };
@@ -37,11 +37,11 @@ const listar = async (req, res) => {
   }
 };
 
-// ── GET /api/proyectos/:id/equipo ───────────────────────────────────────────
+// â”€â”€ GET /api/proyectos/:id/equipo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Devuelve los miembros asignados oficialmente al proyecto
 const equipo = async (req, res) => {
   const id = parseInt(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
 
   try {
     const proyecto = await prisma.proyecto.findUnique({
@@ -84,7 +84,7 @@ const equipo = async (req, res) => {
   }
 };
 
-// ── POST /api/proyectos ─────────────────────────────────────────────────────
+// â”€â”€ POST /api/proyectos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const crear = async (req, res) => {
   const { nombre, descripcion, estado, area, fechaInicio, fechaFin, primerComentario, miembrosIds } = req.body;
   const archivos = req.files;
@@ -150,7 +150,7 @@ const crear = async (req, res) => {
       req.usuario.id,
       proyecto.id,
       'CREAR_PROYECTO',
-      `${req.usuario.nombre} creó el proyecto "${proyecto.nombre}" con ${ids.length} miembros`
+      `${req.usuario.nombre} creÃ³ el proyecto "${proyecto.nombre}" con ${ids.length} miembros`
     );
 
     return res.status(201).json({ mensaje: 'Proyecto creado', proyecto });
@@ -160,11 +160,11 @@ const crear = async (req, res) => {
   }
 };
 
-// ── PUT /api/proyectos/:id ──────────────────────────────────────────────────
+// â”€â”€ PUT /api/proyectos/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const editar = async (req, res) => {
   const id = parseInt(req.params.id);
   const { nombre, descripcion, estado, area, fechaInicio, fechaFin, miembrosIds } = req.body;
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
 
   try {
     const existente = await prisma.proyecto.findUnique({ where: { id } });
@@ -176,7 +176,7 @@ const editar = async (req, res) => {
       ...(estado      && { estado }),
     };
 
-    // Actualizar miembros si se envían
+    // Actualizar miembros si se envÃ­an
     if (miembrosIds) {
       const ids = typeof miembrosIds === 'string' ? JSON.parse(miembrosIds) : miembrosIds;
       dataUpdate.miembros = {
@@ -195,7 +195,7 @@ const editar = async (req, res) => {
       req.usuario.id,
       proyecto.id,
       'EDITAR_PROYECTO',
-      `${req.usuario.nombre} actualizó el proyecto "${proyecto.nombre}"`
+      `${req.usuario.nombre} actualizÃ³ el proyecto "${proyecto.nombre}"`
     );
 
     return res.json({ mensaje: 'Proyecto actualizado', proyecto });
@@ -205,13 +205,13 @@ const editar = async (req, res) => {
   }
 };
 
-// ── DELETE /api/proyectos/:id ───────────────────────────────────────────────
+// â”€â”€ DELETE /api/proyectos/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const eliminar = async (req, res) => {
   const id = parseInt(req.params.id);
   if (req.usuario.rol !== 'ADMIN') {
     return res.status(403).json({ error: 'Solo los administradores pueden eliminar proyectos' });
   }
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
 
   try {
     const existente = await prisma.proyecto.findUnique({ where: { id } });
@@ -225,7 +225,7 @@ const eliminar = async (req, res) => {
       req.usuario.id,
       id,
       'ELIMINAR_PROYECTO',
-      `${req.usuario.nombre} eliminó el proyecto "${existente.nombre}"`
+      `${req.usuario.nombre} eliminÃ³ el proyecto "${existente.nombre}"`
     );
     return res.json({ mensaje: 'Proyecto eliminado correctamente' });
   } catch (error) {

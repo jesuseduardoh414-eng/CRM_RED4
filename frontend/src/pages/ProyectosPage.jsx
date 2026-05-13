@@ -14,7 +14,9 @@ import {
   Plus,
   FolderOpen, 
   ChevronRight, 
-  Pencil
+  Pencil,
+  Upload,
+  FileText
 } from 'lucide-react';
 
 // ── Configuraciones Visuales ────────────────────────────────────────────────
@@ -118,13 +120,15 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   });
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(false);
+  const [archivos, setArchivos] = useState([]);
 
   useEffect(() => {
     usuariosService.listar().then(d => setUsuarios(d.usuarios)).catch(console.error);
   }, []);
 
-  // Filtrar usuarios por el área seleccionada
-  const usuariosFiltrados = usuarios.filter(u => u.area === form.area);
+  // Mostrar todos los usuarios, pero agrupados o resaltados por el área seleccionada
+  const usuariosEnArea = usuarios.filter(u => u.area === form.area);
+  const otrosUsuarios = usuarios.filter(u => u.area !== form.area);
 
   const toggleMiembro = (id) => {
     setForm(prev => {
@@ -138,8 +142,21 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     e.preventDefault();
     setCargando(true);
     try {
-      if (proyecto) await proyectosService.editar(proyecto.id, form);
-      else await proyectosService.crear(form);
+      const formData = new FormData();
+      formData.append('nombre', form.nombre);
+      formData.append('descripcion', form.descripcion);
+      formData.append('estado', form.estado);
+      formData.append('area', form.area);
+      formData.append('fechaInicio', form.fechaInicio);
+      formData.append('fechaFin', form.fechaFin);
+      formData.append('miembrosIds', JSON.stringify(form.miembrosIds));
+      
+      archivos.forEach(file => {
+        formData.append('archivos', file);
+      });
+
+      if (proyecto) await proyectosService.editar(proyecto.id, formData);
+      else await proyectosService.crear(formData);
       onGuardar();
     } catch (err) { alert(err.message); }
     finally { setCargando(false); }
@@ -195,25 +212,79 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
             </div>
 
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">SELECCIONAR RESPONSABLES ({form.area})</label>
-              <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 min-h-[60px]">
-                {usuariosFiltrados.length === 0 ? (
-                  <span className="text-[10px] font-black text-slate-400 uppercase">Sin usuarios en esta área</span>
-                ) : (
-                  usuariosFiltrados.map(u => {
-                    const isSelected = form.miembrosIds.includes(u.id);
-                    return (
-                      <button
-                        key={u.id} type="button"
-                        onClick={() => toggleMiembro(u.id)}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
-                      >
-                        {isSelected ? '✓ ' : '+ '}{u.nombre}
-                      </button>
-                    );
-                  })
-                )}
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-blue-600">RESPONSABLES DEL ÁREA ({form.area})</label>
+              <div className="flex flex-wrap gap-2 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50">
+                {usuariosEnArea.map(u => {
+                  const isSelected = form.miembrosIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id} type="button"
+                      onClick={() => toggleMiembro(u.id)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                    >
+                      {isSelected ? '✓ ' : '+ '}{u.nombre}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OTROS MIEMBROS</label>
+              <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 min-h-[60px]">
+                {otrosUsuarios.map(u => {
+                  const isSelected = form.miembrosIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id} type="button"
+                      onClick={() => toggleMiembro(u.id)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                    >
+                      {isSelected ? '✓ ' : '+ '}{u.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DOCUMENTOS DE APOYO</label>
+              <div className="relative group">
+                <input 
+                  type="file" multiple 
+                  onChange={e => setArchivos([...archivos, ...Array.from(e.target.files)])}
+                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                />
+                <div className="flex items-center gap-3 p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl group-hover:border-blue-400 transition-all">
+                  <div className="p-2 bg-white rounded-xl shadow-sm text-slate-400 group-hover:text-blue-500">
+                    <Upload size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Haga clic para subir archivos</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">PDF, Word, Excel o Imágenes</p>
+                  </div>
+                </div>
+              </div>
+              
+              {archivos.length > 0 && (
+                <div className="grid grid-cols-1 gap-2 mt-2">
+                  {archivos.map((file, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-blue-500" />
+                        <span className="text-[10px] font-black text-slate-600 truncate max-w-[200px]">{file.name}</span>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => setArchivos(archivos.filter((_, i) => i !== idx))}
+                        className="text-red-500 hover:bg-red-50 p-1 rounded-md transition-colors"
+                      >
+                        <Plus size={16} className="rotate-45" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </form>
         </div>
@@ -320,7 +391,7 @@ const ProyectosPage = () => {
           {filtrados.map(p => (
             <ProyectoCard 
               key={p.id} proyecto={p} esAdmin={esAdmin} 
-              onEditar={setEditando} 
+              onEditar={(p) => { setEditando(p); setModal(true); }} 
               onEliminar={handleEliminar}
               onVerDetalle={() => navigate(`/proyectos/${p.id}`)}
             />
