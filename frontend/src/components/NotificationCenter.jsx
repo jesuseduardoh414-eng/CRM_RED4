@@ -28,7 +28,9 @@ const NotificationCenter = () => {
 
     fetchNotificaciones();
 
-    // Configurar canal de Supabase Realtime
+    // Solo configurar Realtime si Supabase está inicializado
+    if (!supabase) return;
+
     const channel = supabase
       .channel(`notificaciones-usuario-${usuario.id}`)
       .on(
