@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { notificacionesService } from '../services/api';
 import { Bell, CheckCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 const NotificationCenter = () => {
+  const { usuario } = useAuth();
   const [notificaciones, setNotificaciones] = useState([]);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -21,15 +24,32 @@ const NotificationCenter = () => {
   };
 
   useEffect(() => {
-    // Definimos una función interna para evitar el warning de cascading updates
-    const init = async () => {
-      await fetchNotificaciones();
-    };
-    init();
+    if (!usuario) return;
 
-    const interval = setInterval(fetchNotificaciones, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    fetchNotificaciones();
+
+    // Configurar canal de Supabase Realtime
+    const channel = supabase
+      .channel(`notificaciones-usuario-${usuario.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'Notificacion',
+          filter: `usuarioId=eq.${usuario.id}`
+        },
+        (payload) => {
+          console.log('[Realtime]: Nueva notificación recibida:', payload.new);
+          setNotificaciones(prev => [payload.new, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [usuario]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
