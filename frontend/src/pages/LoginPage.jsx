@@ -53,10 +53,12 @@ const LoginPage = () => {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '64px', height: '64px',
-            marginBottom: '1rem',
+            width: '100%',
+            maxWidth: '220px',
+            height: 'auto',
+            marginBottom: '1.5rem',
           }}>
-            <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <img src="/logo_login.jpeg" alt="Logo" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
           </div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: '700', color: 'var(--color-text)' }}>
             Panel Interno
