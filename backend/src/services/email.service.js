@@ -4,20 +4,25 @@ const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  pool: true,
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false,
+  },
+  connectionTimeout: 20000,
+  greetingTimeout: 20000,
 });
 
 const sendResetEmail = async (email, token) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-  const mailOptions = {
+  return transporter.sendMail({
     from: `"CRM" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Restablecer contraseña - CRM',
@@ -35,15 +40,13 @@ const sendResetEmail = async (email, token) => {
         <p>Si no solicitaste este cambio, puedes ignorar este correo.</p>
       </div>
     `
-  };
-
-  return transporter.sendMail(mailOptions);
+  });
 };
 
 const sendVerificationEmail = async (email, token) => {
   const verifyUrl = `${process.env.FRONTEND_URL}/verify-account/${token}`;
 
-  const mailOptions = {
+  return transporter.sendMail({
     from: `"CRM" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Verifica tu cuenta - CRM',
@@ -60,9 +63,7 @@ const sendVerificationEmail = async (email, token) => {
         <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
       </div>
     `
-  };
-
-  return transporter.sendMail(mailOptions);
+  });
 };
 
 module.exports = { sendResetEmail, sendVerificationEmail };
