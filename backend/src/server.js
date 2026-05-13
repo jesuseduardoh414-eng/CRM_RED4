@@ -15,6 +15,9 @@ const agendaRoutes                      = require('./routes/agenda.routes');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// Confiar en el proxy de Render para que express-rate-limit funcione bien
+app.set('trust proxy', 1);
+
 // ── Middlewares globales ────────────────────────────────────────────────────
 app.use(helmet()); // Seguridad de headers
 app.use(cors({
