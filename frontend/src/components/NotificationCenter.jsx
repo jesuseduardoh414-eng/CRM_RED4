@@ -27,9 +27,14 @@ const NotificationCenter = () => {
     if (!usuario) return;
 
     fetchNotificaciones();
+    
+    // SISTEMA DE RESPALDO: Polling cada 15 segundos por si Realtime falla
+    const interval = setInterval(() => {
+      fetchNotificaciones();
+    }, 15000);
 
     // Solo configurar Realtime si Supabase está inicializado
-    if (!supabase) return;
+    if (!supabase) return () => clearInterval(interval);
 
     const channel = supabase
       .channel('public:notificaciones')
@@ -41,30 +46,20 @@ const NotificationCenter = () => {
           if (payload.new) {
             const targetId = payload.new.usuario_id || payload.new.usuarioId;
             if (targetId == usuario.id) {
-              console.log('✅ [Realtime] Alerta para el usuario actual. Actualizando...');
-              setNotificaciones(prev => {
-                // Evitar duplicados si por algún motivo llega dos veces
-                if (prev.some(n => n.id === payload.new.id)) return prev;
-                return [payload.new, ...prev];
-              });
-              if ('vibrate' in navigator) navigator.vibrate(50);
+              console.log('✅ [Realtime] Alerta para mí!');
+              fetchNotificaciones(); // Refrescar lista completa para estar seguros
+              if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
             }
           }
         }
       )
       .subscribe((status, err) => {
-        console.log(`📡 [Realtime] Estado de conexión: ${status}`);
-        if (err) console.error('❌ [Realtime] Error de suscripción:', err);
-        
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('⚠️ [Realtime] Error de canal. Reintentando en 5 segundos...');
-          setTimeout(() => {
-            if (usuario) fetchNotificaciones();
-          }, 5000);
-        }
+        console.log(`📡 [Realtime] Estado: ${status}`);
+        if (err) console.error('❌ [Realtime] Error:', err);
       });
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [usuario]);
