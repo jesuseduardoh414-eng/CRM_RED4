@@ -28,7 +28,7 @@ const IconAgenda     = () => <Calendar size={20} strokeWidth={2.5} />;
 const navLinks = [
   { to: '/dashboard', label: 'Inicio', Icon: IconDashboard },
   { to: '/proyectos',  label: 'Proyectos', Icon: IconProyectos },
-  { to: '/agenda',     label: 'Mi Agenda', Icon: IconAgenda, badge: true },
+  { to: '/agenda',     label: 'Mi Agenda', Icon: IconAgenda },
   { to: '/equipo',     label: 'Comunidad', Icon: IconEquipo },
 ];
 
@@ -120,7 +120,7 @@ const Layout = ({ children }) => {
         {/* Navegación */}
         <nav className="flex-1 px-4 flex flex-col gap-1 overflow-y-auto">
           <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest">Menú Principal</div>
-          {navLinks.map(({ to, label, Icon, badge }) => (
+          {navLinks.map(({ to, label, Icon }) => (
             <NavLink
               key={to} to={to} onClick={() => setOpen(false)}
               className={({ isActive }) => `
@@ -130,11 +130,6 @@ const Layout = ({ children }) => {
             >
               <Icon /> 
               <span className="flex-1">{label}</span>
-              {badge && recordatoriosCount > 0 && (
-                <span className="bg-[var(--color-error)] text-white text-[10px] font-black px-2 py-0.5 rounded-lg shadow-lg shadow-red-500/20">
-                  {recordatoriosCount}
-                </span>
-              )}
             </NavLink>
           ))}
 
@@ -163,9 +158,6 @@ const Layout = ({ children }) => {
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold text-white truncate">{usuario?.nombre}</div>
               <div className="text-[11px] text-white/40 font-medium truncate">{usuario?.email?.split('@')[0]}</div>
-            </div>
-            <div className="text-white/40">
-               <NotificationCenter />
             </div>
           </div>
           
@@ -201,12 +193,7 @@ const Layout = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-5 ml-auto">
-            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all">
-              <Bell size={20} />
-            </button>
-            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all">
-              <Calendar size={20} />
-            </button>
+            <NotificationCenter />
             <div className="hidden lg:block w-8 h-8 rounded-full bg-[var(--color-surface-3)] border border-[var(--color-border)] shadow-sm" />
           </div>
         </header>

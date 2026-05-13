@@ -126,6 +126,9 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
   const [usuarios, setUsuarios] = useState([]);
   const [disponibilidad, setDisponibilidad] = useState([]);
 
+  // Seguridad: Solo el dueño puede editar
+  const esDuenio = !evento || evento.usuarioId === usuario?.id || evento.creadoPorId === usuario?.id;
+
   useEffect(() => {
     const cargar = async () => {
       try {
@@ -216,7 +219,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.75rem', fontWeight: '900', letterSpacing: '-0.02em' }}>
-            {evento ? 'Editar Evento' : 'Nuevo Evento'}
+            {!evento ? 'Nuevo Evento' : (esDuenio ? 'Editar Evento' : 'Detalles del Evento')}
           </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={24} /></button>
         </div>
@@ -227,11 +230,11 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
               <label className="form-label" style={{ letterSpacing: '0.05em' }}>TÍTULO DEL EVENTO</label>
-              <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required placeholder="¿De qué trata la reunión?" />
+              <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required placeholder="¿De qué trata la reunión?" disabled={!esDuenio} />
             </div>
             <div className="form-group">
               <label className="form-label" style={{ letterSpacing: '0.05em' }}>CATEGORÍA</label>
-              <select className="form-input form-select" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}>
+              <select className="form-input form-select" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} disabled={!esDuenio}>
                 {TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
             </div>
@@ -250,7 +253,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
-                      <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_inicio} onChange={e => setForm({...form, hora_inicio: e.target.value})} />
+                      <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_inicio} onChange={e => setForm({...form, hora_inicio: e.target.value})} disabled={!esDuenio} />
                       <Clock size={14} color="var(--color-text-dim)" />
                     </div>
                   </div>
@@ -268,7 +271,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
-                      <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_fin} onChange={e => setForm({...form, hora_fin: e.target.value})} />
+                      <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_fin} onChange={e => setForm({...form, hora_fin: e.target.value})} disabled={!esDuenio} />
                       <Clock size={14} color="var(--color-text-dim)" />
                     </div>
                   </div>
@@ -285,12 +288,12 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                 <button 
                   key={c.hex} 
                   type="button" 
-                  onClick={() => setForm({...form, color: c.hex})} 
+                  onClick={() => esDuenio && setForm({...form, color: c.hex})} 
                   style={{ 
                     width: '32px', height: '32px', borderRadius: '10px', background: c.hex, 
                     border: form.color === c.hex ? '3px solid #fff' : 'none', 
                     boxShadow: form.color === c.hex ? `0 0 0 2px ${c.hex}, 0 4px 12px ${c.hex}66` : 'none', 
-                    cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    cursor: esDuenio ? 'pointer' : 'default', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                     transform: form.color === c.hex ? 'scale(1.1)' : 'scale(1)'
                   }} 
                 />
@@ -312,8 +315,8 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               </div>
             </div>
             <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px' }}>
-              <input type="checkbox" checked={form.es_compartido} onChange={e => setForm({...form, es_compartido: e.target.checked})} style={{ opacity: 0, width: 0, height: 0 }} />
-              <span className="slider" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, background: form.es_compartido ? 'var(--color-primary)' : '#cbd5e1', transition: '.4s', borderRadius: '34px' }}>
+              <input type="checkbox" checked={form.es_compartido} onChange={e => setForm({...form, es_compartido: e.target.checked})} style={{ opacity: 0, width: 0, height: 0 }} disabled={!esDuenio} />
+              <span className="slider" style={{ position: 'absolute', cursor: esDuenio ? 'pointer' : 'default', top: 0, left: 0, right: 0, bottom: 0, background: form.es_compartido ? 'var(--color-primary)' : '#cbd5e1', transition: '.4s', borderRadius: '34px' }}>
                 <span style={{ position: 'absolute', height: '20px', width: '20px', left: form.es_compartido ? '26px' : '4px', bottom: '4px', background: 'white', transition: '.4s', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}></span>
               </span>
             </label>
@@ -442,7 +445,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
           )}
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', paddingBottom: '1rem' }}>
-            {evento && (
+            {evento && esDuenio && (
               <button 
                 type="button" 
                 onClick={() => onDelete(evento.id)}
@@ -458,10 +461,12 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                 <Trash2 size={24} />
               </button>
             )}
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: '1rem', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '1.25rem', fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-text-dim)', cursor: 'pointer', transition: 'all 0.2s' }}>CANCELAR</button>
-            <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 2, padding: '1rem', fontSize: '0.95rem', letterSpacing: '0.02em' }}>
-              <Save size={20} /> {cargando ? 'GUARDANDO...' : (evento ? 'ACTUALIZAR EVENTO' : 'CREAR EVENTO')}
-            </button>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: '1rem', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '1.25rem', fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-text-dim)', cursor: 'pointer', transition: 'all 0.2s' }}>{esDuenio ? 'CANCELAR' : 'CERRAR'}</button>
+            {esDuenio && (
+              <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 2, padding: '1rem', fontSize: '0.95rem', letterSpacing: '0.02em' }}>
+                <Save size={20} /> {cargando ? 'GUARDANDO...' : (evento ? 'ACTUALIZAR EVENTO' : 'CREAR EVENTO')}
+              </button>
+            )}
           </div>
         </form>
       </div>
