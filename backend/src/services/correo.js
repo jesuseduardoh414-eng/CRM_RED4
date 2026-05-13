@@ -1,29 +1,14 @@
-const nodemailer = require('nodemailer')
-const dns = require('dns');
+const { Resend } = require('resend');
 
-// Forzar al servidor a preferir IPv4 sobre IPv6 (soluciona bloqueos en Render/Vercel)
-dns.setDefaultResultOrder('ipv4first');
-
-const transporter = nodemailer.createTransport({
-  host: 'smtp.googlemail.com',
-  port: 587,
-  secure: false, // TLS
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-})
+const resend = new Resend(process.env.RESEND_API_KEY || 're_LHXu9aNg_EDjXmS5TFjGCbBiFhBJkWdAR');
 
 const enviarInvitacion = async ({ nombre, email, token }) => {
-  const enlace = `${process.env.FRONTEND_URL}/invitacion/${token}`
-  console.log(`[Email Service]: Intentando enviar invitación a ${email}...`);
-  
+  const enlace = `${process.env.FRONTEND_URL}/invitacion/${token}`;
+  console.log(`[Resend Service]: Intentando enviar invitación a ${email}...`);
+
   try {
-    const info = await transporter.sendMail({
-      from: `"CRM Equipos" <${process.env.EMAIL_USER}>`,
+    const { data, error } = await resend.emails.send({
+      from: 'CRM <onboarding@resend.dev>', // Usar este remitente por defecto de Resend para pruebas
       to: email,
       subject: 'Te han invitado al CRM',
       html: `
@@ -41,13 +26,19 @@ const enviarInvitacion = async ({ nombre, email, token }) => {
           <p style="color: #666; font-size: 12px;">Si no esperabas esta invitación, ignora este correo.</p>
         </div>
       `
-    })
-    console.log('[Email Service]: Correo enviado con éxito:', info.messageId);
-    return info;
+    });
+
+    if (error) {
+      console.error('[Resend Error]:', error);
+      throw error;
+    }
+
+    console.log('[Resend Success]: Correo enviado con ID:', data.id);
+    return data;
   } catch (error) {
-    console.error('[Email Service Error]:', error);
+    console.error('[Resend Exception]:', error);
     throw error;
   }
-}
+};
 
-module.exports = { enviarInvitacion }
+module.exports = { enviarInvitacion };
