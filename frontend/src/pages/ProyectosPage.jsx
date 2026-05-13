@@ -229,8 +229,6 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     </div>
   );
 };
-  );
-};
 
 // ── Componente Principal ─────────────────────────────────────────────────────
 const ProyectosPage = () => {
