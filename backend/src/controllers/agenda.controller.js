@@ -1,7 +1,7 @@
 // Controlador de Agenda Personal y Compartida
 const prisma = require('../lib/prisma');
 
-// ── Utilidad: expandir evento recurrente en ocurrencias ─────────────────────
+// â”€â”€ Utilidad: expandir evento recurrente en ocurrencias â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function expandirRecurrente(evento, desdeDate, hastaDate) {
   if (!evento.esRecurrente || !evento.patronRecurrencia) return [];
   try {
@@ -40,7 +40,7 @@ function expandirRecurrente(evento, desdeDate, hastaDate) {
   } catch { return []; }
 }
 
-// ── GET /api/agenda ─────────────────────────────────────────────────────────
+// â”€â”€ GET /api/agenda â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Listar eventos del usuario (propios + invitados)
 const listar = async (req, res) => {
   const { fecha_inicio, fecha_fin } = req.query;
@@ -81,11 +81,11 @@ const listar = async (req, res) => {
       }),
     ]);
 
-    // Eliminar duplicados (eventos que son normales Y tienen patrón)
+    // Eliminar duplicados (eventos que son normales Y tienen patrÃ³n)
     const idsNormales = new Set(eventosNormales.map(e => e.id));
     const soloRecurrentes = eventosRecurrentes.filter(e => !idsNormales.has(e.id));
 
-    // Filtrar normales que NO son recurrentes (no tienen patrón)
+    // Filtrar normales que NO son recurrentes (no tienen patrÃ³n)
     const normales = eventosNormales.filter(e => !e.patronRecurrencia);
 
     // Expandir recurrentes en el rango
@@ -102,7 +102,7 @@ const listar = async (req, res) => {
   }
 };
 
-// ── PUT /api/agenda/:id ─────────────────────────────────────────────────────
+// â”€â”€ PUT /api/agenda/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const editar = async (req, res) => {
   const { id } = req.params;
   const usuarioId = req.usuario.id;
@@ -135,7 +135,7 @@ const editar = async (req, res) => {
 
     let evento;
     try {
-      // Intentar actualización completa (con recurrencia)
+      // Intentar actualizaciÃ³n completa (con recurrencia)
       evento = await prisma.evento.update({
         where: { id },
         data: {
@@ -150,8 +150,8 @@ const editar = async (req, res) => {
         }
       });
     } catch (err) {
-      console.warn('[agenda.editar] Falló actualización completa, reintentando básica...', err.message);
-      // Fallback: actualización básica sin campos de recurrencia
+      console.warn('[agenda.editar] FallÃ³ actualizaciÃ³n completa, reintentando bÃ¡sica...', err.message);
+      // Fallback: actualizaciÃ³n bÃ¡sica sin campos de recurrencia
       evento = await prisma.evento.update({
         where: { id },
         data: updateData
@@ -165,7 +165,7 @@ const editar = async (req, res) => {
   }
 };
 
-// ── Notificar a invitados (Interno) ──────────────────────────────────────────
+// Notificar a invitados (Interno)
 async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento, esGlobal = false) {
   try {
     if (!prisma) return;
@@ -197,7 +197,7 @@ async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, t
   }
 }
 
-// ── POST /api/agenda ────────────────────────────────────────────────────────
+// POST /api/agenda
 const crear = async (req, res) => {
   const { 
     titulo, descripcion, tipo, fecha_inicio, fecha_fin, todo_el_dia, color, 
@@ -207,12 +207,12 @@ const crear = async (req, res) => {
   const usuarioId = req.usuario.id;
 
   if (!titulo || !tipo || !fecha_inicio) {
-    return res.status(400).json({ error: 'Título, tipo y fecha de inicio son obligatorios' });
+    return res.status(400).json({ error: 'Titulo, tipo y fecha de inicio son obligatorios' });
   }
 
-  // Validar recurrencia: si es recurrente, el patrón es obligatorio
+  // Validar recurrencia: si es recurrente, el patrÃ³n es obligatorio
   if (es_recurrente && !patron_recurrencia) {
-    return res.status(400).json({ error: 'Patrón de recurrencia requerido' });
+    return res.status(400).json({ error: 'Patron de recurrencia requerido' });
   }
 
   try {
@@ -256,7 +256,7 @@ const crear = async (req, res) => {
 
     let evento;
     try {
-      // Intentar creación completa
+      // Intentar creaciÃ³n completa
       evento = await prisma.evento.create({
         data: {
           ...createData,
@@ -267,15 +267,15 @@ const crear = async (req, res) => {
         include: { invitados: true }
       });
     } catch (err) {
-      console.warn('[agenda.crear] Falló creación completa, reintentando básica...', err.message);
-      // Fallback: creación básica
+      console.warn('[agenda.crear] FallÃ³ creaciÃ³n completa, reintentando bÃ¡sica...', err.message);
+      // Fallback: creaciÃ³n bÃ¡sica
       evento = await prisma.evento.create({
         data: createData,
         include: { invitados: true }
       });
     }
 
-    // Crear notificaciones de forma síncrona para asegurar el envío
+    // Crear notificaciones de forma sÃ­ncrona para asegurar el envÃ­o
     if (es_global || listadoInvitados.length > 1) {
       const idsFinales = listadoInvitados.map(i => i.usuarioId);
       await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo, !!es_global);
@@ -289,14 +289,14 @@ const crear = async (req, res) => {
 };
 
 
-// ── PATCH /api/agenda/:id/responder ──────────────────────────────────────────
+// â”€â”€ PATCH /api/agenda/:id/responder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const responderInvitacion = async (req, res) => {
   const { id } = req.params;
   const { estado } = req.body; // 'aceptado', 'rechazado'
   const usuarioId = req.usuario.id;
 
   if (!['aceptado', 'rechazado'].includes(estado)) {
-    return res.status(400).json({ error: 'Estado de respuesta inválido' });
+    return res.status(400).json({ error: 'Estado de respuesta invÃ¡lido' });
   }
 
   try {
@@ -305,7 +305,7 @@ const responderInvitacion = async (req, res) => {
     });
 
     if (!invitacion) {
-      return res.status(404).json({ error: 'No tienes una invitación para este evento' });
+      return res.status(404).json({ error: 'No tienes una invitaciÃ³n para este evento' });
     }
 
     await prisma.eventoInvitado.update({
@@ -316,11 +316,11 @@ const responderInvitacion = async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     console.error('[agenda.responder]', error);
-    return res.status(500).json({ error: 'Error al responder invitación' });
+    return res.status(500).json({ error: 'Error al responder invitaciÃ³n' });
   }
 };
 
-// ── GET /api/agenda/invitaciones/pendientes ──────────────────────────────────
+// â”€â”€ GET /api/agenda/invitaciones/pendientes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const invitacionesPendientes = async (req, res) => {
   const usuarioId = req.usuario.id;
 
@@ -342,7 +342,7 @@ const invitacionesPendientes = async (req, res) => {
   }
 };
 
-// ── DELETE /api/agenda/:id ──────────────────────────────────────────────────
+// â”€â”€ DELETE /api/agenda/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const eliminar = async (req, res) => {
   const { id } = req.params;
   const usuarioId = req.usuario.id;
@@ -372,10 +372,10 @@ const eliminar = async (req, res) => {
   }
 };
 
-// ── GET /api/agenda/disponibilidad ───────────────────────────────────────────
+// â”€â”€ GET /api/agenda/disponibilidad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const consultarDisponibilidad = async (req, res) => {
   const { usuarios_ids, inicio, fin } = req.query;
-  if (!usuarios_ids || !inicio) return res.status(400).json({ error: 'Faltan parámetros' });
+  if (!usuarios_ids || !inicio) return res.status(400).json({ error: 'Faltan parÃ¡metros' });
 
   try {
     const ids = usuarios_ids.split(',').map(id => parseInt(id));
@@ -407,7 +407,7 @@ const consultarDisponibilidad = async (req, res) => {
   }
 };
 
-// ── CALENDARIO LABORAL ───────────────────────────────────────────────────────
+// â”€â”€ CALENDARIO LABORAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const getConfigLaboral = async (req, res) => {
   const usuarioId = req.usuario.id;
@@ -425,7 +425,7 @@ const getConfigLaboral = async (req, res) => {
     }
     return res.json({ config });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al obtener configuración' });
+    return res.status(500).json({ error: 'Error al obtener configuraciÃ³n' });
   }
 };
 
@@ -461,11 +461,11 @@ const updateConfigLaboral = async (req, res) => {
     return res.json({ config });
   } catch (error) {
     console.error('[agenda.updateConfig]', error);
-    return res.status(500).json({ error: 'Error al actualizar configuración' });
+    return res.status(500).json({ error: 'Error al actualizar configuraciÃ³n' });
   }
 };
 
-// ── DÍAS ESPECIALES ──────────────────────────────────────────────────────────
+// â”€â”€ DÃAS ESPECIALES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const listarDiasEspeciales = async (req, res) => {
   const usuarioId = req.usuario.id;
@@ -482,7 +482,7 @@ const listarDiasEspeciales = async (req, res) => {
     const dias = await prisma.diaEspecial.findMany({ where });
     return res.json({ dias });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al listar días especiales' });
+    return res.status(500).json({ error: 'Error al listar dÃ­as especiales' });
   }
 };
 
@@ -502,7 +502,7 @@ const crearDiaEspecial = async (req, res) => {
     return res.status(201).json({ dia });
   } catch (error) {
     console.error('[agenda.crearDia]', error);
-    return res.status(500).json({ error: 'Error al crear día especial' });
+    return res.status(500).json({ error: 'Error al crear dÃ­a especial' });
   }
 };
 
