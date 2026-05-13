@@ -377,7 +377,7 @@ const eliminar = async (req, res) => {
 
 // €€ GET /api/agenda/disponibilidad €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const consultarDisponibilidad = async (req, res) => {
-  const { usuarios_ids, inicio, fin } = req.query;
+  const { usuarios_ids, inicio, fin, excluir_id } = req.query;
   if (!usuarios_ids || !inicio) return res.status(400).json({ error: 'Faltan parÃ¡metros' });
 
   try {
@@ -387,6 +387,7 @@ const consultarDisponibilidad = async (req, res) => {
 
     const conflictos = await prisma.evento.findMany({
       where: {
+        id: excluir_id ? { not: excluir_id } : undefined,
         OR: [
           { usuarioId: { in: ids } },
           { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }

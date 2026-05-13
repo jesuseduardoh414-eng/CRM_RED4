@@ -145,11 +145,11 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
   useEffect(() => {
     if (form.es_compartido && !form.es_global && form.invitados_ids.length > 0 && form.fecha_inicio) {
       const fetchDisp = async () => {
-        try {
           const res = await agendaService.consultarDisponibilidad({
             usuarios_ids: form.invitados_ids.join(','),
             inicio: `${form.fecha_inicio}T${form.hora_inicio || '00:00'}`,
-            fin: `${form.fecha_fin || form.fecha_inicio}T${form.hora_fin || '23:59'}`
+            fin: `${form.fecha_fin || form.fecha_inicio}T${form.hora_fin || '23:59'}`,
+            excluir_id: evento?.id // Excluir el propio evento si estamos editando
           });
           setDisponibilidad(res.conflictos || []);
         } catch (err) {
