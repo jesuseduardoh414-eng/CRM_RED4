@@ -292,9 +292,10 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
         const esHoy = dia === new Date().getDate() && month === new Date().getMonth();
 
         const diaSemana = dObj ? (dObj.getDay() === 0 ? 7 : dObj.getDay()) : null;
-        const esLaboral = configLaboral?.diasLaborales?.includes(diaSemana);
-        const circleBg = esHoy ? 'var(--color-primary)' : (dia ? (esLaboral ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)') : 'transparent');
-        const circleColor = esHoy ? '#fff' : (dia ? (esLaboral ? '#3b82f6' : '#ef4444') : 'var(--color-text)');
+        const LABORALES_DEFAULT = [1, 2, 3, 4, 5];
+        const esLaboral = (configLaboral?.diasLaborales || LABORALES_DEFAULT).includes(diaSemana);
+        const circleBg = esHoy ? 'bg-blue-600' : '';
+        const circleColor = esHoy ? 'text-white' : (dia ? (esLaboral ? 'text-slate-600' : 'text-red-400') : 'text-slate-300');
 
         return (
           <div 
@@ -303,15 +304,16 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
             className={`
               min-h-[70px] lg:min-h-[120px] p-1.5 lg:p-2 border-r border-b border-slate-50 relative cursor-pointer transition-colors
               ${dia ? 'hover:bg-blue-50/30' : 'bg-slate-50/30'}
-              ${dia && !esLaboral ? 'bg-red-50/10' : ''}
+              ${dia && !esLaboral ? 'bg-slate-50/80' : 'bg-white'}
             `}
           >
             {dia && (
               <>
                 <div className="flex justify-between items-start mb-1">
                   <span className={`
-                    w-6 h-6 lg:w-7 lg:h-7 flex items-center justify-center rounded-lg text-[10px] lg:text-xs font-black
-                    ${esHoy ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-600'}
+                    w-6 h-6 lg:w-7 lg:h-7 flex items-center justify-center rounded-lg text-[10px] lg:text-xs font-black transition-all
+                    ${circleBg} ${circleColor}
+                    ${esHoy ? 'shadow-lg shadow-blue-500/30' : ''}
                   `}>
                     {dia}
                   </span>
