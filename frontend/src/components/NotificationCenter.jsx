@@ -38,12 +38,14 @@ const NotificationCenter = () => {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'notificaciones',
-          filter: `usuarioId=eq.${usuario.id}`
+          table: 'notificaciones'
         },
         (payload) => {
-          console.log('[Realtime]: Nueva notificación recibida:', payload.new);
-          setNotificaciones(prev => [payload.new, ...prev]);
+          // Filtro manual en el cliente para mayor seguridad
+          if (payload.new && payload.new.usuarioId === usuario.id) {
+            console.log('[Realtime]: Nueva notificación para ti:', payload.new);
+            setNotificaciones(prev => [payload.new, ...prev]);
+          }
         }
       )
       .subscribe();
