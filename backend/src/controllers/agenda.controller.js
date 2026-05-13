@@ -256,7 +256,7 @@ const crear = async (req, res) => {
   }
 };
 
-// ── Notificar a invitados (Interno) ──────────────────────────────────────────
+// Función auxiliar para generar alertas de sistema
 async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento, esGlobal = false) {
   try {
     const creatorInt = parseInt(creadorId);
