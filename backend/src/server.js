@@ -42,6 +42,6 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Inicio del servidor
-app.listen(PORT, () => {
-  console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\u2705 Servidor CRM corriendo en el puerto ${PORT}`);
 });
