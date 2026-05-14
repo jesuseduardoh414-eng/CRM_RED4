@@ -191,6 +191,7 @@ const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, us
 
     delete tarea.asignadoEmail;
     tarea.proyectoId = proyectoId;
+    tarea.creadorId = usuarioId;
     tareasACrear.push(tarea);
   }
 

@@ -15,6 +15,18 @@ const INCLUDE_ASIGNADO = {
   },
 };
 
+const visibilidadTareasPara = (usuarioId) => ({
+  OR: [
+    { asignadoId: null },
+    { asignadoId: usuarioId },
+    { creadorId: usuarioId },
+  ],
+});
+
+const puedeAccederTarea = (tarea, usuarioId) => (
+  !tarea.asignadoId || tarea.asignadoId === usuarioId || tarea.creadorId === usuarioId
+);
+
 // Helper para crear notificaciones
 const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
   if (!usuarioId) return;
@@ -62,7 +74,7 @@ const listar = async (req, res) => {
     const tareas = await prisma.tarea.findMany({
       where: {
         proyectoId,
-        ...(esAdmin ? {} : { asignadoId: req.usuario.id }),
+        ...(esAdmin ? {} : visibilidadTareasPara(req.usuario.id)),
       },
       orderBy: { creadoEn: 'asc' },
       include: INCLUDE_ASIGNADO,
@@ -141,6 +153,7 @@ const crear = async (req, res) => {
         venceEn:     dVence,
         proyectoId,
         asignadoId:  asignadoId ? parseInt(asignadoId) : null,
+        creadorId:   req.usuario.id,
         dependeDeId: dependeDeId ? parseInt(dependeDeId) : null,
       },
       include: INCLUDE_ASIGNADO,
@@ -213,10 +226,10 @@ const editar = async (req, res) => {
     });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 
-    // Verificar permisos: ADMIN o Miembro del proyecto
+    // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
     if (req.usuario.rol !== 'ADMIN') {
       const esMiembro = existente.proyecto.miembros.some(m => m.id === req.usuario.id);
-      if (!esMiembro) {
+      if (!esMiembro || !puedeAccederTarea(existente, req.usuario.id)) {
         return res.status(403).json({ error: 'No tienes permiso para editar esta tarea' });
       }
     }
@@ -284,10 +297,10 @@ const eliminar = async (req, res) => {
     });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 
-    // Verificar permisos: ADMIN o Miembro del proyecto
+    // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
     if (req.usuario.rol !== 'ADMIN') {
       const esMiembro = existente.proyecto.miembros.some(m => m.id === req.usuario.id);
-      if (!esMiembro) {
+      if (!esMiembro || !puedeAccederTarea(existente, req.usuario.id)) {
         return res.status(403).json({ error: 'No tienes permiso para eliminar esta tarea' });
       }
     }
@@ -326,10 +339,10 @@ const actualizarEstado = async (req, res) => {
     });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 
-    // Verificar permisos: ADMIN o Miembro del proyecto
+    // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
     if (req.usuario.rol !== 'ADMIN') {
       const esMiembro = existente.proyecto.miembros.some(m => m.id === req.usuario.id);
-      if (!esMiembro) {
+      if (!esMiembro || !puedeAccederTarea(existente, req.usuario.id)) {
         return res.status(403).json({ error: 'No tienes permiso para actualizar esta tarea' });
       }
     }

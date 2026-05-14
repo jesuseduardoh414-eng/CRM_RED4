@@ -23,7 +23,9 @@ const listarPorProyecto = async (req, res) => {
               accion: { notIn: accionesSoloDeTarea },
               NOT: { descripcion: { contains: 'tarea' } }
             },
-            { tarea: { asignadoId: req.usuario.id } }
+            { tarea: { asignadoId: null } },
+            { tarea: { asignadoId: req.usuario.id } },
+            { tarea: { creadorId: req.usuario.id } }
           ]
         })
       },

@@ -34,6 +34,7 @@ model Usuario {
   diasEspeciales           DiaEspecial[]
   notificaciones           Notificacion[] @relation("DestinatarioNotificacion")
   proyectosCreados         Proyecto[]     @relation("CreadorProyecto")
+  tareasCreadas            Tarea[]        @relation("CreadorTarea")
   tareasAsignadas          Tarea[]        @relation("AsignadoTarea")
   proyectosMiembro         Proyecto[]     @relation("ProyectoMiembro")
   invitacionesEnviadas     Invitacion[]   @relation("CreadorInvitacion")
@@ -88,12 +89,14 @@ model Tarea {
   venceEn     DateTime?
   proyectoId  Int
   asignadoId  Int?
+  creadorId   Int?
   dependeDeId Int?
   fechaInicio DateTime     @default(now())
   adjuntos    Adjunto[]
   comentarios Comentario[]
   actividades LogActividad[]
   asignado    Usuario?     @relation("AsignadoTarea", fields: [asignadoId], references: [id])
+  creador     Usuario?     @relation("CreadorTarea", fields: [creadorId], references: [id])
   dependeDe   Tarea?       @relation("Dependencia", fields: [dependeDeId], references: [id])
   bloqueaA    Tarea[]      @relation("Dependencia")
   proyecto    Proyecto     @relation(fields: [proyectoId], references: [id])
