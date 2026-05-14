@@ -93,7 +93,8 @@ const crear = async (req, res) => {
       req.usuario.id,
       proyectoId,
       'NUEVO_COMENTARIO',
-      `${req.usuario.nombre} comentó en ${tituloRef}`
+      `${req.usuario.nombre} comentó en ${tituloRef}`,
+      isTarea ? Number(parentId) : null
     );
 
     res.status(201).json({ comentario });
@@ -135,7 +136,8 @@ const eliminar = async (req, res) => {
       req.usuario.id,
       proyectoId,
       'ELIMINAR_COMENTARIO',
-      `${req.usuario.nombre} eliminó un ${desc}`
+      `${req.usuario.nombre} eliminó un ${desc}`,
+      comentario.tareaId || null
     );
 
     res.json({ success: true });

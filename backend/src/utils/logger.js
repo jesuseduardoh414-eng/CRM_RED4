@@ -7,14 +7,15 @@ const prisma = require('../lib/prisma');
  * @param {string} accion - Tipo de acción (e.g., "CREAR_TAREA")
  * @param {string} descripcion - Descripción legible
  */
-const registrarActividad = async (usuarioId, proyectoId, accion, descripcion) => {
+const registrarActividad = async (usuarioId, proyectoId, accion, descripcion, tareaId = null) => {
   try {
     await prisma.logActividad.create({
       data: {
         usuarioId,
         proyectoId,
         accion,
-        descripcion
+        descripcion,
+        tareaId
       }
     });
   } catch (error) {

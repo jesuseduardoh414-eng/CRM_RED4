@@ -92,6 +92,7 @@ model Tarea {
   fechaInicio DateTime     @default(now())
   adjuntos    Adjunto[]
   comentarios Comentario[]
+  actividades LogActividad[]
   asignado    Usuario?     @relation("AsignadoTarea", fields: [asignadoId], references: [id])
   dependeDe   Tarea?       @relation("Dependencia", fields: [dependeDeId], references: [id])
   bloqueaA    Tarea[]      @relation("Dependencia")
@@ -134,7 +135,9 @@ model LogActividad {
   creadoEn    DateTime @default(now())
   usuarioId   Int
   proyectoId  Int
+  tareaId     Int?
   proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  tarea       Tarea?    @relation(fields: [tareaId], references: [id], onDelete: Cascade)
   usuario     Usuario  @relation("AutorActividad", fields: [usuarioId], references: [id])
 
   @@map("logs_actividad")

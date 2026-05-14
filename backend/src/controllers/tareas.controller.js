@@ -60,7 +60,10 @@ const listar = async (req, res) => {
     }
 
     const tareas = await prisma.tarea.findMany({
-      where: { proyectoId },
+      where: {
+        proyectoId,
+        ...(esAdmin ? {} : { asignadoId: req.usuario.id }),
+      },
       orderBy: { creadoEn: 'asc' },
       include: INCLUDE_ASIGNADO,
     });
@@ -83,7 +86,7 @@ const listar = async (req, res) => {
     return res.json({
       proyecto,
       tareas: tareasAjustadas,
-      filtradoPorUsuario: false, 
+      filtradoPorUsuario: !esAdmin, 
     });
   } catch (error) {
     console.error('[tareas.listar]', error);
@@ -185,7 +188,8 @@ const crear = async (req, res) => {
       req.usuario.id,
       proyectoId,
       'CREAR_TAREA',
-      `${req.usuario.nombre} creó la tarea "${tarea.titulo}"${archivos?.length ? ` con ${archivos.length} archivos` : ''}`
+      `${req.usuario.nombre} creó la tarea "${tarea.titulo}"${archivos?.length ? ` con ${archivos.length} archivos` : ''}`,
+      tarea.id
     );
 
     return res.status(201).json({ mensaje: 'Tarea creada exitosamente', tarea });
@@ -257,7 +261,8 @@ const editar = async (req, res) => {
       req.usuario.id,
       tarea.proyectoId,
       'EDITAR_TAREA',
-      `${req.usuario.nombre} editó la tarea "${tarea.titulo}"`
+      `${req.usuario.nombre} editó la tarea "${tarea.titulo}"`,
+      tarea.id
     );
 
     return res.json({ mensaje: 'Tarea actualizada', tarea });
@@ -349,7 +354,8 @@ const actualizarEstado = async (req, res) => {
       req.usuario.id,
       tarea.proyectoId,
       'CAMBIO_ESTADO',
-      `${req.usuario.nombre} cambió el estado de "${tarea.titulo}" a ${tarea.estado}`
+      `${req.usuario.nombre} cambió el estado de "${tarea.titulo}" a ${tarea.estado}`,
+      tarea.id
     );
 
     return res.json({ mensaje: 'Estado actualizado', tarea });

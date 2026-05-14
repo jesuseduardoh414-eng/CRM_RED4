@@ -5,8 +5,28 @@ const listarPorProyecto = async (req, res) => {
   if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
   try {
+    const esAdmin = req.usuario.rol === 'ADMIN';
+    const accionesSoloDeTarea = [
+      'CREAR_TAREA',
+      'EDITAR_TAREA',
+      'ELIMINAR_TAREA',
+      'CAMBIO_ESTADO'
+    ];
+
     const logs = await prisma.logActividad.findMany({
-      where: { proyectoId },
+      where: {
+        proyectoId,
+        ...(esAdmin ? {} : {
+          OR: [
+            {
+              tareaId: null,
+              accion: { notIn: accionesSoloDeTarea },
+              NOT: { descripcion: { contains: 'tarea' } }
+            },
+            { tarea: { asignadoId: req.usuario.id } }
+          ]
+        })
+      },
       orderBy: { creadoEn: 'desc' },
       take: 50, // Limitamos a los últimos 50 para rendimiento
       include: {

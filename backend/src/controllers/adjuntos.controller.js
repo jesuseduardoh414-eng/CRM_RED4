@@ -81,7 +81,8 @@ const subir = async (req, res) => {
       req.usuario.id,
       proyectoId,
       'SUBIR_ARCHIVO',
-      `${req.usuario.nombre} subió el archivo "${adjunto.nombre}" a ${tituloRef}`
+      `${req.usuario.nombre} subió el archivo "${adjunto.nombre}" a ${tituloRef}`,
+      isTarea ? Number(parentId) : null
     );
 
     res.status(201).json({ adjunto });
@@ -129,7 +130,8 @@ const eliminar = async (req, res) => {
       req.usuario.id,
       proyectoId,
       'ELIMINAR_ARCHIVO',
-      `${req.usuario.nombre} eliminó el ${desc}`
+      `${req.usuario.nombre} eliminó el ${desc}`,
+      adjunto.tareaId || null
     );
 
     res.json({ success: true });
