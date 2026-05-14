@@ -1,19 +1,16 @@
 const nodemailer = require('nodemailer');
 
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  console.error('❌ [SMTP] CRÍTICO: Faltan EMAIL_USER o EMAIL_PASS en las variables de entorno.');
+if (!process.env.BREVO_API_KEY) {
+  console.error('❌ [SMTP] CRÍTICO: Falta BREVO_API_KEY en las variables de entorno.');
 }
 
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT) || 587,
-  secure: false, // true para 465, false para otros
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false, 
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false
+    user: process.env.EMAIL_USER || 'jesuseduardoh414@gmail.com',
+    pass: process.env.BREVO_API_KEY,
   }
 });
 
