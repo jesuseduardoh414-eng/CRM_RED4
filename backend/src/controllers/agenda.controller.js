@@ -1,6 +1,62 @@
 // Controlador de Agenda Personal y Compartida
 const prisma = require('../lib/prisma');
 
+const DIAS_LABORALES_DEFAULT = [1, 2, 3, 4, 5];
+const TIPOS_NO_LABORALES = ['festivo', 'vacacion', 'permiso'];
+
+const getDateKeyUTC = (date) => date.toISOString().split('T')[0];
+const getGlobalHoliday = (date) => {
+  const year = date.getUTCFullYear();
+  const holidays = [
+    { fecha: `${year}-01-01`, descripcion: 'Año Nuevo' },
+    { fecha: `${year}-02-02`, descripcion: 'Día de la Constitución' },
+    { fecha: `${year}-03-16`, descripcion: 'Natalicio de Benito Juárez' },
+    { fecha: `${year}-05-01`, descripcion: 'Día del Trabajo' },
+    { fecha: `${year}-09-16`, descripcion: 'Día de la Independencia' },
+    { fecha: `${year}-09-20`, descripcion: 'Fundación de Monterrey' },
+    { fecha: `${year}-11-16`, descripcion: 'Aniversario de la Revolución' },
+    { fecha: `${year}-12-25`, descripcion: 'Navidad' },
+  ];
+
+  return holidays.find(holiday => holiday.fecha === getDateKeyUTC(date));
+};
+
+const validarFechaLaboral = async (usuarioId, fecha) => {
+  const date = new Date(fecha);
+  if (Number.isNaN(date.getTime())) {
+    return { valido: false, error: 'Fecha de inicio invalida' };
+  }
+
+  const config = await prisma.configuracionLaboral.findUnique({ where: { usuarioId } });
+  const diasLaborales = config?.diasLaborales || DIAS_LABORALES_DEFAULT;
+  const diaSemana = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+
+  if (!diasLaborales.includes(diaSemana)) {
+    return { valido: false, error: 'No se permiten eventos en dias no laborales' };
+  }
+
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1));
+  const diaEspecial = await prisma.diaEspecial.findFirst({
+    where: {
+      usuarioId,
+      fecha: { gte: start, lt: end },
+      tipo: { in: TIPOS_NO_LABORALES }
+    }
+  });
+
+  if (diaEspecial) {
+    return { valido: false, error: `No se permiten eventos en esta fecha: ${diaEspecial.descripcion || 'dia no laboral'}` };
+  }
+
+  const feriadoGlobal = getGlobalHoliday(date);
+  if (feriadoGlobal) {
+    return { valido: false, error: `No se permiten eventos en esta fecha: ${feriadoGlobal.descripcion}` };
+  }
+
+  return { valido: true };
+};
+
 // €€ Utilidad: expandir evento recurrente en ocurrencias €€€€€€€€€€€€€€€€€€€€€
 function expandirRecurrente(evento, desdeDate, hastaDate) {
   if (!evento.esRecurrente || !evento.patronRecurrencia) return [];
@@ -143,9 +199,9 @@ const editar = async (req, res) => {
   } = req.body;
   
   if (fecha_inicio) {
-    const day = new Date(fecha_inicio).getDay();
-    if (day === 0 || day === 6) {
-      return res.status(400).json({ error: 'No se permiten eventos en fin de semana (Sábados o Domingos)' });
+    const validacionLaboral = await validarFechaLaboral(usuarioId, fecha_inicio);
+    if (!validacionLaboral.valido) {
+      return res.status(400).json({ error: validacionLaboral.error });
     }
   }
 
@@ -250,9 +306,9 @@ const crear = async (req, res) => {
     return res.status(400).json({ error: 'Titulo, tipo y fecha de inicio son obligatorios' });
   }
 
-  const startDay = new Date(fecha_inicio).getDay();
-  if (startDay === 0 || startDay === 6) {
-    return res.status(400).json({ error: 'No se permiten eventos en fin de semana (Sábados o Domingos)' });
+  const validacionLaboral = await validarFechaLaboral(usuarioId, fecha_inicio);
+  if (!validacionLaboral.valido) {
+    return res.status(400).json({ error: validacionLaboral.error });
   }
 
   // Validar recurrencia: si es recurrente, el patrón es obligatorio

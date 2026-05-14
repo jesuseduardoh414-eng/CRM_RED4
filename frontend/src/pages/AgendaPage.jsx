@@ -36,6 +36,31 @@ const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sáb
 const formatFechaLarga = (date) => date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric', day: 'numeric' });
 const formatMesAnio = (date) => date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
 
+const LABORALES_DEFAULT = [1, 2, 3, 4, 5];
+const TIPOS_NO_LABORALES = ['festivo', 'vacacion', 'permiso'];
+const getDiaSemanaLaboral = (date) => date.getDay() === 0 ? 7 : date.getDay();
+const getDateKey = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const getDiaEspecialKey = (dia) => typeof dia?.fecha === 'string' ? dia.fecha.split('T')[0] : getDateKey(dia?.fecha);
+const getDiaEspecial = (date, diasEspeciales = []) => {
+  const dateKey = getDateKey(date);
+  return diasEspeciales.find(dia => getDiaEspecialKey(dia) === dateKey);
+};
+const getEstadoLaboral = (date, configLaboral, diasEspeciales = []) => {
+  const diaSemana = getDiaSemanaLaboral(date);
+  const diasLaborales = configLaboral?.diasLaborales || LABORALES_DEFAULT;
+  const diaEspecial = getDiaEspecial(date, diasEspeciales);
+  const esDiaEspecialNoLaboral = diaEspecial && TIPOS_NO_LABORALES.includes(diaEspecial.tipo);
+
+  return {
+    diaEspecial,
+    esLaboral: diasLaborales.includes(diaSemana) && !esDiaEspecialNoLaboral,
+    esDiaEspecialNoLaboral
+  };
+};
+
 const getHoras = (start = 0, end = 23) => {
   const horas = [];
   for (let i = start; i <= end; i++) horas.push(`${i.toString().padStart(2, '0')}:00`);
@@ -136,6 +161,36 @@ const AgendaPage = () => {
     } catch (error) {
       showToast(error.message, 'error');
     }
+  };
+
+  const getMensajeFechaNoLaboral = (fechaInicio) => {
+    const { diaEspecial, esLaboral, esDiaEspecialNoLaboral } = getEstadoLaboral(fechaInicio, configLaboral, diasEspeciales);
+    if (esLaboral) return null;
+
+    const motivo = esDiaEspecialNoLaboral
+      ? (diaEspecial?.descripcion || 'dia no laboral')
+      : 'dia no laboral';
+
+    return `No se pueden crear eventos en esta fecha: ${motivo}`;
+  };
+
+  const handleSelectFechaEvento = (datosFecha) => {
+    const fechaInicio = new Date(datosFecha.fechaInicio);
+    const mensaje = getMensajeFechaNoLaboral(fechaInicio);
+
+    if (mensaje) {
+      showToast(mensaje, 'warning');
+      return;
+    }
+
+    setSelectedEvent(null);
+    setPrefillData(datosFecha);
+    setModalOpen(true);
+  };
+
+  const handleSelectFechaMes = (datosFecha) => {
+    setCurrentDate(new Date(datosFecha.fechaInicio));
+    setView('DIA');
   };
 
   if (cargando && !eventos.length) return <Spinner />;
@@ -270,9 +325,9 @@ const AgendaPage = () => {
 
       {/* Grid Calendario */}
       <div className="card" style={{ padding: '0', borderRadius: isMobile ? '1rem' : '2rem', overflow: 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
-        {view === 'MES' && <VistaMensual date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setCurrentDate(new Date(d.fechaInicio)); setView('DIA'); }} />}
-        {view === 'SEMANA' && <VistaSemanal date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { if (new Date(d.fechaInicio).getDay() === 0 || new Date(d.fechaInicio).getDay() === 6) { showToast('No se permiten eventos en fin de semana', 'warning'); return; } setPrefillData(d); setModalOpen(true); }} />}
-        {view === 'DIA' && <VistaDiaria date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { if (new Date(d.fechaInicio).getDay() === 0 || new Date(d.fechaInicio).getDay() === 6) { showToast('No se permiten eventos en fin de semana', 'warning'); return; } setPrefillData(d); setModalOpen(true); }} onEliminar={handleEliminar} />}
+        {view === 'MES' && <VistaMensual date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={handleSelectFechaMes} />}
+        {view === 'SEMANA' && <VistaSemanal date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={handleSelectFechaEvento} />}
+        {view === 'DIA' && <VistaDiaria date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={handleSelectFechaEvento} onEliminar={handleEliminar} />}
       </div>
 
       {modalOpen && (() => {
@@ -336,12 +391,10 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
           const isWeekend = current.getDay() === 0 || current.getDay() === 6;
           return c >= s && c <= ed && !isWeekend;
         }) : [];
-        const diaEsp = dia ? diasEspeciales.find(e => new Date(e.fecha).getDate() === dia && new Date(e.fecha).getMonth() === month) : null;
+        const diaEsp = dia ? getDiaEspecial(dObj, diasEspeciales) : null;
         const esHoy = dia === new Date().getDate() && month === new Date().getMonth();
 
-        const diaSemana = dObj ? (dObj.getDay() === 0 ? 7 : dObj.getDay()) : null;
-        const LABORALES_DEFAULT = [1, 2, 3, 4, 5];
-        const esLaboral = (configLaboral?.diasLaborales || LABORALES_DEFAULT).includes(diaSemana);
+        const { esLaboral } = dObj ? getEstadoLaboral(dObj, configLaboral, diasEspeciales) : { esLaboral: false };
         const circleBg = esHoy ? 'bg-blue-600' : '';
         const circleColor = esHoy ? 'text-white' : (dia ? (esLaboral ? 'text-slate-600' : 'text-red-400') : 'text-slate-300');
 
@@ -415,7 +468,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
   );
 };
 
-const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEvent, onSelectDate }) => {
+const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, onSelectEvent, onSelectDate }) => {
   const startOfWeek = useMemo(() => {
     const d = new Date(date);
     const day = d.getDay();
@@ -437,8 +490,7 @@ const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEve
       <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
         <div style={{ width: '60px', borderRight: '1px solid var(--color-border)' }} />
         {semana.map((d, i) => {
-          const diaSemana = d.getDay() === 0 ? 7 : d.getDay();
-          const esLaboral = configLaboral?.diasLaborales?.includes(diaSemana);
+          const { esLaboral, diaEspecial } = getEstadoLaboral(d, configLaboral, diasEspeciales);
           const circleBg = d.getDate() === new Date().getDate() && d.getMonth() === new Date().getMonth() ? 'var(--color-primary)' : (esLaboral ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)');
           const circleColor = d.getDate() === new Date().getDate() && d.getMonth() === new Date().getMonth() ? '#fff' : (esLaboral ? '#3b82f6' : '#ef4444');
 
@@ -448,7 +500,7 @@ const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEve
               <div style={{ width: '32px', height: '32px', margin: '0.4rem auto', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontSize: '1.1rem', fontWeight: '900', background: circleBg, color: circleColor }}>
                 {d.getDate()}
               </div>
-              {!esLaboral && <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#ef4444' }}>NO LABORAL</div>}
+              {!esLaboral && <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#ef4444' }}>{diaEspecial?.descripcion || 'NO LABORAL'}</div>}
             </div>
           );
         })}
@@ -459,8 +511,7 @@ const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEve
         </div>
         <div style={{ flex: 1, display: 'flex' }}>
           {semana.map((d, dayIdx) => {
-             const diaSemana = d.getDay() === 0 ? 7 : d.getDay();
-             const esLaboralDia = configLaboral?.diasLaborales?.includes(diaSemana);
+             const { esLaboral: esLaboralDia } = getEstadoLaboral(d, configLaboral, diasEspeciales);
 
              return (
               <div key={dayIdx} style={{ flex: 1, borderRight: dayIdx < 6 ? '1px solid var(--color-border-light)' : 'none', position: 'relative', background: !esLaboralDia ? 'rgba(239, 68, 68, 0.03)' : 'transparent' }}>
@@ -513,7 +564,7 @@ const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEve
   );
 };
 
-const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, onSelectEvent, onSelectDate, onEliminar }) => {
+const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, isMobile, onSelectEvent, onSelectDate, onEliminar }) => {
   const hStart = 6;
   const hEnd = 18;
   const horas = getHoras(hStart, hEnd);
@@ -526,8 +577,7 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, on
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     return c >= s && c <= ed && !isWeekend;
   });
-  const diaSemana = date.getDay() === 0 ? 7 : date.getDay();
-  const esLaboral = configLaboral?.diasLaborales?.includes(diaSemana);
+  const { esLaboral, diaEspecial } = getEstadoLaboral(date, configLaboral, diasEspeciales);
   const colorHeader = esLaboral ? 'var(--color-primary)' : '#ef4444';
 
   return (
@@ -577,7 +627,7 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, on
            </div>
            <div>
              <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{formatFechaLarga(date)}</div>
-             <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>{esLaboral ? 'DÍA LABORAL' : 'DÍA DE DESCANSO'}</div>
+             <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>{esLaboral ? 'DÍA LABORAL' : (diaEspecial?.descripcion || 'DÍA DE DESCANSO')}</div>
            </div>
          </div>
          <h3 style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--color-text-dim)', textTransform: 'uppercase', marginBottom: '1.5rem' }}>Agenda del día</h3>
