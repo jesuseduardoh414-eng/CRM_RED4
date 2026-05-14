@@ -1,8 +1,116 @@
 const prisma = require('../lib/prisma');
 const bcrypt = require('bcryptjs');
 
+const inicioDelDia = (fecha) => {
+  const d = new Date(fecha);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const finDelDia = (fecha) => {
+  const d = new Date(fecha);
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+const finDeSemana = (fecha) => {
+  const d = finDelDia(fecha);
+  d.setDate(d.getDate() + (6 - d.getDay()));
+  return d;
+};
+
+const tareaResumenSelect = {
+  id: true,
+  titulo: true,
+  estado: true,
+  prioridad: true,
+  venceEn: true,
+  proyecto: {
+    select: { id: true, nombre: true }
+  }
+};
+
+const resumenTarea = (tarea) => ({
+  id: tarea.id,
+  titulo: tarea.titulo,
+  estado: tarea.estado,
+  prioridad: tarea.prioridad,
+  venceEn: tarea.venceEn,
+  proyecto: tarea.proyecto
+});
+
+const obtenerActividadUsuario = async (usuarioId) => {
+  const ahora = new Date();
+  const hoyInicio = inicioDelDia(ahora);
+  const hoyFin = finDelDia(ahora);
+  const semanaFin = finDeSemana(ahora);
+
+  const [logsHechasHoy, enProgreso, faltanHoy, faltanSemana] = await Promise.all([
+    prisma.logActividad.findMany({
+      where: {
+        accion: 'CAMBIO_ESTADO',
+        creadoEn: { gte: hoyInicio, lte: hoyFin },
+        descripcion: { contains: 'HECHO' },
+        tarea: { asignadoId: usuarioId }
+      },
+      orderBy: { creadoEn: 'desc' },
+      include: {
+        tarea: { select: tareaResumenSelect }
+      }
+    }),
+    prisma.tarea.findMany({
+      where: { asignadoId: usuarioId, estado: 'EN_PROGRESO' },
+      orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
+      take: 6,
+      select: tareaResumenSelect
+    }),
+    prisma.tarea.findMany({
+      where: {
+        asignadoId: usuarioId,
+        estado: { not: 'HECHO' },
+        venceEn: { gte: hoyInicio, lte: hoyFin }
+      },
+      orderBy: [{ prioridad: 'desc' }, { venceEn: 'asc' }],
+      take: 6,
+      select: tareaResumenSelect
+    }),
+    prisma.tarea.findMany({
+      where: {
+        asignadoId: usuarioId,
+        estado: { not: 'HECHO' },
+        venceEn: { gt: hoyFin, lte: semanaFin }
+      },
+      orderBy: [{ venceEn: 'asc' }, { prioridad: 'desc' }],
+      take: 6,
+      select: tareaResumenSelect
+    })
+  ]);
+
+  const hechasHoy = [];
+  const vistas = new Set();
+  logsHechasHoy.forEach(log => {
+    if (log.tarea && !vistas.has(log.tarea.id)) {
+      vistas.add(log.tarea.id);
+      hechasHoy.push(resumenTarea(log.tarea));
+    }
+  });
+
+  return {
+    hechasHoy,
+    enProgreso: enProgreso.map(resumenTarea),
+    faltanHoy: faltanHoy.map(resumenTarea),
+    faltanSemana: faltanSemana.map(resumenTarea),
+    totales: {
+      hechasHoy: hechasHoy.length,
+      enProgreso: enProgreso.length,
+      faltanHoy: faltanHoy.length,
+      faltanSemana: faltanSemana.length
+    }
+  };
+};
+
 // Devuelve todos los usuarios sin exponer sus contraseñas
-const listar = async (_req, res) => {
+const listar = async (req, res) => {
   try {
     const usuarios = await prisma.usuario.findMany({
       orderBy: { nombre: 'asc' },
@@ -16,7 +124,18 @@ const listar = async (_req, res) => {
         estado: true
       },
     });
-    return res.json({ usuarios });
+    if (req.usuario?.rol !== 'ADMIN') {
+      return res.json({ usuarios });
+    }
+
+    const usuariosConActividad = await Promise.all(
+      usuarios.map(async (usuario) => ({
+        ...usuario,
+        actividad: await obtenerActividadUsuario(usuario.id)
+      }))
+    );
+
+    return res.json({ usuarios: usuariosConActividad });
   } catch (error) {
     console.error('[usuarios.listar]', error);
     return res.status(500).json({ error: 'Error interno del servidor' });

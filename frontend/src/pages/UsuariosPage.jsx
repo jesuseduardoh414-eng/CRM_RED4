@@ -1,5 +1,5 @@
 // Página de Gestión de Usuarios (Solo Admin)
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback } from 'react';
 import { usuariosService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
@@ -14,11 +14,85 @@ import {
   AlertTriangle,
   RefreshCcw,
   UserX,
-  UserCheck
+  UserCheck,
+  Activity,
+  CalendarDays,
+  PlayCircle,
+  ChevronDown
 } from 'lucide-react';
 
 const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION'];
 const ROLES = ['MIEMBRO', 'ADMIN'];
+
+const TaskMini = ({ tarea }) => (
+  <div className="py-2 border-b border-slate-100 last:border-0">
+    <div className="text-xs font-black text-slate-800 leading-snug">{tarea.titulo}</div>
+    <div className="mt-1 flex items-center justify-between gap-2 text-[10px] font-bold text-slate-400">
+      <span className="truncate">{tarea.proyecto?.nombre || 'Sin proyecto'}</span>
+      {tarea.venceEn && <span className="shrink-0">{new Date(tarea.venceEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</span>}
+    </div>
+  </div>
+);
+
+const ActivityColumn = ({ title, count, icon, color, items, empty }) => (
+  <div className="min-w-0">
+    <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest" style={{ color }}>
+        {icon}
+        {title}
+      </div>
+      <span className="text-xs font-black" style={{ color }}>{count}</span>
+    </div>
+    <div className="bg-white rounded-xl border border-slate-100 px-3 py-1 min-h-[58px]">
+      {items?.length ? items.map(t => <TaskMini key={t.id} tarea={t} />) : (
+        <div className="h-11 flex items-center text-[11px] font-bold text-slate-400">{empty}</div>
+      )}
+    </div>
+  </div>
+);
+
+const UserActivityPanel = ({ actividad }) => {
+  if (!actividad) {
+    return <div className="text-xs font-bold text-slate-400">Sin datos de actividad.</div>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+      <ActivityColumn
+        title="Hechas hoy"
+        count={actividad.totales?.hechasHoy || 0}
+        color="#16a34a"
+        icon={<CheckCircle2 size={13} />}
+        items={actividad.hechasHoy}
+        empty="Sin completadas hoy"
+      />
+      <ActivityColumn
+        title="Haciendo"
+        count={actividad.totales?.enProgreso || 0}
+        color="#2563eb"
+        icon={<PlayCircle size={13} />}
+        items={actividad.enProgreso}
+        empty="Sin tareas en curso"
+      />
+      <ActivityColumn
+        title="Faltan hoy"
+        count={actividad.totales?.faltanHoy || 0}
+        color="#dc2626"
+        icon={<Clock size={13} />}
+        items={actividad.faltanHoy}
+        empty="Sin pendientes de hoy"
+      />
+      <ActivityColumn
+        title="Faltan semana"
+        count={actividad.totales?.faltanSemana || 0}
+        color="#f59e0b"
+        icon={<CalendarDays size={13} />}
+        items={actividad.faltanSemana}
+        empty="Sin pendientes próximos"
+      />
+    </div>
+  );
+};
 
 const UsuariosPage = () => {
   const [tab, setTab] = useState('activos'); // 'activos' o 'invitaciones'
@@ -153,6 +227,8 @@ const UsuariosPage = () => {
 };
 
 const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
+  const [actividadAbierta, setActividadAbierta] = useState(null);
+
   if (usuarios.length === 0) return <div className="p-12 text-center text-slate-400">No hay miembros activos.</div>;
 
   return (
@@ -171,7 +247,8 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {usuarios.map(u => (
-            <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+            <Fragment key={u.id}>
+            <tr className="hover:bg-slate-50/50 transition-colors">
               <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
@@ -206,6 +283,13 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
               </td>
               <td className="px-6 py-4 text-right">
                 <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setActividadAbierta(prev => prev === u.id ? null : u.id)}
+                    title="Ver actividad"
+                    className={`p-2 rounded-xl transition-all ${actividadAbierta === u.id ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                  >
+                    <Activity size={18} />
+                  </button>
                   <button 
                     onClick={() => onToggleStatus(u)}
                     title={u.estado === 'activo' ? 'Desactivar' : 'Activar'}
@@ -228,6 +312,23 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
                 </div>
               </td>
             </tr>
+            {actividadAbierta === u.id && (
+              <tr key={`${u.id}-actividad`} className="bg-slate-50/70">
+                <td colSpan={6} className="px-6 py-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-xs font-black text-slate-500 uppercase tracking-widest">Actividad de {u.nombre}</div>
+                    <button
+                      onClick={() => setActividadAbierta(null)}
+                      className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-slate-700"
+                    >
+                      Cerrar <ChevronDown size={13} className="rotate-180" />
+                    </button>
+                  </div>
+                  <UserActivityPanel actividad={u.actividad} />
+                </td>
+              </tr>
+            )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -290,6 +391,12 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
                   <Trash2 size={16} />
                 </button>
               </div>
+            </div>
+            <div className="pt-3 border-t border-slate-200/50">
+              <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                <Activity size={13} /> Actividad
+              </div>
+              <UserActivityPanel actividad={u.actividad} />
             </div>
           </div>
         ))}
