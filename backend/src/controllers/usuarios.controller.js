@@ -54,14 +54,23 @@ const crear = async (req, res) => {
       select: { id: true, nombre: true, email: true, area: true, rol: true }
     });
 
-    // Enviar email de invitación profesional
-    await enviarInvitacion({ 
-      nombre: usuario.nombre, 
-      email: usuario.email, 
-      token: verificationToken 
-    });
+    // LOG DE RASTREO DEFINITIVO
+    console.log(`[INVITACIÓN]: Iniciando proceso de envío para: ${usuario.email}`);
 
-    return res.status(201).json({ mensaje: 'Usuario creado exitosamente', usuario });
+    try {
+      // Enviar email de invitación profesional
+      await enviarInvitacion({ 
+        nombre: usuario.nombre, 
+        email: usuario.email, 
+        token: verificationToken 
+      });
+      console.log(`🚀 [SMTP]: EL SERVIDOR CONFIRMA ENVÍO A: ${usuario.email}`);
+    } catch (mailErr) {
+      console.error(`❌ [SMTP]: EL SERVIDOR FALLÓ AL ENVIAR A: ${usuario.email}`, mailErr.message);
+      // No lanzamos el error para que el usuario se cree, pero lo registramos
+    }
+
+    return res.status(201).json({ mensaje: 'Usuario creado (revisa logs de correo)', usuario });
   } catch (error) {
     console.error('[usuarios.crear]', error);
     return res.status(500).json({ error: 'Error interno del servidor' });
