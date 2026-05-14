@@ -36,8 +36,7 @@ const crear = async (req, res) => {
     if (existe) return res.status(400).json({ error: 'El correo ya está registrado' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    const { sendVerificationEmail } = require('../services/email.service');
+    const { enviarInvitacion } = require('../services/correo');
     const crypto = require('crypto');
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
@@ -50,13 +49,17 @@ const crear = async (req, res) => {
         rol:  rol  || 'MIEMBRO',
         verificado: false,
         verificationToken,
-        verificationTokenExpires: new Date(Date.now() + 15 * 60 * 1000) // 15 minutos
+        verificationTokenExpires: new Date(Date.now() + 48 * 60 * 60 * 1000) // 48 horas
       },
       select: { id: true, nombre: true, email: true, area: true, rol: true }
     });
 
-    // Enviar email de verificación al nuevo usuario
-    await sendVerificationEmail(email.toLowerCase().trim(), verificationToken);
+    // Enviar email de invitación profesional
+    await enviarInvitacion({ 
+      nombre: usuario.nombre, 
+      email: usuario.email, 
+      token: verificationToken 
+    });
 
     return res.status(201).json({ mensaje: 'Usuario creado exitosamente', usuario });
   } catch (error) {
