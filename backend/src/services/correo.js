@@ -30,10 +30,16 @@ const enviarInvitacion = async ({ nombre, email, token }) => {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`[SMTP]: Invitación enviada exitosamente. ID: ${info.messageId}`);
+    console.log(`✅ [SMTP]: Invitación enviada exitosamente. ID: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('[SMTP] Error enviando invitación:', error.message);
+    console.error('❌ [SMTP] ERROR DETALLADO AL ENVIAR:', {
+      mensaje: error.message,
+      codigo: error.code,
+      comando: error.command,
+      respuesta: error.response,
+      stack: error.stack
+    });
     throw error;
   }
 };
