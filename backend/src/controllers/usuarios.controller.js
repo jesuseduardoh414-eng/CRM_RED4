@@ -33,6 +33,25 @@ const resumenTarea = (tarea) => ({
   proyecto: tarea.proyecto
 });
 
+const resumenPorProyecto = (...grupos) => {
+  const proyectos = new Map();
+
+  grupos.flat().forEach(tarea => {
+    const id = tarea.proyecto?.id || 'sin-proyecto';
+    const nombre = tarea.proyecto?.nombre || 'Sin proyecto';
+    if (!proyectos.has(id)) {
+      proyectos.set(id, { id, nombre, total: 0, hechas: 0, enProgreso: 0, pendientes: 0 });
+    }
+    const proyecto = proyectos.get(id);
+    proyecto.total += 1;
+    if (tarea.estado === 'HECHO') proyecto.hechas += 1;
+    if (tarea.estado === 'EN_PROGRESO') proyecto.enProgreso += 1;
+    if (tarea.estado === 'PENDIENTE') proyecto.pendientes += 1;
+  });
+
+  return [...proyectos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+};
+
 const obtenerActividadUsuario = async (usuarioId) => {
   const ahora = new Date();
   const hoyFin = finDelDia(ahora);
@@ -80,11 +99,17 @@ const obtenerActividadUsuario = async (usuarioId) => {
     })
   ]);
 
+  const hechasResumen = hechas.map(resumenTarea);
+  const enProgresoResumen = enProgreso.map(resumenTarea);
+  const faltanResumen = faltanHoy.map(resumenTarea);
+  const faltanSemanaResumen = faltanSemana.map(resumenTarea);
+
   return {
-    hechasHoy: hechas.map(resumenTarea),
-    enProgreso: enProgreso.map(resumenTarea),
-    faltanHoy: faltanHoy.map(resumenTarea),
-    faltanSemana: faltanSemana.map(resumenTarea),
+    hechasHoy: hechasResumen,
+    enProgreso: enProgresoResumen,
+    faltanHoy: faltanResumen,
+    faltanSemana: faltanSemanaResumen,
+    porProyecto: resumenPorProyecto(hechasResumen, enProgresoResumen, faltanResumen),
     totales: {
       hechasHoy: hechas.length,
       enProgreso: enProgreso.length,
@@ -315,6 +340,7 @@ const actividad = async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
+    res.set('Cache-Control', 'no-store');
     return res.json({ actividad: await obtenerActividadUsuario(id) });
   } catch (error) {
     console.error('[usuarios.actividad]', error);

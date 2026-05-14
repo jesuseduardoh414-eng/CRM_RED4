@@ -196,7 +196,10 @@ export const usuariosService = {
     return handleResponse(res);
   },
   actividad: async (id) => {
-    const res = await fetch(`${API_URL}/usuarios/${id}/actividad`, { headers: getHeaders() });
+    const res = await fetch(`${API_URL}/usuarios/${id}/actividad?t=${Date.now()}`, {
+      headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },
+      cache: 'no-store',
+    });
     return handleResponse(res);
   },
   crear: async (datos) => {

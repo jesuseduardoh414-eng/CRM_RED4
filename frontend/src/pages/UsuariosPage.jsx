@@ -52,6 +52,24 @@ const actividadDesdeTareas = (usuarioId, tareas) => {
   actividad.enProgreso = usuarioTareas.filter(t => t.estado === 'EN_PROGRESO').sort(ordenarPorFecha);
   actividad.faltanHoy = usuarioTareas.filter(t => t.estado === 'PENDIENTE').sort(ordenarPorFecha);
   actividad.faltanSemana = usuarioTareas.filter(t => t.estado !== 'HECHO' && t.venceEn).sort(ordenarPorFecha);
+  actividad.porProyecto = [...usuarioTareas.reduce((acc, tarea) => {
+    const id = tarea.proyecto?.id || 'sin-proyecto';
+    const actual = acc.get(id) || {
+      id,
+      nombre: tarea.proyecto?.nombre || 'Sin proyecto',
+      total: 0,
+      hechas: 0,
+      enProgreso: 0,
+      pendientes: 0
+    };
+
+    actual.total += 1;
+    if (tarea.estado === 'HECHO') actual.hechas += 1;
+    if (tarea.estado === 'EN_PROGRESO') actual.enProgreso += 1;
+    if (tarea.estado === 'PENDIENTE') actual.pendientes += 1;
+    acc.set(id, actual);
+    return acc;
+  }, new Map()).values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
 
   actividad.totales = {
     hechasHoy: actividad.hechasHoy.length,
@@ -90,6 +108,26 @@ const ActivityColumn = ({ title, count, icon, color, items, empty }) => (
   </div>
 );
 
+const ProjectSummary = ({ proyectos }) => {
+  if (!proyectos?.length) return null;
+
+  return (
+    <div className="lg:col-span-4 bg-white rounded-xl border border-slate-100 p-3">
+      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Por proyecto</div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        {proyectos.map(p => (
+          <div key={p.id} className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
+            <div className="text-xs font-black text-slate-900 truncate">{p.nombre}</div>
+            <div className="mt-1 text-[10px] font-bold text-slate-500">
+              {p.total} total · {p.hechas} hechas · {p.enProgreso} curso · {p.pendientes} faltan
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const UserActivityPanel = ({ actividad }) => {
   if (!actividad) {
     return <div className="text-xs font-bold text-slate-400">Sin datos de actividad.</div>;
@@ -97,6 +135,7 @@ const UserActivityPanel = ({ actividad }) => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+      <ProjectSummary proyectos={actividad.porProyecto} />
       <ActivityColumn
         title="Hechas"
         count={actividad.totales?.hechasHoy || 0}
