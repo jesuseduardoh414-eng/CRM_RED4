@@ -1,6 +1,6 @@
 // Página de Gestión de Usuarios (Solo Admin)
 import { Fragment, useState, useEffect, useCallback } from 'react';
-import { usuariosService, statsService } from '../services/api';
+import { proyectosService, tareasService, usuariosService, statsService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
 import { 
@@ -23,6 +23,52 @@ import {
 
 const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION'];
 const ROLES = ['MIEMBRO', 'ADMIN'];
+
+const actividadVacia = () => ({
+  hechasHoy: [],
+  enProgreso: [],
+  faltanHoy: [],
+  faltanSemana: [],
+  totales: {
+    hechasHoy: 0,
+    enProgreso: 0,
+    faltanHoy: 0,
+    faltanSemana: 0
+  }
+});
+
+const ordenarPorFecha = (a, b) => {
+  if (!a.venceEn && !b.venceEn) return a.titulo.localeCompare(b.titulo);
+  if (!a.venceEn) return 1;
+  if (!b.venceEn) return -1;
+  return new Date(a.venceEn) - new Date(b.venceEn);
+};
+
+const actividadDesdeTareas = (usuarioId, tareas) => {
+  const usuarioTareas = tareas.filter(t => t.asignadoId === usuarioId || t.creadorId === usuarioId);
+  const actividad = actividadVacia();
+
+  actividad.hechasHoy = usuarioTareas.filter(t => t.estado === 'HECHO').sort(ordenarPorFecha).slice(0, 8);
+  actividad.enProgreso = usuarioTareas.filter(t => t.estado === 'EN_PROGRESO').sort(ordenarPorFecha).slice(0, 8);
+  actividad.faltanHoy = usuarioTareas.filter(t => t.estado === 'PENDIENTE').sort(ordenarPorFecha).slice(0, 8);
+  actividad.faltanSemana = usuarioTareas.filter(t => t.estado !== 'HECHO' && t.venceEn).sort(ordenarPorFecha).slice(0, 8);
+
+  actividad.totales = {
+    hechasHoy: actividad.hechasHoy.length,
+    enProgreso: actividad.enProgreso.length,
+    faltanHoy: actividad.faltanHoy.length,
+    faltanSemana: actividad.faltanSemana.length
+  };
+
+  return actividad;
+};
+
+const actividadSinDatos = (actividad) => {
+  if (!actividad) return true;
+  const totales = actividad.totales || {};
+  return ['hechasHoy', 'enProgreso', 'faltanHoy', 'faltanSemana']
+    .every(key => !totales[key]);
+};
 
 const TaskMini = ({ tarea }) => (
   <div className="py-2 border-b border-slate-100 last:border-0">
@@ -59,12 +105,12 @@ const UserActivityPanel = ({ actividad }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
       <ActivityColumn
-        title="Hechas hoy"
+        title="Hechas"
         count={actividad.totales?.hechasHoy || 0}
         color="#16a34a"
         icon={<CheckCircle2 size={13} />}
         items={actividad.hechasHoy}
-        empty="Sin completadas hoy"
+        empty="Sin completadas"
       />
       <ActivityColumn
         title="Haciendo"
@@ -110,7 +156,7 @@ const UsuariosPage = () => {
       if (tab === 'activos') {
         const data = await usuariosService.listar();
         let usuariosActivos = data.usuarios || [];
-        const faltaActividad = usuariosActivos.some(u => !u.actividad);
+        const faltaActividad = usuariosActivos.some(u => actividadSinDatos(u.actividad));
 
         if (faltaActividad) {
           try {
@@ -118,10 +164,36 @@ const UsuariosPage = () => {
             const actividadPorUsuario = new Map((stats.actividadMiembros || []).map(item => [item.id, item]));
             usuariosActivos = usuariosActivos.map(u => ({
               ...u,
-              actividad: u.actividad || actividadPorUsuario.get(u.id)?.actividad || actividadPorUsuario.get(u.id)
+              actividad: actividadSinDatos(u.actividad)
+                ? (actividadPorUsuario.get(u.id)?.actividad || actividadPorUsuario.get(u.id))
+                : u.actividad
             }));
           } catch (statsError) {
             console.error('No se pudo cargar actividad desde stats/admin:', statsError);
+          }
+        }
+
+        if (usuariosActivos.some(u => actividadSinDatos(u.actividad))) {
+          try {
+            const proyectosData = await proyectosService.listar();
+            const proyectos = proyectosData.proyectos || [];
+            const tareasPorProyecto = await Promise.all(
+              proyectos.map(async (proyecto) => {
+                const dataTareas = await tareasService.listar(proyecto.id);
+                return (dataTareas.tareas || []).map(t => ({
+                  ...t,
+                  proyecto: t.proyecto || { id: proyecto.id, nombre: proyecto.nombre }
+                }));
+              })
+            );
+            const todasTareas = tareasPorProyecto.flat();
+
+            usuariosActivos = usuariosActivos.map(u => ({
+              ...u,
+              actividad: actividadSinDatos(u.actividad) ? actividadDesdeTareas(u.id, todasTareas) : u.actividad
+            }));
+          } catch (tareasError) {
+            console.error('No se pudo armar actividad desde tareas:', tareasError);
           }
         }
 
