@@ -187,42 +187,7 @@ const UsuariosPage = () => {
     try {
       if (tab === 'activos') {
         const data = await usuariosService.listar();
-        let usuariosActivos = data.usuarios || [];
-
-        try {
-          const proyectosData = await proyectosService.listar();
-          const proyectos = proyectosData.proyectos || [];
-          const tareasPorProyecto = await Promise.all(
-            proyectos.map(async (proyecto) => {
-              const dataTareas = await tareasService.listar(proyecto.id);
-              return (dataTareas.tareas || []).map(t => ({
-                ...t,
-                proyecto: t.proyecto || { id: proyecto.id, nombre: proyecto.nombre }
-              }));
-            })
-          );
-          const todasTareas = tareasPorProyecto.flat();
-
-          usuariosActivos = usuariosActivos.map(u => ({
-            ...u,
-            actividad: actividadDesdeTareas(u.id, todasTareas)
-          }));
-        } catch (tareasError) {
-          console.error('No se pudo armar actividad desde tareas:', tareasError);
-
-          try {
-            const stats = await statsService.getAdminStats();
-            const actividadPorUsuario = new Map((stats.actividadMiembros || []).map(item => [item.id, item]));
-            usuariosActivos = usuariosActivos.map(u => ({
-              ...u,
-              actividad: actividadPorUsuario.get(u.id)?.actividad || actividadPorUsuario.get(u.id) || u.actividad
-            }));
-          } catch (statsError) {
-            console.error('No se pudo cargar actividad desde stats/admin:', statsError);
-          }
-        }
-
-        setUsuarios(usuariosActivos);
+        setUsuarios(data.usuarios || []);
       } else {
         const data = await usuariosService.listarInvitaciones();
         setInvitaciones(data);

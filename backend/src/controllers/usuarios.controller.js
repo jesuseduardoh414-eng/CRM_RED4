@@ -53,6 +53,7 @@ const resumenPorProyecto = (...grupos) => {
 };
 
 const obtenerActividadUsuario = async (usuarioId) => {
+  // Esta función se mantiene para compatibilidad con el endpoint individual /actividad
   const ahora = new Date();
   const hoyFin = finDelDia(ahora);
   const semanaFin = finDeSemana(ahora);
@@ -65,26 +66,17 @@ const obtenerActividadUsuario = async (usuarioId) => {
 
   const [hechas, enProgreso, faltanHoy, faltanSemana] = await Promise.all([
     prisma.tarea.findMany({
-      where: {
-        ...tareasDelUsuario,
-        estado: 'HECHO'
-      },
+      where: { ...tareasDelUsuario, estado: 'HECHO' },
       orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
-      where: {
-        ...tareasDelUsuario,
-        estado: 'EN_PROGRESO'
-      },
+      where: { ...tareasDelUsuario, estado: 'EN_PROGRESO' },
       orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
-      where: {
-        ...tareasDelUsuario,
-        estado: 'PENDIENTE'
-      },
+      where: { ...tareasDelUsuario, estado: 'PENDIENTE' },
       orderBy: [{ prioridad: 'desc' }, { venceEn: 'asc' }],
       select: tareaResumenSelect
     }),
@@ -119,7 +111,7 @@ const obtenerActividadUsuario = async (usuarioId) => {
   };
 };
 
-// Devuelve todos los usuarios sin exponer sus contraseñas
+// Devuelve todos los usuarios con su actividad pre-calculada de forma eficiente
 const listar = async (req, res) => {
   try {
     const usuarios = await prisma.usuario.findMany({
@@ -134,16 +126,62 @@ const listar = async (req, res) => {
         estado: true
       },
     });
+
     if (req.usuario?.rol !== 'ADMIN') {
       return res.json({ usuarios });
     }
 
-    const usuariosConActividad = await Promise.all(
-      usuarios.map(async (usuario) => ({
+    // OPTIMIZACIÓN: Obtener TODAS las tareas relevantes en una sola consulta
+    const ahora = new Date();
+    const hoyFin = finDelDia(ahora);
+    const semanaFin = finDeSemana(ahora);
+
+    const todasTareas = await prisma.tarea.findMany({
+      where: {
+        OR: [
+          { asignadoId: { in: usuarios.map(u => u.id) } },
+          { creadorId: { in: usuarios.map(u => u.id) } }
+        ]
+      },
+      select: tareaResumenSelect,
+      orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }]
+    });
+
+    // Procesar en memoria para cada usuario
+    const usuariosConActividad = usuarios.map(usuario => {
+      const id = usuario.id;
+      
+      // Filtrar tareas del usuario
+      const hechasHoy = todasTareas.filter(t => (t.asignadoId === id || t.creadorId === id) && t.estado === 'HECHO');
+      const enProgreso = todasTareas.filter(t => (t.asignadoId === id || t.creadorId === id) && t.estado === 'EN_PROGRESO');
+      const faltanHoy = todasTareas.filter(t => (t.asignadoId === id || t.creadorId === id) && t.estado === 'PENDIENTE');
+      const faltanSemana = todasTareas.filter(t => 
+        (t.asignadoId === id || t.creadorId === id) && 
+        t.estado !== 'HECHO' && 
+        t.venceEn && t.venceEn > hoyFin && t.venceEn <= semanaFin
+      );
+
+      const hR = hechasHoy.map(resumenTarea);
+      const eR = enProgreso.map(resumenTarea);
+      const fR = faltanHoy.map(resumenTarea);
+
+      return {
         ...usuario,
-        actividad: await obtenerActividadUsuario(usuario.id)
-      }))
-    );
+        actividad: {
+          hechasHoy: hR,
+          enProgreso: eR,
+          faltanHoy: fR,
+          faltanSemana: faltanSemana.map(resumenTarea),
+          porProyecto: resumenPorProyecto(hR, eR, fR),
+          totales: {
+            hechasHoy: hechasHoy.length,
+            enProgreso: enProgreso.length,
+            faltanHoy: faltanHoy.length,
+            faltanSemana: faltanSemana.length
+          }
+        }
+      };
+    });
 
     return res.json({ usuarios: usuariosConActividad });
   } catch (error) {
