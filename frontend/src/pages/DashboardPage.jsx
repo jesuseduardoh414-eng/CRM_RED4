@@ -13,7 +13,10 @@ import {
   Mail, 
   ArrowRight,
   ClipboardList,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  PlayCircle,
+  CalendarDays
 } from 'lucide-react';
 
 // ─── Configuración Visual ────────────────────────────────────────────────────
@@ -54,6 +57,85 @@ const StatCard = ({ value, sub, icon, color, bg }) => (
     </div>
   </div>
 );
+
+const MiniTask = ({ tarea }) => (
+  <div style={{ padding: '0.65rem 0', borderBottom: '1px solid rgba(148,163,184,0.16)' }}>
+    <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.25 }}>
+      {tarea.titulo}
+    </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginTop: '0.25rem', fontSize: '0.68rem', color: '#64748b', fontWeight: '700' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.proyecto?.nombre || 'Sin proyecto'}</span>
+      {tarea.venceEn && <span>{new Date(tarea.venceEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</span>}
+    </div>
+  </div>
+);
+
+const ActivityBucket = ({ label, count, icon, color, children }) => (
+  <div style={{ minWidth: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.72rem', fontWeight: '900', color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {icon}
+        {label}
+      </div>
+      <span style={{ fontSize: '0.78rem', fontWeight: '900', color }}>{count}</span>
+    </div>
+    <div style={{ minHeight: '48px' }}>
+      {children}
+    </div>
+  </div>
+);
+
+const AdminMemberActivity = ({ miembros }) => {
+  if (!miembros?.length) return null;
+
+  return (
+    <div className="card" style={{ padding: '2rem', marginBottom: '3rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>Actividad del equipo</h3>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Tareas hechas hoy, en curso y pendientes por vencimiento.</p>
+        </div>
+        <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Hoy / Semana</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {miembros.map(miembro => (
+          <div key={miembro.id} style={{ border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1rem', background: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>
+                {miembro.nombre?.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: '900', color: '#0f172a' }}>{miembro.nombre}</div>
+                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '800' }}>{miembro.area}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#16a34a', background: '#f0fdf4', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.hechasHoy} hechas</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#2563eb', background: '#eff6ff', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.enProgreso} curso</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#dc2626', background: '#fef2f2', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.faltanHoy} hoy</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
+              <ActivityBucket label="Hechas hoy" count={miembro.totales.hechasHoy} color="#16a34a" icon={<CheckCircle2 size={15} />}>
+                {miembro.hechasHoy.length ? miembro.hechasHoy.map(t => <MiniTask key={t.id} tarea={t} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin completadas hoy</span>}
+              </ActivityBucket>
+              <ActivityBucket label="Haciendo" count={miembro.totales.enProgreso} color="#2563eb" icon={<PlayCircle size={15} />}>
+                {miembro.enProgreso.length ? miembro.enProgreso.map(t => <MiniTask key={t.id} tarea={t} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin tareas en curso</span>}
+              </ActivityBucket>
+              <ActivityBucket label="Faltan hoy" count={miembro.totales.faltanHoy} color="#dc2626" icon={<Clock size={15} />}>
+                {miembro.faltanHoy.length ? miembro.faltanHoy.map(t => <MiniTask key={t.id} tarea={t} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin pendientes de hoy</span>}
+              </ActivityBucket>
+              <ActivityBucket label="Faltan semana" count={miembro.totales.faltanSemana} color="#f59e0b" icon={<CalendarDays size={15} />}>
+                {miembro.faltanSemana.length ? miembro.faltanSemana.map(t => <MiniTask key={t.id} tarea={t} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin pendientes próximos</span>}
+              </ActivityBucket>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 // ─── Dashboard MIEMBRO ────────────────────────────────────────────────────────
 const DashboardMiembro = ({ usuario }) => {
@@ -171,7 +253,7 @@ const DashboardAdmin = () => {
   if (cargando) return <Spinner texto="Compilando datos globales..." />;
   if (!stats) return <div style={{ padding: '4rem', textAlign: 'center' }}>Error de conexión</div>;
 
-  const { proyectos, tareas, topUsuarios, actividadReciente, proyectosProgreso } = stats;
+  const { proyectos, tareas, topUsuarios, actividadReciente, proyectosProgreso, actividadMiembros } = stats;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -226,6 +308,8 @@ const DashboardAdmin = () => {
           </div>
         </div>
       </div>
+
+      <AdminMemberActivity miembros={actividadMiembros} />
 
       <div className="card" style={{ padding: '2rem' }}>
         <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>Flujo Reciente de Actividad</h3>
