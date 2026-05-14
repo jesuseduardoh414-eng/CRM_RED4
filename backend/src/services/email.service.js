@@ -6,8 +6,8 @@ if (!process.env.BREVO_API_KEY) {
 
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false, 
+  port: 465,
+  secure: true, // true para puerto 465 (SSL)
   auth: {
     user: process.env.EMAIL_USER || 'jesuseduardoh414@gmail.com',
     pass: process.env.BREVO_API_KEY,
