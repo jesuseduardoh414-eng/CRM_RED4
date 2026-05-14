@@ -11,10 +11,13 @@ const sendEmailViaAPI = (options) => {
       return reject(new Error('Falta BREVO_API_KEY en las variables de entorno.'));
     }
 
+    // Limpiar el email del remitente (quitar nombres o comillas)
+    const senderEmail = (process.env.EMAIL_USER || "jesuseduardoh414@gmail.com").replace(/.*<(.+)>.*/, "$1").trim();
+
     const data = JSON.stringify({
       sender: { 
         name: "Centralita CRM", 
-        email: process.env.EMAIL_USER || "jesuseduardoh414@gmail.com" 
+        email: senderEmail
       },
       to: [{ email: options.to }],
       subject: options.subject,
@@ -29,7 +32,8 @@ const sendEmailViaAPI = (options) => {
       headers: {
         'api-key': apiKey,
         'Content-Type': 'application/json',
-        'Content-Length': data.length
+        'Accept': 'application/json',
+        'Content-Length': Buffer.byteLength(data)
       }
     };
 
