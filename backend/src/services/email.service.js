@@ -1,5 +1,9 @@
 const nodemailer = require('nodemailer');
 
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.error('❌ [SMTP] CRÍTICO: Faltan EMAIL_USER o EMAIL_PASS en las variables de entorno.');
+}
+
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.EMAIL_PORT) || 587,
