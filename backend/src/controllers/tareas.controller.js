@@ -27,6 +27,17 @@ const puedeAccederTarea = (tarea, usuarioId) => (
   !tarea.asignadoId || tarea.asignadoId === usuarioId || tarea.creadorId === usuarioId
 );
 
+const normalizarAsignadoId = (asignadoId) => {
+  if (!asignadoId) return null;
+  const id = parseInt(asignadoId);
+  return Number.isNaN(id) ? null : id;
+};
+
+const asignadoPerteneceAProyecto = (proyecto, asignadoId) => {
+  if (!asignadoId) return true;
+  return proyecto.miembros.some(m => m.id === asignadoId);
+};
+
 // Helper para crear notificaciones
 const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
   if (!usuarioId) return;
@@ -57,7 +68,7 @@ const listar = async (req, res) => {
       where: { id: proyectoId },
       include: { 
         creador: { select: { id: true, nombre: true, area: true } },
-        miembros: { select: { id: true } }
+        miembros: { select: { id: true, nombre: true, email: true, area: true, rol: true } }
       },
     });
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
@@ -120,8 +131,12 @@ const crear = async (req, res) => {
 
   try {
     // Verificar que el proyecto existe
-    const proyecto = await prisma.proyecto.findUnique({ where: { id: proyectoId } });
+    const proyecto = await prisma.proyecto.findUnique({
+      where: { id: proyectoId },
+      include: { miembros: { select: { id: true } } }
+    });
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    const asignadoIdNormalizado = normalizarAsignadoId(asignadoId);
 
     // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
     if (req.usuario.rol !== 'ADMIN') {
@@ -134,6 +149,10 @@ const crear = async (req, res) => {
       if (!miembro) {
         return res.status(403).json({ error: 'No tienes permiso para crear tareas en este proyecto' });
       }
+    }
+
+    if (!asignadoPerteneceAProyecto(proyecto, asignadoIdNormalizado)) {
+      return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
 
     // Crear la tarea
@@ -152,7 +171,7 @@ const crear = async (req, res) => {
         fechaInicio: dInicio,
         venceEn:     dVence,
         proyectoId,
-        asignadoId:  asignadoId ? parseInt(asignadoId) : null,
+        asignadoId:  asignadoIdNormalizado,
         creadorId:   req.usuario.id,
         dependeDeId: dependeDeId ? parseInt(dependeDeId) : null,
       },
@@ -225,6 +244,7 @@ const editar = async (req, res) => {
       include: { proyecto: { include: { miembros: { select: { id: true } } } } }
     });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
+    const asignadoIdNormalizado = asignadoId !== undefined ? normalizarAsignadoId(asignadoId) : undefined;
 
     // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
     if (req.usuario.rol !== 'ADMIN') {
@@ -232,6 +252,10 @@ const editar = async (req, res) => {
       if (!esMiembro || !puedeAccederTarea(existente, req.usuario.id)) {
         return res.status(403).json({ error: 'No tienes permiso para editar esta tarea' });
       }
+    }
+
+    if (asignadoIdNormalizado !== undefined && !asignadoPerteneceAProyecto(existente.proyecto, asignadoIdNormalizado)) {
+      return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
 
     let dInicio = fechaInicio !== undefined ? (fechaInicio ? new Date(fechaInicio) : new Date()) : undefined;
@@ -247,7 +271,7 @@ const editar = async (req, res) => {
         ...(descripcion  !== undefined && { descripcion: descripcion?.trim() || null }),
         ...(prioridad    !== undefined && { prioridad }),
         ...(estado       !== undefined && { estado }),
-        ...(asignadoId   !== undefined && { asignadoId: asignadoId ? parseInt(asignadoId) : null }),
+        ...(asignadoId   !== undefined && { asignadoId: asignadoIdNormalizado }),
         ...(dInicio      !== undefined && { fechaInicio: dInicio }),
         ...(dVence       !== undefined && { venceEn: dVence }),
         ...(dependeDeId  !== undefined && { dependeDeId: dependeDeId ? parseInt(dependeDeId) : null }),

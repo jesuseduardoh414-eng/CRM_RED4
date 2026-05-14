@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { tareasService, usuariosService } from '../services/api';
+import { tareasService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import KanbanView from '../components/KanbanView';
@@ -156,10 +156,10 @@ const ProyectoDetallePage = () => {
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [t, u] = await Promise.all([tareasService.listar(id), usuariosService.listar()]);
+      const t = await tareasService.listar(id);
       setProyecto(t.proyecto);
       setTareas(t.tareas);
-      setUsuarios(u.usuarios);
+      setUsuarios(t.proyecto?.miembros || []);
     } catch (err) { showToast(err.message, 'error'); }
     finally { setCargando(false); }
   }, [id, showToast]);

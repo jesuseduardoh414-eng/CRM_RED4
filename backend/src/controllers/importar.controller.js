@@ -67,7 +67,7 @@ const importar = async (req, res) => {
       if (!isNaN(miembroId)) {
         // Validar que el miembro pertenezca al proyecto
         const esMiembro = proyecto.miembros.some(m => m.id === miembroId);
-        if (!esMiembro && req.usuario.rol !== 'ADMIN') {
+        if (!esMiembro) {
           fs.unlinkSync(filePath);
           return res.status(400).json({ error: 'El miembro seleccionado no pertenece a este proyecto' });
         }
@@ -77,6 +77,11 @@ const importar = async (req, res) => {
     // modo 'archivo' → asignadoPorDefecto = null (respeta columna del archivo)
 
     // 4. Detectar tipo de archivo por extensión
+    if (asignadoPorDefecto && !proyecto.miembros.some(m => m.id === asignadoPorDefecto)) {
+      fs.unlinkSync(filePath);
+      return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
+    }
+
     const ext = path.extname(req.file.originalname).toLowerCase();
     let resultado;
 
