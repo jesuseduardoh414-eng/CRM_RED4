@@ -48,10 +48,10 @@ const actividadDesdeTareas = (usuarioId, tareas) => {
   const usuarioTareas = tareas.filter(t => t.asignadoId === usuarioId || t.creadorId === usuarioId);
   const actividad = actividadVacia();
 
-  actividad.hechasHoy = usuarioTareas.filter(t => t.estado === 'HECHO').sort(ordenarPorFecha).slice(0, 8);
-  actividad.enProgreso = usuarioTareas.filter(t => t.estado === 'EN_PROGRESO').sort(ordenarPorFecha).slice(0, 8);
-  actividad.faltanHoy = usuarioTareas.filter(t => t.estado === 'PENDIENTE').sort(ordenarPorFecha).slice(0, 8);
-  actividad.faltanSemana = usuarioTareas.filter(t => t.estado !== 'HECHO' && t.venceEn).sort(ordenarPorFecha).slice(0, 8);
+  actividad.hechasHoy = usuarioTareas.filter(t => t.estado === 'HECHO').sort(ordenarPorFecha);
+  actividad.enProgreso = usuarioTareas.filter(t => t.estado === 'EN_PROGRESO').sort(ordenarPorFecha);
+  actividad.faltanHoy = usuarioTareas.filter(t => t.estado === 'PENDIENTE').sort(ordenarPorFecha);
+  actividad.faltanSemana = usuarioTareas.filter(t => t.estado !== 'HECHO' && t.venceEn).sort(ordenarPorFecha);
 
   actividad.totales = {
     hechasHoy: actividad.hechasHoy.length,

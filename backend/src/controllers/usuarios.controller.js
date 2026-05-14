@@ -1,12 +1,6 @@
 const prisma = require('../lib/prisma');
 const bcrypt = require('bcryptjs');
 
-const inicioDelDia = (fecha) => {
-  const d = new Date(fecha);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-
 const finDelDia = (fecha) => {
   const d = new Date(fecha);
   d.setHours(23, 59, 59, 999);
@@ -41,7 +35,6 @@ const resumenTarea = (tarea) => ({
 
 const obtenerActividadUsuario = async (usuarioId) => {
   const ahora = new Date();
-  const hoyInicio = inicioDelDia(ahora);
   const hoyFin = finDelDia(ahora);
   const semanaFin = finDeSemana(ahora);
   const tareasDelUsuario = {
@@ -51,19 +44,14 @@ const obtenerActividadUsuario = async (usuarioId) => {
     ]
   };
 
-  const [logsHechasHoy, enProgreso, faltanHoy, faltanSemana] = await Promise.all([
-    prisma.logActividad.findMany({
+  const [hechas, enProgreso, faltanHoy, faltanSemana] = await Promise.all([
+    prisma.tarea.findMany({
       where: {
-        accion: 'CAMBIO_ESTADO',
-        creadoEn: { gte: hoyInicio, lte: hoyFin },
-        descripcion: { contains: 'HECHO' },
-        usuarioId,
-        tarea: { isNot: null }
+        ...tareasDelUsuario,
+        estado: 'HECHO'
       },
-      orderBy: { creadoEn: 'desc' },
-      include: {
-        tarea: { select: tareaResumenSelect }
-      }
+      orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
+      select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
       where: {
@@ -71,7 +59,6 @@ const obtenerActividadUsuario = async (usuarioId) => {
         estado: 'EN_PROGRESO'
       },
       orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
-      take: 6,
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
@@ -80,7 +67,6 @@ const obtenerActividadUsuario = async (usuarioId) => {
         estado: 'PENDIENTE'
       },
       orderBy: [{ prioridad: 'desc' }, { venceEn: 'asc' }],
-      take: 6,
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
@@ -90,27 +76,17 @@ const obtenerActividadUsuario = async (usuarioId) => {
         venceEn: { gt: hoyFin, lte: semanaFin }
       },
       orderBy: [{ venceEn: 'asc' }, { prioridad: 'desc' }],
-      take: 6,
       select: tareaResumenSelect
     })
   ]);
 
-  const hechasHoy = [];
-  const vistas = new Set();
-  logsHechasHoy.forEach(log => {
-    if (log.tarea && !vistas.has(log.tarea.id)) {
-      vistas.add(log.tarea.id);
-      hechasHoy.push(resumenTarea(log.tarea));
-    }
-  });
-
   return {
-    hechasHoy,
+    hechasHoy: hechas.map(resumenTarea),
     enProgreso: enProgreso.map(resumenTarea),
     faltanHoy: faltanHoy.map(resumenTarea),
     faltanSemana: faltanSemana.map(resumenTarea),
     totales: {
-      hechasHoy: hechasHoy.length,
+      hechasHoy: hechas.length,
       enProgreso: enProgreso.length,
       faltanHoy: faltanHoy.length,
       faltanSemana: faltanSemana.length
