@@ -195,6 +195,10 @@ export const usuariosService = {
     const res = await fetch(`${API_URL}/usuarios`, { headers: getHeaders() });
     return handleResponse(res);
   },
+  actividad: async (id) => {
+    const res = await fetch(`${API_URL}/usuarios/${id}/actividad`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
   crear: async (datos) => {
     const res = await fetch(`${API_URL}/usuarios`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),

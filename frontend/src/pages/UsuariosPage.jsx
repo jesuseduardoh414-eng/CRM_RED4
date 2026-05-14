@@ -229,6 +229,15 @@ const UsuariosPage = () => {
     } catch (error) { showToast(error.message, 'error'); }
   };
 
+  const handleCargarActividad = async (id) => {
+    try {
+      const data = await usuariosService.actividad(id);
+      setUsuarios(prev => prev.map(u => u.id === id ? { ...u, actividad: data.actividad } : u));
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
   if (cargando && (usuarios.length === 0 && invitaciones.length === 0)) return <Spinner texto="Cargando..." />;
 
   return (
@@ -272,6 +281,7 @@ const UsuariosPage = () => {
             onEdit={(u) => { setUsuarioEditando(u); setModalEditar(true); }}
             onDelete={handleEliminar}
             onToggleStatus={handleToggleEstado}
+            onLoadActivity={handleCargarActividad}
           />
         ) : (
           <TablaInvitaciones 
@@ -300,7 +310,7 @@ const UsuariosPage = () => {
   );
 };
 
-const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
+const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivity }) => {
   const [actividadAbierta, setActividadAbierta] = useState(null);
 
   if (usuarios.length === 0) return <div className="p-12 text-center text-slate-400">No hay miembros activos.</div>;
@@ -358,7 +368,10 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
               <td className="px-6 py-4 text-right">
                 <div className="flex justify-end gap-2">
                   <button
-                    onClick={() => setActividadAbierta(prev => prev === u.id ? null : u.id)}
+                    onClick={async () => {
+                      if (actividadAbierta !== u.id) await onLoadActivity(u.id);
+                      setActividadAbierta(prev => prev === u.id ? null : u.id);
+                    }}
                     title="Ver actividad"
                     className={`p-2 rounded-xl transition-all ${actividadAbierta === u.id ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                   >
