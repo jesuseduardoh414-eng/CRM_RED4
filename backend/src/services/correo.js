@@ -8,7 +8,7 @@ const enviarInvitacion = async ({ nombre, email, token }) => {
   console.log(`[SMTP]: Intentando enviar invitación a ${email}...`);
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || '"Centralita CRM" <jesuseduardoh414@gmail.com>',
+    from: process.env.EMAIL_FROM || '"Red4 CRM" <jesuseduardoh414@gmail.com>',
     to: email,
     subject: 'Te han invitado al CRM',
     html: `

@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "prisma generate && node src/server.js"
+    "start": "node src/server.js",
+    "vercel-build": "prisma generate"
   },
   "keywords": [],
   "author": "",

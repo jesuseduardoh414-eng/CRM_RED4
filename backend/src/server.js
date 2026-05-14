@@ -41,8 +41,12 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, mensaje: 'Servidor CRM funcionando' });
 });
 
-// Inicio del servidor
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\u2705 Servidor CRM [ACTUALIZADO] corriendo en el puerto ${PORT}`);
-  console.log(`⏰ Hora de despliegue: ${new Date().toISOString()}`);
-});
+// Inicio del servidor (solo si no estamos en Vercel/Producción)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Servidor CRM corriendo en el puerto ${PORT}`);
+  });
+}
+
+// Exportar para Vercel
+module.exports = app;
