@@ -63,13 +63,6 @@ const actividadDesdeTareas = (usuarioId, tareas) => {
   return actividad;
 };
 
-const actividadSinDatos = (actividad) => {
-  if (!actividad) return true;
-  const totales = actividad.totales || {};
-  return ['hechasHoy', 'enProgreso', 'faltanHoy', 'faltanSemana']
-    .every(key => !totales[key]);
-};
-
 const TaskMini = ({ tarea }) => (
   <div className="py-2 border-b border-slate-100 last:border-0">
     <div className="text-xs font-black text-slate-800 leading-snug">{tarea.titulo}</div>
@@ -156,44 +149,37 @@ const UsuariosPage = () => {
       if (tab === 'activos') {
         const data = await usuariosService.listar();
         let usuariosActivos = data.usuarios || [];
-        const faltaActividad = usuariosActivos.some(u => actividadSinDatos(u.actividad));
 
-        if (faltaActividad) {
+        try {
+          const proyectosData = await proyectosService.listar();
+          const proyectos = proyectosData.proyectos || [];
+          const tareasPorProyecto = await Promise.all(
+            proyectos.map(async (proyecto) => {
+              const dataTareas = await tareasService.listar(proyecto.id);
+              return (dataTareas.tareas || []).map(t => ({
+                ...t,
+                proyecto: t.proyecto || { id: proyecto.id, nombre: proyecto.nombre }
+              }));
+            })
+          );
+          const todasTareas = tareasPorProyecto.flat();
+
+          usuariosActivos = usuariosActivos.map(u => ({
+            ...u,
+            actividad: actividadDesdeTareas(u.id, todasTareas)
+          }));
+        } catch (tareasError) {
+          console.error('No se pudo armar actividad desde tareas:', tareasError);
+
           try {
             const stats = await statsService.getAdminStats();
             const actividadPorUsuario = new Map((stats.actividadMiembros || []).map(item => [item.id, item]));
             usuariosActivos = usuariosActivos.map(u => ({
               ...u,
-              actividad: actividadSinDatos(u.actividad)
-                ? (actividadPorUsuario.get(u.id)?.actividad || actividadPorUsuario.get(u.id))
-                : u.actividad
+              actividad: actividadPorUsuario.get(u.id)?.actividad || actividadPorUsuario.get(u.id) || u.actividad
             }));
           } catch (statsError) {
             console.error('No se pudo cargar actividad desde stats/admin:', statsError);
-          }
-        }
-
-        if (usuariosActivos.some(u => actividadSinDatos(u.actividad))) {
-          try {
-            const proyectosData = await proyectosService.listar();
-            const proyectos = proyectosData.proyectos || [];
-            const tareasPorProyecto = await Promise.all(
-              proyectos.map(async (proyecto) => {
-                const dataTareas = await tareasService.listar(proyecto.id);
-                return (dataTareas.tareas || []).map(t => ({
-                  ...t,
-                  proyecto: t.proyecto || { id: proyecto.id, nombre: proyecto.nombre }
-                }));
-              })
-            );
-            const todasTareas = tareasPorProyecto.flat();
-
-            usuariosActivos = usuariosActivos.map(u => ({
-              ...u,
-              actividad: actividadSinDatos(u.actividad) ? actividadDesdeTareas(u.id, todasTareas) : u.actividad
-            }));
-          } catch (tareasError) {
-            console.error('No se pudo armar actividad desde tareas:', tareasError);
           }
         }
 
