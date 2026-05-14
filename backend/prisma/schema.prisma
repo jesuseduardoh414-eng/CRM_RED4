@@ -101,6 +101,9 @@ model Tarea {
   bloqueaA    Tarea[]      @relation("Dependencia")
   proyecto    Proyecto     @relation(fields: [proyectoId], references: [id])
 
+  @@index([asignadoId])
+  @@index([creadorId])
+  @@index([estado])
   @@map("tareas")
 }
 

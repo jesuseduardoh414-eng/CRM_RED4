@@ -111,9 +111,21 @@ const obtenerActividadUsuario = async (usuarioId) => {
   };
 };
 
+// Cache simple en memoria para acelerar la respuesta de la lista de usuarios
+let cacheUsuarios = null;
+let ultimaActualizacion = 0;
+const CACHE_TTL = 30000; // 30 segundos
+
 // Devuelve todos los usuarios con su actividad pre-calculada de forma eficiente
 const listar = async (req, res) => {
   try {
+    const ahoraMs = Date.now();
+    
+    // Si hay datos en caché y no han expirado, devolverlos de inmediato
+    if (cacheUsuarios && (ahoraMs - ultimaActualizacion < CACHE_TTL) && req.usuario?.rol === 'ADMIN') {
+      return res.json({ usuarios: cacheUsuarios, cached: true });
+    }
+
     const usuarios = await prisma.usuario.findMany({
       orderBy: { nombre: 'asc' },
       select: {
@@ -195,6 +207,10 @@ const listar = async (req, res) => {
       };
     });
 
+    // Guardar en caché antes de responder
+    cacheUsuarios = usuariosConActividad;
+    ultimaActualizacion = Date.now();
+
     return res.json({ usuarios: usuariosConActividad });
   } catch (error) {
     console.error('[usuarios.listar]', error);
@@ -249,6 +265,8 @@ const crear = async (req, res) => {
       // No lanzamos el error para que el usuario se cree, pero lo registramos
     }
 
+    // Limpiar caché al crear usuario
+    cacheUsuarios = null;
     return res.status(201).json({ mensaje: 'Usuario creado (revisa logs de correo)', usuario });
   } catch (error) {
     console.error('[usuarios.crear]', error);
@@ -280,6 +298,8 @@ const editar = async (req, res) => {
       select: { id: true, nombre: true, email: true, area: true, rol: true }
     });
 
+    // Limpiar caché al editar usuario
+    cacheUsuarios = null;
     return res.json({ mensaje: 'Usuario actualizado', usuario });
   } catch (error) {
     console.error('[usuarios.editar]', error);
@@ -342,6 +362,8 @@ const eliminar = async (req, res) => {
       await tx.usuario.delete({ where: { id } });
     });
 
+    // Limpiar caché al eliminar usuario
+    cacheUsuarios = null;
     return res.json({ mensaje: 'Usuario eliminado correctamente y sus dependencias han sido gestionadas' });
   } catch (error) {
     console.error('[usuarios.eliminar]', error);
@@ -369,6 +391,8 @@ const toggleEstado = async (req, res) => {
       select: { id: true, nombre: true, estado: true }
     });
 
+    // Limpiar caché al cambiar estado
+    cacheUsuarios = null;
     return res.json({ mensaje: `Usuario marcado como ${estado}`, usuario });
   } catch (error) {
     console.error('[usuarios.toggleEstado]', error);
