@@ -44,6 +44,12 @@ const obtenerActividadUsuario = async (usuarioId) => {
   const hoyInicio = inicioDelDia(ahora);
   const hoyFin = finDelDia(ahora);
   const semanaFin = finDeSemana(ahora);
+  const tareasDelUsuario = {
+    OR: [
+      { asignadoId: usuarioId },
+      { creadorId: usuarioId }
+    ]
+  };
 
   const [logsHechasHoy, enProgreso, faltanHoy, faltanSemana] = await Promise.all([
     prisma.logActividad.findMany({
@@ -51,7 +57,8 @@ const obtenerActividadUsuario = async (usuarioId) => {
         accion: 'CAMBIO_ESTADO',
         creadoEn: { gte: hoyInicio, lte: hoyFin },
         descripcion: { contains: 'HECHO' },
-        tarea: { asignadoId: usuarioId }
+        usuarioId,
+        tarea: { isNot: null }
       },
       orderBy: { creadoEn: 'desc' },
       include: {
@@ -59,16 +66,18 @@ const obtenerActividadUsuario = async (usuarioId) => {
       }
     }),
     prisma.tarea.findMany({
-      where: { asignadoId: usuarioId, estado: 'EN_PROGRESO' },
+      where: {
+        ...tareasDelUsuario,
+        estado: 'EN_PROGRESO'
+      },
       orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
       take: 6,
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
       where: {
-        asignadoId: usuarioId,
-        estado: { not: 'HECHO' },
-        venceEn: { gte: hoyInicio, lte: hoyFin }
+        ...tareasDelUsuario,
+        estado: 'PENDIENTE'
       },
       orderBy: [{ prioridad: 'desc' }, { venceEn: 'asc' }],
       take: 6,
@@ -76,7 +85,7 @@ const obtenerActividadUsuario = async (usuarioId) => {
     }),
     prisma.tarea.findMany({
       where: {
-        asignadoId: usuarioId,
+        ...tareasDelUsuario,
         estado: { not: 'HECHO' },
         venceEn: { gt: hoyFin, lte: semanaFin }
       },

@@ -54,13 +54,21 @@ const getActividadMiembros = async () => {
   });
 
   return Promise.all(miembros.map(async (miembro) => {
+    const tareasDelUsuario = {
+      OR: [
+        { asignadoId: miembro.id },
+        { creadorId: miembro.id }
+      ]
+    };
+
     const [logsHechasHoy, enProgreso, faltanHoy, faltanSemana] = await Promise.all([
       prisma.logActividad.findMany({
         where: {
           accion: 'CAMBIO_ESTADO',
           creadoEn: { gte: hoyInicio, lte: hoyFin },
           descripcion: { contains: 'HECHO' },
-          tarea: { asignadoId: miembro.id }
+          usuarioId: miembro.id,
+          tarea: { isNot: null }
         },
         orderBy: { creadoEn: 'desc' },
         include: {
@@ -69,7 +77,7 @@ const getActividadMiembros = async () => {
       }),
       prisma.tarea.findMany({
         where: {
-          asignadoId: miembro.id,
+          ...tareasDelUsuario,
           estado: 'EN_PROGRESO'
         },
         orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
@@ -78,9 +86,8 @@ const getActividadMiembros = async () => {
       }),
       prisma.tarea.findMany({
         where: {
-          asignadoId: miembro.id,
-          estado: { not: 'HECHO' },
-          venceEn: { gte: hoyInicio, lte: hoyFin }
+          ...tareasDelUsuario,
+          estado: 'PENDIENTE'
         },
         orderBy: [{ prioridad: 'desc' }, { venceEn: 'asc' }],
         take: 6,
@@ -88,7 +95,7 @@ const getActividadMiembros = async () => {
       }),
       prisma.tarea.findMany({
         where: {
-          asignadoId: miembro.id,
+          ...tareasDelUsuario,
           estado: { not: 'HECHO' },
           venceEn: { gt: hoyFin, lte: semanaFin }
         },

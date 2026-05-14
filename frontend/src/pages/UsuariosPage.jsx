@@ -1,6 +1,6 @@
 // Página de Gestión de Usuarios (Solo Admin)
 import { Fragment, useState, useEffect, useCallback } from 'react';
-import { usuariosService } from '../services/api';
+import { usuariosService, statsService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
 import { 
@@ -75,12 +75,12 @@ const UserActivityPanel = ({ actividad }) => {
         empty="Sin tareas en curso"
       />
       <ActivityColumn
-        title="Faltan hoy"
+        title="Faltan"
         count={actividad.totales?.faltanHoy || 0}
         color="#dc2626"
         icon={<Clock size={13} />}
         items={actividad.faltanHoy}
-        empty="Sin pendientes de hoy"
+        empty="Sin pendientes"
       />
       <ActivityColumn
         title="Faltan semana"
@@ -109,7 +109,23 @@ const UsuariosPage = () => {
     try {
       if (tab === 'activos') {
         const data = await usuariosService.listar();
-        setUsuarios(data.usuarios);
+        let usuariosActivos = data.usuarios || [];
+        const faltaActividad = usuariosActivos.some(u => !u.actividad);
+
+        if (faltaActividad) {
+          try {
+            const stats = await statsService.getAdminStats();
+            const actividadPorUsuario = new Map((stats.actividadMiembros || []).map(item => [item.id, item]));
+            usuariosActivos = usuariosActivos.map(u => ({
+              ...u,
+              actividad: u.actividad || actividadPorUsuario.get(u.id)?.actividad || actividadPorUsuario.get(u.id)
+            }));
+          } catch (statsError) {
+            console.error('No se pudo cargar actividad desde stats/admin:', statsError);
+          }
+        }
+
+        setUsuarios(usuariosActivos);
       } else {
         const data = await usuariosService.listarInvitaciones();
         setInvitaciones(data);
