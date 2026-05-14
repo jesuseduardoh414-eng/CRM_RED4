@@ -1,5 +1,6 @@
 // Página de Gestión de Usuarios (Solo Admin)
 import { Fragment, useState, useEffect, useCallback } from 'react';
+import useSWR from 'swr';
 import { proyectosService, tareasService, usuariosService, statsService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
@@ -173,44 +174,52 @@ const UserActivityPanel = ({ actividad }) => {
 };
 
 const UsuariosPage = () => {
-  const [tab, setTab] = useState('activos'); // 'activos' o 'invitaciones'
+  const [tab, setTab] = useState('activos');
   const [usuarios, setUsuarios] = useState([]);
   const [invitaciones, setInvitaciones] = useState([]);
-  const [cargando, setCargando] = useState(true);
   const [modalInvitar, setModalInvitar] = useState(false);
   const [modalEditar, setModalEditar] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const { showToast } = useToast();
 
-  const fetchData = useCallback(async () => {
-    setCargando(true);
-    try {
-      if (tab === 'activos') {
-        const data = await usuariosService.listar();
-        setUsuarios(data.usuarios || []);
+  const { 
+    data: listado, 
+    error, 
+    isLoading, 
+    mutate 
+  } = useSWR(
+    tab === 'activos' ? 'usuarios' : 'invitaciones',
+    async (key) => {
+      if (key === 'usuarios') {
+        const res = await usuariosService.listar();
+        return res.usuarios || [];
       } else {
-        const data = await usuariosService.listarInvitaciones();
-        setInvitaciones(data);
+        return await usuariosService.listarInvitaciones();
       }
-    } catch (error) {
-      showToast(error.message, 'error');
-    } finally {
-      setCargando(false);
+    },
+    { 
+      revalidateOnFocus: false,
+      dedupingInterval: 5000 
     }
-  }, [tab, showToast]);
+  );
 
-  useEffect(() => { 
-    const fetch = async () => {
-      await fetchData();
-    };
-    fetch();
-  }, [fetchData]);
+  useEffect(() => {
+    if (tab === 'activos') {
+      setUsuarios(listado || []);
+    } else {
+      setInvitaciones(listado || []);
+    }
+  }, [listado, tab]);
+
+  useEffect(() => {
+    if (error) showToast(error.message, 'error');
+  }, [error, showToast]);
 
   const handleEliminar = async (id) => {
     if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;
     try {
       await usuariosService.eliminar(id);
-      setUsuarios(prev => prev.filter(u => u.id !== id));
+      mutate();
       showToast('Usuario eliminado', 'success');
     } catch (error) { showToast(error.message, 'error'); }
   };
@@ -220,7 +229,7 @@ const UsuariosPage = () => {
     const msg = nuevoEstado === 'activo' ? 'activado' : 'desactivado';
     try {
       await usuariosService.toggleEstado(u.id, nuevoEstado);
-      setUsuarios(prev => prev.map(item => item.id === u.id ? { ...item, estado: nuevoEstado } : item));
+      mutate();
       showToast(`Usuario ${msg}`, 'success');
     } catch (error) { showToast(error.message, 'error'); }
   };
@@ -229,7 +238,7 @@ const UsuariosPage = () => {
     try {
       await usuariosService.reenviarInvitacion(email);
       showToast('Invitación reenviada', 'success');
-      fetchData();
+      mutate();
     } catch (error) { showToast(error.message, 'error'); }
   };
 
@@ -242,7 +251,7 @@ const UsuariosPage = () => {
     }
   };
 
-  if (cargando && (usuarios.length === 0 && invitaciones.length === 0)) return <Spinner texto="Cargando..." />;
+  if (isLoading && (usuarios.length === 0 && invitaciones.length === 0)) return <Spinner texto="Cargando..." />;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -299,7 +308,7 @@ const UsuariosPage = () => {
       {modalInvitar && (
         <ModalInvitar 
           onClose={() => setModalInvitar(false)} 
-          onSuccess={() => { setModalInvitar(false); setTab('invitaciones'); fetchData(); }}
+          onSuccess={() => { setModalInvitar(false); setTab('invitaciones'); mutate(); }}
         />
       )}
 
@@ -307,7 +316,7 @@ const UsuariosPage = () => {
         <ModalEditar 
           usuario={usuarioEditando}
           onClose={() => { setModalEditar(false); setUsuarioEditando(null); }} 
-          onSuccess={() => { setModalEditar(false); setUsuarioEditando(null); fetchData(); }}
+          onSuccess={() => { setModalEditar(false); setUsuarioEditando(null); mutate(); }}
         />
       )}
     </div>
