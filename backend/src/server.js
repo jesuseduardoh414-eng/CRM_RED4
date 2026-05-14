@@ -43,5 +43,6 @@ app.get('/api/health', (_req, res) => {
 
 // Inicio del servidor
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\u2705 Servidor CRM corriendo en el puerto ${PORT}`);
+  console.log(`\u2705 Servidor CRM [ACTUALIZADO] corriendo en el puerto ${PORT}`);
+  console.log(`⏰ Hora de despliegue: ${new Date().toISOString()}`);
 });
