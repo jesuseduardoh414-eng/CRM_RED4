@@ -102,7 +102,10 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+    <div 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+    >
       <div className="card" style={{ width: '100%', maxWidth: '600px', background: 'var(--color-surface)', padding: '0', borderRadius: '2rem', overflow: 'hidden', boxShadow: 'var(--shadow-xl)' }}>
         
         {/* Header Tabs */}
@@ -207,7 +210,9 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
               </div>
 
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                <h4 style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', marginBottom: '1rem', textTransform: 'uppercase' }}>Días marcados este mes</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', margin: 0 }}>Días marcados este mes</h4>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {diasEspeciales.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '1rem', fontSize: '0.85rem', color: 'var(--color-text-dim)' }}>No hay días especiales registrados</div>

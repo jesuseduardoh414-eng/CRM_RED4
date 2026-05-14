@@ -47,7 +47,12 @@ const UsuariosPage = () => {
     }
   }, [tab, showToast]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { 
+    const fetch = async () => {
+      await fetchData();
+    };
+    fetch();
+  }, [fetchData]);
 
   const handleEliminar = async (id) => {
     if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;
@@ -430,7 +435,10 @@ const ModalInvitar = ({ onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
         <div className="p-8 pb-0">
           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4">
@@ -489,7 +497,7 @@ const ModalInvitar = ({ onClose, onSuccess }) => {
             <button 
               type="button" 
               onClick={onClose}
-              className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 transition-colors"
+              className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all"
             >
               Cancelar
             </button>
@@ -531,7 +539,10 @@ const ModalEditar = ({ usuario, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
         <div className="p-8 pb-0">
           <h2 className="text-xl font-black text-slate-900 tracking-tight">Editar Miembro</h2>
@@ -582,7 +593,7 @@ const ModalEditar = ({ usuario, onClose, onSuccess }) => {
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 transition-colors">Cancelar</button>
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">Cancelar</button>
             <button disabled={cargando} className="flex-1.5 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all active:scale-95 disabled:bg-slate-200">
               {cargando ? 'Guardando...' : 'Guardar cambios'}
             </button>

@@ -3,16 +3,13 @@
 // Vistas: Lista | Kanban | Gantt | Muro
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { tareasService, usuariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
 import Spinner    from '../components/Spinner';
-import TaskComments from '../components/TaskComments';
-import ProjectActivityLog from '../components/ProjectActivityLog';
-import TaskAttachments from '../components/TaskAttachments';
 import ModalImportar from '../components/ModalImportar';
 import { 
   Target, 
@@ -27,8 +24,7 @@ import {
   List,
   LayoutGrid,
   CalendarRange,
-  ChevronLeft,
-  AlertCircle
+  ChevronLeft
 } from 'lucide-react';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
@@ -54,7 +50,7 @@ const formatFecha = (iso) => {
 };
 
 // ── Tarjeta de Tarea (List View) ─────────────────────────────────────────────
-const TareaCard = ({ tarea, onClick, onEditar, onEliminar, onCambiarEstado }) => {
+const TareaCard = ({ tarea, onClick, onEliminar, onCambiarEstado }) => {
   const prio = getPrioridad(tarea.prioridad);
   const estado = getEstadoConf(tarea.estado);
   const CICLO = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
@@ -145,9 +141,7 @@ const ToggleVista = ({ vista, onChange }) => (
 // ── Main Page Component ─────────────────────────────────────────────────────
 const ProyectoDetallePage = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { usuario } = useAuth();
-  const esAdmin = usuario?.rol === 'ADMIN';
   const { showToast } = useToast();
 
   const [proyecto, setProyecto] = useState(null);
@@ -170,7 +164,12 @@ const ProyectoDetallePage = () => {
     finally { setCargando(false); }
   }, [id, showToast]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { 
+    const fetch = async () => {
+      await cargar();
+    };
+    fetch();
+  }, [cargar]);
 
   const stats = {
     total: tareas.length,
@@ -272,7 +271,6 @@ const ProyectoDetallePage = () => {
                 key={t.id} 
                 tarea={t} 
                 onClick={(x) => { setTareaEditando(x); setModal(true); }}
-                onEditar={(x) => { setTareaEditando(x); setModal(true); }}
                 onEliminar={handleEliminar}
                 onCambiarEstado={handleCambiarEstado}
               />
@@ -336,7 +334,10 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4 transition-all">
+    <div 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4 transition-all"
+    >
       <div className="bg-white w-full max-w-2xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
         {/* Modal Header */}
         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -407,7 +408,12 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
 
         {/* Modal Footer */}
         <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse lg:flex-row gap-3">
-          <button onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest">Cancelar</button>
+          <button 
+            onClick={onClose} 
+            className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all uppercase tracking-widest"
+          >
+            Cancelar
+          </button>
           <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
             {cargando ? 'Guardando...' : 'Guardar Tarea'}
           </button>

@@ -163,7 +163,10 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4">
+    <div 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
+    >
       <div className="bg-white w-full max-w-xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -212,7 +215,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
             </div>
 
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-blue-600">RESPONSABLES DEL ÁREA ({form.area})</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">RESPONSABLES DEL ÁREA ({form.area})</label>
               <div className="flex flex-wrap gap-2 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50">
                 {usuariosEnArea.map(u => {
                   const isSelected = form.miembrosIds.includes(u.id);
@@ -291,7 +294,12 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
         {/* Footer */}
         <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse lg:flex-row gap-3">
-          <button onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">Cancelar</button>
+          <button 
+            onClick={onClose} 
+            className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+          >
+            Cancelar
+          </button>
           <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
             {cargando ? 'Guardando...' : 'Guardar Proyecto'}
           </button>

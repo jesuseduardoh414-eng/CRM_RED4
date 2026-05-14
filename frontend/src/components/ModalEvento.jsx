@@ -10,22 +10,13 @@ import {
   Hash,
   Trash2,
   Globe,
-  Clock,
-  RefreshCw
+  Clock
 } from 'lucide-react';
 import { agendaService, usuariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
-const DIAS_SEMANA = [
-  { id: 1, label: 'L', full: 'Lunes' },
-  { id: 2, label: 'M', full: 'Martes' },
-  { id: 3, label: 'X', full: 'Miércoles' },
-  { id: 4, label: 'J', full: 'Jueves' },
-  { id: 5, label: 'V', full: 'Viernes' },
-  { id: 6, label: 'S', full: 'Sábado' },
-  { id: 0, label: 'D', full: 'Domingo' },
-];
+
 
 const COLORES = [
   { hex: '#4a90d9', label: 'Azul' },
@@ -50,7 +41,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
       const start = new Date(evento.fechaInicio);
       const end = evento.fechaFin ? new Date(evento.fechaFin) : null;
       let patronParsed = null;
-      try { patronParsed = evento.patronRecurrencia ? JSON.parse(evento.patronRecurrencia) : null; } catch {}
+      try { patronParsed = evento.patronRecurrencia ? JSON.parse(evento.patronRecurrencia) : null; } catch { /* ignore */ }
       return {
         titulo: evento.titulo,
         descripcion: evento.descripcion || '',
@@ -143,30 +134,41 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
 
   // Consultar disponibilidad al cambiar invitados o fecha
   useEffect(() => {
+    let active = true;
     if (form.es_compartido && !form.es_global && form.invitados_ids.length > 0 && form.fecha_inicio) {
       const fetchDisp = async () => {
+        try {
           const res = await agendaService.consultarDisponibilidad({
             usuarios_ids: form.invitados_ids.join(','),
             inicio: `${form.fecha_inicio}T${form.hora_inicio || '00:00'}`,
             fin: `${form.fecha_fin || form.fecha_inicio}T${form.hora_fin || '23:59'}`,
             excluir_id: evento?.id // Excluir el propio evento si estamos editando
           });
-          setDisponibilidad(res.conflictos || []);
+          if (active) setDisponibilidad(res.conflictos || []);
         } catch (err) {
-          console.error('Error disponibilidad', err);
+          if (active) console.error('Error disponibilidad', err);
         }
       };
       fetchDisp();
-    } else {
-      setDisponibilidad(prev => prev.length > 0 ? [] : prev);
     }
-  }, [form.es_compartido, form.es_global, form.invitados_ids, form.fecha_inicio, form.hora_inicio, form.fecha_fin, form.hora_fin]);
+
+    return () => {
+      active = false;
+      setDisponibilidad([]);
+    };
+  }, [form.es_compartido, form.es_global, form.invitados_ids, form.fecha_inicio, form.hora_inicio, form.fecha_fin, form.hora_fin, evento?.id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (form.es_recurrente && form.recur_dias.length === 0) {
       showToast('Selecciona al menos un día de la semana para el evento recurrente.', 'error');
+      return;
+    }
+
+    const startDay = new Date(form.fecha_inicio).getDay();
+    if (startDay === 0 || startDay === 6) {
+      showToast('No se permiten eventos en fin de semana (Sábados o Domingos)', 'error');
       return;
     }
 
@@ -214,7 +216,10 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+    <div 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+    >
       <div className="card" style={{ width: '95%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: '2rem', borderRadius: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -487,7 +492,20 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                 <Trash2 size={24} />
               </button>
             )}
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: '1rem', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '1.25rem', fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-text-dim)', cursor: 'pointer', transition: 'all 0.2s' }}>{esDuenio ? 'CANCELAR' : 'CERRAR'}</button>
+            <button 
+              type="button" 
+              onClick={onClose} 
+              style={{ 
+                flex: 1, padding: '1rem', background: 'transparent', 
+                border: '1px solid var(--color-border)', borderRadius: '1.25rem', 
+                fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-text-dim)', 
+                cursor: 'pointer', transition: 'all 0.2s' 
+              }}
+              onMouseOver={e => { e.currentTarget.style.background = 'var(--color-surface-3)'; e.currentTarget.style.color = 'var(--color-text)'; }}
+              onMouseOut={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-dim)'; }}
+            >
+              {esDuenio ? 'CANCELAR' : 'CERRAR'}
+            </button>
             {esDuenio && (
               <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 2, padding: '1rem', fontSize: '0.95rem', letterSpacing: '0.02em' }}>
                 <Save size={20} /> {cargando ? 'GUARDANDO...' : (evento ? 'ACTUALIZAR EVENTO' : 'CREAR EVENTO')}

@@ -58,8 +58,8 @@ const listar = async (req, res) => {
       ]
     };
 
-    // Traer eventos normales en el rango + todos los recurrentes vigentes
-    const [eventosNormales, eventosRecurrentes] = await Promise.all([
+    // Traer eventos normales en el rango + todos los recurrentes vigentes + tareas
+    const [eventosNormales, eventosRecurrentes, tareas] = await Promise.all([
       // Eventos normales dentro del rango
       prisma.evento.findMany({
         where: { AND: [ where, { fechaInicio: { gte: desde, lte: hasta } } ] },
@@ -79,19 +79,49 @@ const listar = async (req, res) => {
           proyecto:  { select: { id: true, nombre: true } }
         },
       }),
+      // Tareas asignadas al usuario con fecha de vencimiento
+      prisma.tarea.findMany({
+        where: { 
+          asignadoId: usuarioId, 
+          venceEn: { gte: desde, lte: hasta } 
+        },
+        include: { proyecto: { select: { nombre: true } } }
+      })
     ]);
 
-    // Eliminar duplicados (eventos que son normales Y tienen patrÃ³n)
+    // Eliminar duplicados (eventos que son normales Y tienen patrón)
     const idsNormales = new Set(eventosNormales.map(e => e.id));
     const soloRecurrentes = eventosRecurrentes.filter(e => !idsNormales.has(e.id));
 
-    // Filtrar normales que NO son recurrentes (no tienen patrÃ³n)
+    // Filtrar normales que NO son recurrentes (no tienen patrón)
     const normales = eventosNormales.filter(e => !e.patronRecurrencia);
+
+    // Mapear tareas a formato evento
+    const eventosTareas = tareas.map(t => {
+      // Ajuste de zona horaria: Si la fecha viene a medianoche (00:00:00),
+      // al convertirla a local en México (UTC-6) se atrasa un día.
+      // La ponemos a mediodía (12:00:00) para asegurar que caiga en el día correcto.
+      const fechaAjustada = new Date(t.venceEn);
+      if (fechaAjustada.getUTCHours() === 0) {
+        fechaAjustada.setUTCHours(12);
+      }
+
+      return {
+        id: `tarea-${t.id}`,
+        titulo: `TAREA: ${t.titulo}`,
+        tipo: 'tarea',
+        fechaInicio: fechaAjustada,
+        todoElDia: true, 
+        color: '#f59e0b', // Color naranja para tareas
+        proyecto: t.proyecto,
+        esLectura: true 
+      };
+    });
 
     // Expandir recurrentes en el rango
     const expandidos = soloRecurrentes.flatMap(e => expandirRecurrente(e, desde, hasta));
 
-    const resultado = [...normales, ...expandidos].sort(
+    const resultado = [...normales, ...eventosTareas, ...expandidos].sort(
       (a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio)
     );
 
@@ -111,6 +141,13 @@ const editar = async (req, res) => {
     alerta_minutos, es_compartido, es_global, proyecto_id,
     es_recurrente, patron_recurrencia, fecha_fin_recurrencia
   } = req.body;
+  
+  if (fecha_inicio) {
+    const day = new Date(fecha_inicio).getDay();
+    if (day === 0 || day === 6) {
+      return res.status(400).json({ error: 'No se permiten eventos en fin de semana (Sábados o Domingos)' });
+    }
+  }
 
   try {
     const existente = await prisma.evento.findUnique({ where: { id } });
@@ -135,7 +172,7 @@ const editar = async (req, res) => {
 
     let evento;
     try {
-      // Intentar actualizaciÃ³n completa (con recurrencia)
+      // Intentar actualizacion completa (con recurrencia)
       evento = await prisma.evento.update({
         where: { id },
         data: {
@@ -150,8 +187,8 @@ const editar = async (req, res) => {
         }
       });
     } catch (err) {
-      console.warn('[agenda.editar] FallÃ³ actualizaciÃ³n completa, reintentando bÃ¡sica...', err.message);
-      // Fallback: actualizaciÃ³n bÃ¡sica sin campos de recurrencia
+      console.warn('[agenda.editar] Falló actualización completa, reintentando básica...', err.message);
+      // Fallback: actualización básica sin campos de recurrencia
       evento = await prisma.evento.update({
         where: { id },
         data: updateData
@@ -213,7 +250,12 @@ const crear = async (req, res) => {
     return res.status(400).json({ error: 'Titulo, tipo y fecha de inicio son obligatorios' });
   }
 
-  // Validar recurrencia: si es recurrente, el patrÃ³n es obligatorio
+  const startDay = new Date(fecha_inicio).getDay();
+  if (startDay === 0 || startDay === 6) {
+    return res.status(400).json({ error: 'No se permiten eventos en fin de semana (Sábados o Domingos)' });
+  }
+
+  // Validar recurrencia: si es recurrente, el patrón es obligatorio
   if (es_recurrente && !patron_recurrencia) {
     return res.status(400).json({ error: 'Patron de recurrencia requerido' });
   }
@@ -259,7 +301,7 @@ const crear = async (req, res) => {
 
     let evento;
     try {
-      // Intentar creaciÃ³n completa
+      // Intentar creación completa
       evento = await prisma.evento.create({
         data: {
           ...createData,
@@ -270,8 +312,8 @@ const crear = async (req, res) => {
         include: { invitados: true }
       });
     } catch (err) {
-      console.warn('[agenda.crear] FallÃ³ creaciÃ³n completa, reintentando bÃ¡sica...', err.message);
-      // Fallback: creaciÃ³n bÃ¡sica
+      console.warn('[agenda.crear] Falló creación completa, reintentando básica...', err.message);
+      // Fallback: creación básica
       evento = await prisma.evento.create({
         data: createData,
         include: { invitados: true }
@@ -308,7 +350,7 @@ const responderInvitacion = async (req, res) => {
     });
 
     if (!invitacion) {
-      return res.status(404).json({ error: 'No tienes una invitaciÃ³n para este evento' });
+      return res.status(404).json({ error: 'No tienes una invitación para este evento' });
     }
 
     await prisma.eventoInvitado.update({
@@ -319,7 +361,7 @@ const responderInvitacion = async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     console.error('[agenda.responder]', error);
-    return res.status(500).json({ error: 'Error al responder invitaciÃ³n' });
+    return res.status(500).json({ error: 'Error al responder invitación' });
   }
 };
 
@@ -429,7 +471,7 @@ const getConfigLaboral = async (req, res) => {
     }
     return res.json({ config });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al obtener configuraciÃ³n' });
+    return res.status(500).json({ error: 'Error al obtener configuracion' });
   }
 };
 
@@ -465,11 +507,11 @@ const updateConfigLaboral = async (req, res) => {
     return res.json({ config });
   } catch (error) {
     console.error('[agenda.updateConfig]', error);
-    return res.status(500).json({ error: 'Error al actualizar configuraciÃ³n' });
+    return res.status(500).json({ error: 'Error al actualizar configuracion' });
   }
 };
 
-// €€ DÃAS ESPECIALES €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
+// €€ DÃ AS ESPECIALES €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 
 const listarDiasEspeciales = async (req, res) => {
   const usuarioId = req.usuario.id;
@@ -484,9 +526,40 @@ const listarDiasEspeciales = async (req, res) => {
     }
 
     const dias = await prisma.diaEspecial.findMany({ where });
+
+    // Feriados Globales de México (Dinámicos)
+    if (anio) {
+      const currentAnio = parseInt(anio);
+      const feriadosGlobales = [
+        { id: 'f1', fecha: new Date(currentAnio, 0, 1), tipo: 'festivo', descripcion: 'Año Nuevo' },
+        { id: 'f2', fecha: new Date(currentAnio, 1, 2), tipo: 'festivo', descripcion: 'Día de la Constitución' },
+        { id: 'f3', fecha: new Date(currentAnio, 2, 16), tipo: 'festivo', descripcion: 'Natalicio de Benito Juárez' },
+        { id: 'f4', fecha: new Date(currentAnio, 4, 1), tipo: 'festivo', descripcion: 'Día del Trabajo' },
+        { id: 'f5', fecha: new Date(currentAnio, 8, 16), tipo: 'festivo', descripcion: 'Día de la Independencia' },
+        { id: 'f6', fecha: new Date(currentAnio, 8, 20), tipo: 'festivo', descripcion: 'Fundación de Monterrey' },
+        { id: 'f7', fecha: new Date(currentAnio, 10, 16), tipo: 'festivo', descripcion: 'Aniversario de la Revolución' },
+        { id: 'f8', fecha: new Date(currentAnio, 11, 25), tipo: 'festivo', descripcion: 'Navidad' },
+      ];
+
+      // Filtrar por mes si se solicita
+      const feriadosFiltrados = mes 
+        ? feriadosGlobales.filter(f => f.fecha.getMonth() + 1 === parseInt(mes))
+        : feriadosGlobales;
+
+      // Combinar (evitar duplicados si el usuario ya los agregó manualmente)
+      const fechasUsuario = new Set(dias.map(d => d.fecha.toISOString().split('T')[0]));
+      feriadosFiltrados.forEach(f => {
+        const fStr = f.fecha.toISOString().split('T')[0];
+        if (!fechasUsuario.has(fStr)) {
+          dias.push(f);
+        }
+      });
+    }
+
     return res.json({ dias });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al listar dÃ­as especiales' });
+    console.error('[agenda.listarDias]', error);
+    return res.status(500).json({ error: 'Error al listar días especiales' });
   }
 };
 
@@ -549,6 +622,7 @@ const recordatoriosProximos = async (req, res) => {
     return res.status(500).json({ error: 'Error al consultar recordatorios' });
   }
 };
+
 
 module.exports = {
   listar,

@@ -32,8 +32,8 @@ routerProyecto.post('/importar', uploadImport.single('archivo'), importar);
 routerTarea.put('/:id',          editar);
 routerTarea.patch('/:id/estado', actualizarEstado);
 
-// Eliminar tarea (solo ADMIN)
-routerTarea.delete('/:id', soloAdmin, eliminar);
+// Eliminar tarea (ADMIN o Miembro del proyecto)
+routerTarea.delete('/:id', eliminar);
 
 // Comentarios de una tarea
 routerTarea.get('/:id/comentarios', listarComentarios);

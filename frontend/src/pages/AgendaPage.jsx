@@ -13,7 +13,9 @@ import {
   X,
   Trash2,
   Edit2,
-  Globe
+  Globe,
+  Activity,
+  CheckSquare
 } from 'lucide-react';
 import { agendaService } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -82,7 +84,7 @@ const AgendaPage = () => {
       setInvitaciones(resI.invitaciones || []);
       setConfigLaboral(resC.config || null);
       setDiasEspeciales(resD.dias || []);
-    } catch (err) {
+    } catch {
       showToast('Error al cargar la agenda', 'error');
     } finally {
       setCargando(false);
@@ -150,7 +152,23 @@ const AgendaPage = () => {
           <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
             <div style={{ display: 'flex', gap: '2px' }}>
               <button onClick={nav.prev} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronLeft size={16} /></button>
-              <button onClick={nav.hoy} style={{ padding: '0 0.5rem', fontSize: '0.7rem', fontWeight: '800', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text)' }}>HOY</button>
+              <button 
+                onClick={nav.hoy} 
+                style={{ 
+                  padding: '0 0.8rem', 
+                  fontSize: '0.7rem', 
+                  fontWeight: '800', 
+                  border: 'none', 
+                  background: 'none', 
+                  cursor: 'pointer', 
+                  color: 'var(--color-primary)',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.opacity = '0.7'}
+                onMouseOut={e => e.currentTarget.style.opacity = '1'}
+              >
+                HOY
+              </button>
               <button onClick={nav.next} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronRight size={16} /></button>
             </div>
           </div>
@@ -180,7 +198,36 @@ const AgendaPage = () => {
 
           <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
             {VISTAS.map(v => (
-              <button key={v.id} onClick={() => setView(v.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', background: view === v.id ? 'var(--color-primary)' : 'transparent', color: view === v.id ? '#fff' : 'var(--color-text-muted)', transition: 'all 0.2s' }}>
+              <button 
+                key={v.id} 
+                onClick={() => setView(v.id)} 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.4rem', 
+                  padding: '0.4rem 0.8rem', 
+                  borderRadius: '8px', 
+                  border: 'none', 
+                  fontSize: '0.75rem', 
+                  fontWeight: '700', 
+                  cursor: 'pointer', 
+                  background: view === v.id ? 'var(--color-primary)' : 'transparent', 
+                  color: view === v.id ? '#ffffff' : 'var(--color-text-muted)', 
+                  transition: 'all 0.2s' 
+                }}
+                onMouseOver={e => {
+                  if (view !== v.id) {
+                    e.currentTarget.style.background = 'var(--color-surface-3)';
+                    e.currentTarget.style.color = 'var(--color-primary)';
+                  }
+                }}
+                onMouseOut={e => {
+                  if (view !== v.id) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--color-text-muted)';
+                  }
+                }}
+              >
                 {v.icon} {!isMobile && v.label}
               </button>
             ))}
@@ -223,9 +270,9 @@ const AgendaPage = () => {
 
       {/* Grid Calendario */}
       <div className="card" style={{ padding: '0', borderRadius: isMobile ? '1rem' : '2rem', overflow: 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
-        {view === 'MES' && <VistaMensual date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} />}
-        {view === 'SEMANA' && <VistaSemanal date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} />}
-        {view === 'DIA' && <VistaDiaria date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setPrefillData(d); setModalOpen(true); }} onEliminar={handleEliminar} />}
+        {view === 'MES' && <VistaMensual date={currentDate} eventos={eventos} diasEspeciales={diasEspeciales} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { setCurrentDate(new Date(d.fechaInicio)); setView('DIA'); }} />}
+        {view === 'SEMANA' && <VistaSemanal date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { if (new Date(d.fechaInicio).getDay() === 0 || new Date(d.fechaInicio).getDay() === 6) { showToast('No se permiten eventos en fin de semana', 'warning'); return; } setPrefillData(d); setModalOpen(true); }} />}
+        {view === 'DIA' && <VistaDiaria date={currentDate} eventos={eventos} configLaboral={configLaboral} currentUserId={usuario?.id} isMobile={isMobile} onSelectEvent={(e) => { if (e.esLectura) return showToast(e.titulo, 'info'); setSelectedEvent(e); setModalOpen(true); }} onSelectDate={(d) => { if (new Date(d.fechaInicio).getDay() === 0 || new Date(d.fechaInicio).getDay() === 6) { showToast('No se permiten eventos en fin de semana', 'warning'); return; } setPrefillData(d); setModalOpen(true); }} onEliminar={handleEliminar} />}
       </div>
 
       {modalOpen && (() => {
@@ -256,7 +303,7 @@ const AgendaPage = () => {
 
 // ── VISTAS (MENSUAL, SEMANAL, DIARIA) ────────────────────────────────────────
 
-const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, isMobile, onSelectEvent, onSelectDate }) => {
+const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate }) => {
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
@@ -286,7 +333,8 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
           const ed = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
           const c = new Date(current.getFullYear(), current.getMonth(), current.getDate()).getTime();
           
-          return c >= s && c <= ed;
+          const isWeekend = current.getDay() === 0 || current.getDay() === 6;
+          return c >= s && c <= ed && !isWeekend;
         }) : [];
         const diaEsp = dia ? diasEspeciales.find(e => new Date(e.fecha).getDate() === dia && new Date(e.fecha).getMonth() === month) : null;
         const esHoy = dia === new Date().getDate() && month === new Date().getMonth();
@@ -327,20 +375,34 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, currentUse
                     />
                   )}
                 </div>
+
+                {diaEsp && (
+                  <div style={{ 
+                    fontSize: '0.65rem', 
+                    fontWeight: '800', 
+                    color: diaEsp.tipo === 'festivo' ? '#ef4444' : '#6366f1',
+                    marginBottom: '4px',
+                    textTransform: 'uppercase'
+                  }}>
+                    {diaEsp.descripcion}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-1">
-                  {diaEventos.slice(0, 3).map(e => (
+                  {diaEventos.slice(0, 2).map(e => (
                     <div 
                       key={e.id} 
                       onClick={(ev) => { ev.stopPropagation(); onSelectEvent(e); }} 
-                      className="text-[9px] lg:text-[10px] px-1.5 py-0.5 rounded-md font-bold truncate text-white"
+                      className="text-[9px] lg:text-[10px] px-1.5 py-0.5 rounded-md font-bold truncate text-white flex items-center gap-1"
                       style={{ background: e.color }}
                     >
+                      {e.tipo === 'actividad' ? <Activity size={8} /> : e.tipo === 'tarea' ? <CheckSquare size={8} /> : null}
                       {e.titulo}
                     </div>
                   ))}
-                  {diaEventos.length > 3 && (
-                    <div className="text-[8px] lg:text-[9px] font-black text-slate-400 pl-1">
-                      + {diaEventos.length - 3} más
+                  {diaEventos.length > 2 && (
+                    <div style={{ fontSize: '0.65rem', color: 'var(--color-primary)', fontWeight: '800', paddingLeft: '4px' }}>
+                      + {diaEventos.length - 2} más
                     </div>
                   )}
                 </div>
@@ -416,7 +478,8 @@ const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEve
                   const s = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
                   const ed = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
                   const c = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                  return c >= s && c <= ed && !e.todoElDia;
+                  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                  return c >= s && c <= ed && !e.todoElDia && !isWeekend;
                 }).map(e => {
                   const start = new Date(e.fechaInicio);
                   const end = e.fechaFin ? new Date(e.fechaFin) : new Date(start.getTime() + 3600000);
@@ -436,7 +499,8 @@ const VistaSemanal = ({ date, eventos, configLaboral, currentUserId, onSelectEve
                   const isInvited = e.usuarioId !== currentUserId;
                   return (
                     <div key={e.id} onClick={() => onSelectEvent(e)} style={{ position: 'absolute', top, height: Math.max(height, 20), left: '2px', right: '2px', background: e.color, borderRadius: '4px', padding: '4px', color: '#fff', fontSize: '0.65rem', fontWeight: '700', zIndex: 5, boxShadow: 'var(--shadow-sm)', opacity: isInvited ? 0.9 : 1, border: isInvited ? '2px dashed rgba(255,255,255,0.5)' : 'none', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      {e.esGlobal ? <Globe size={10}/> : e.esCompartido ? <Users size={10}/> : null}{e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
+                      {e.tipo === 'actividad' ? <Activity size={10} /> : e.tipo === 'tarea' ? <CheckSquare size={10} /> : (e.esGlobal ? <Globe size={10}/> : e.esCompartido ? <Users size={10}/> : null)}
+                      {e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
                     </div>
                   );
                 })}
@@ -459,7 +523,8 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, on
     const s = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
     const ed = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
     const c = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-    return c >= s && c <= ed;
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    return c >= s && c <= ed && !isWeekend;
   });
   const diaSemana = date.getDay() === 0 ? 7 : date.getDay();
   const esLaboral = configLaboral?.diasLaborales?.includes(diaSemana);
@@ -496,7 +561,8 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, on
             return (
               <div key={e.id} onClick={() => onSelectEvent(e)} style={{ position: 'absolute', top, height: Math.max(height, 40), left: '10px', right: '10px', background: e.color, borderRadius: '12px', padding: '1rem', color: '#fff', boxShadow: 'var(--shadow-lg)', zIndex: 10, cursor: 'pointer', border: e.usuarioId !== currentUserId ? '2px dashed rgba(255,255,255,0.4)' : 'none' }}>
                 <div style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {e.esGlobal ? <Globe size={14}/> : e.esCompartido ? <Users size={14}/> : null}{e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
+                  {e.tipo === 'actividad' ? <Activity size={14} /> : e.tipo === 'tarea' ? <CheckSquare size={14} /> : (e.esGlobal ? <Globe size={14}/> : e.esCompartido ? <Users size={14}/> : null)}
+                  {e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
                 </div>
                 <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>{start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
@@ -514,7 +580,7 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, on
              <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>{esLaboral ? 'DÍA LABORAL' : 'DÍA DE DESCANSO'}</div>
            </div>
          </div>
-         <h3 style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--color-text-dim)', textTransform: 'uppercase', marginBottom: '1.5rem' }}>Eventos programados</h3>
+         <h3 style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--color-text-dim)', textTransform: 'uppercase', marginBottom: '1.5rem' }}>Agenda del día</h3>
          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
            {evs.length === 0 ? (
              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-dim)', fontSize: '0.85rem' }}>No hay eventos para hoy</div>
@@ -522,10 +588,17 @@ const VistaDiaria = ({ date, eventos, configLaboral, currentUserId, isMobile, on
              evs.sort((a,b) => new Date(a.fechaInicio) - new Date(b.fechaInicio)).map(e => (
                <div key={e.id} style={{ padding: '1.25rem', background: 'var(--color-surface)', borderRadius: '1.25rem', borderLeft: `5px solid ${e.color}`, boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <div style={{ fontWeight: '800' }}>{e.esOcurrencia ? '🔁 ' : ''}{e.titulo}</div>
+                    <div style={{ fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {e.tipo === 'actividad' ? <Activity size={14} color="var(--color-primary)" /> : e.tipo === 'tarea' ? <CheckSquare size={14} color="var(--color-primary)" /> : null}
+                      {e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
+                    </div>
                     <div style={{ display: 'flex', gap: '4px' }}>
-                      <button onClick={() => onSelectEvent(e)} className="btn-icon-sm"><Edit2 size={12}/></button>
-                      <button onClick={() => onEliminar(e.id)} className="btn-icon-sm" style={{ color: 'var(--color-error)' }}><Trash2 size={12}/></button>
+                      {!e.esLectura && (
+                        <>
+                          <button onClick={() => onSelectEvent(e)} className="btn-icon-sm"><Edit2 size={12}/></button>
+                          <button onClick={() => onEliminar(e.id)} className="btn-icon-sm" style={{ color: 'var(--color-error)' }}><Trash2 size={12}/></button>
+                        </>
+                      )}
                     </div>
                   </div>
                    {e.esGlobal ? (

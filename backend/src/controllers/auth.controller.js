@@ -1,4 +1,4 @@
-﻿const bcrypt  = require('bcryptjs');
+const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const prisma  = require('../lib/prisma');
 const crypto  = require('crypto');
@@ -6,9 +6,9 @@ const { validarPassword } = require('../utils/security.utils');
 const { sendResetEmail, sendVerificationEmail } = require('../services/email.service');
 const { enviarInvitacion } = require('../services/correo');
 
-// POST /api/auth/register - DESHABILITADO (Solo por invitaciÃ³n)
+// POST /api/auth/register - DESHABILITADO (Solo por invitación)
 const register = async (req, res) => {
-  return res.status(403).json({ error: 'El registro pÃºblico estÃ¡ deshabilitado. Solicita una invitaciÃ³n al administrador.' });
+  return res.status(403).json({ error: 'El registro público está deshabilitado. Solicita una invitación al administrador.' });
 };
 
 // €€ GET /api/auth/verify/:token €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
@@ -21,16 +21,16 @@ const verifyAccount = async (req, res) => {
     });
 
     if (!usuario) {
-      // Verificar si ya estÃ¡ verificado (el token ya se borrÃ³)
-      // En este caso, el token no existe, pero podrÃ­amos intentar buscar por algo mÃ¡s? 
-      // No, si el token no existe es invÃ¡lido. Pero si el usuario ya estÃ¡ verificado,
-      // el frontend podrÃ­a haber mostrado el error antes.
-      return res.status(400).json({ error: 'Token de verificaciÃ³n invÃ¡lido o ya utilizado' });
+      // Verificar si ya está verificado (el token ya se borró)
+      // En este caso, el token no existe, pero podríamos intentar buscar por algo más? 
+      // No, si el token no existe es inválido. Pero si el usuario ya está verificado,
+      // el frontend podría haber mostrado el error antes.
+      return res.status(400).json({ error: 'Token de verificación inválido o ya utilizado' });
     }
 
-    // Verificar expiraciÃ³n
+    // Verificar expiración
     if (usuario.verificationTokenExpires && usuario.verificationTokenExpires < new Date()) {
-      return res.status(400).json({ error: 'El enlace de verificaciÃ³n ha expirado (duraciÃ³n: 15 min)' });
+      return res.status(400).json({ error: 'El enlace de verificación ha expirado (duración: 15 min)' });
     }
 
     await prisma.usuario.update({
@@ -41,7 +41,7 @@ const verifyAccount = async (req, res) => {
       }
     });
 
-    return res.json({ mensaje: 'Cuenta verificada correctamente. Ya puedes iniciar sesiÃ³n.' });
+    return res.json({ mensaje: 'Cuenta verificada correctamente. Ya puedes iniciar sesión.' });
   } catch (error) {
     console.error('[verifyAccount]', error);
     return res.status(500).json({ error: 'Error al verificar cuenta' });
@@ -53,24 +53,24 @@ const login = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ error: 'Email y contraseÃ±a son requeridos' });
+    return res.status(400).json({ error: 'Email y contraseña son requeridos' });
   }
 
   try {
     const usuario = await prisma.usuario.findUnique({ where: { email: email.toLowerCase().trim() } });
     
     if (!usuario) {
-      return res.status(401).json({ error: 'Credenciales invÃ¡lidas' });
+      return res.status(401).json({ error: 'Credenciales inválidas ' });
     }
 
-    // VERIFICAR SI ESTÃ ACTIVO
+    // VERIFICAR SI ESTÁ ACTIVO
     if (usuario.estado && usuario.estado !== 'activo') {
-      return res.status(403).json({ error: 'Tu cuenta no estÃ¡ activa, contacta al administrador' });
+      return res.status(403).json({ error: 'Tu cuenta no está activa, contacta al administrador' });
     }
 
     const passwordValida = await bcrypt.compare(password, usuario.password);
     if (!passwordValida) {
-      return res.status(401).json({ error: 'Credenciales invÃ¡lidas' });
+      return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
     const token = jwt.sign(
@@ -99,7 +99,7 @@ const forgotPassword = async (req, res) => {
     const usuario = await prisma.usuario.findUnique({ where: { email: email.toLowerCase().trim() } });
     
     if (!usuario) {
-      return res.json({ mensaje: 'Si el correo estÃ¡ registrado, recibirÃ¡s un enlace de recuperaciÃ³n' });
+      return res.json({ mensaje: 'Si el correo está registrado, recibirás un enlace de recuperación' });
     }
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -115,7 +115,7 @@ const forgotPassword = async (req, res) => {
 
     await sendResetEmail(usuario.email, token);
 
-    return res.json({ mensaje: 'Si el correo estÃ¡ registrado, recibirÃ¡s un enlace de recuperaciÃ³n' });
+    return res.json({ mensaje: 'Si el correo está registrado, recibirás un enlace de recuperación' });
   } catch (error) {
     console.error('[forgotPassword Error]:', error);
     return res.status(500).json({ 
@@ -131,11 +131,11 @@ const resetPassword = async (req, res) => {
   const { token } = req.params;
   const { password } = req.body;
 
-  if (!password) return res.status(400).json({ error: 'Nueva contraseÃ±a es requerida' });
+  if (!password) return res.status(400).json({ error: 'Nueva contraseña es requerida' });
 
   const validation = validarPassword(password);
   if (!validation.valido) {
-    return res.status(400).json({ error: 'ContraseÃ±a no segura', detalles: validation.errores });
+    return res.status(400).json({ error: 'Contraseña no segura', detalles: validation.errores });
   }
 
   try {
@@ -149,7 +149,7 @@ const resetPassword = async (req, res) => {
     });
 
     if (!usuario) {
-      return res.status(400).json({ error: 'Token invÃ¡lido o expirado' });
+      return res.status(400).json({ error: 'Token inválido o expirado' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -163,10 +163,10 @@ const resetPassword = async (req, res) => {
       }
     });
 
-    return res.json({ mensaje: 'ContraseÃ±a actualizada correctamente' });
+    return res.json({ mensaje: 'Contraseña actualizada correctamente' });
   } catch (error) {
     console.error('[resetPassword]', error);
-    return res.status(500).json({ error: 'Error al resetear contraseÃ±a' });
+    return res.status(500).json({ error: 'Error al resetear contraseña' });
   }
 };
 
@@ -195,7 +195,7 @@ const invitar = async (req, res) => {
   try {
     const usuarioExistente = await prisma.usuario.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (usuarioExistente) {
-      return res.status(409).json({ error: 'El email ya estÃ¡ registrado' });
+      return res.status(409).json({ error: 'El email ya está registrado' });
     }
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -215,10 +215,10 @@ const invitar = async (req, res) => {
 
     await enviarInvitacion({ nombre, email, token });
 
-    return res.json({ mensaje: `InvitaciÃ³n enviada a ${email}` });
+    return res.json({ mensaje: `Invitación enviada a ${email}` });
   } catch (error) {
     console.error('[invitar]', error);
-    return res.status(500).json({ error: 'Error al enviar invitaciÃ³n' });
+    return res.status(500).json({ error: 'Error al enviar invitación' });
   }
 };
 
@@ -229,15 +229,15 @@ const verificarInvitacion = async (req, res) => {
     const invitacion = await prisma.invitacion.findUnique({ where: { token } });
 
     if (!invitacion) {
-      return res.status(404).json({ error: 'InvitaciÃ³n no vÃ¡lida' });
+      return res.status(404).json({ error: 'Invitación no válida' });
     }
 
     if (invitacion.estado === 'aceptada') {
-      return res.status(409).json({ error: 'InvitaciÃ³n ya utilizada' });
+      return res.status(409).json({ error: 'Invitación ya utilizada' });
     }
 
     if (invitacion.expiraEn < new Date() || invitacion.estado === 'expirada') {
-      return res.status(410).json({ error: 'InvitaciÃ³n expirada' });
+      return res.status(410).json({ error: 'Invitación expirada' });
     }
 
     return res.json({
@@ -246,7 +246,7 @@ const verificarInvitacion = async (req, res) => {
       area: invitacion.area
     });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al verificar invitaciÃ³n' });
+    return res.status(500).json({ error: 'Error al verificar invitación' });
   }
 };
 
@@ -255,22 +255,22 @@ const aceptarInvitacion = async (req, res) => {
   const { password, confirmar_password } = req.body;
 
   if (!password || !confirmar_password) {
-    return res.status(400).json({ error: 'La contraseÃ±a es requerida' });
+    return res.status(400).json({ error: 'La contraseña es requerida' });
   }
 
   if (password !== confirmar_password) {
-    return res.status(400).json({ error: 'Las contraseÃ±as no coinciden' });
+    return res.status(400).json({ error: 'Las contraseñas no coinciden' });
   }
 
   if (password.length < 8) {
-    return res.status(400).json({ error: 'La contraseÃ±a debe tener al menos 8 caracteres' });
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
   }
 
   try {
     const invitacion = await prisma.invitacion.findUnique({ where: { token } });
 
     if (!invitacion || invitacion.estado !== 'pendiente' || invitacion.expiraEn < new Date()) {
-      return res.status(400).json({ error: 'InvitaciÃ³n invÃ¡lida o expirada' });
+      return res.status(400).json({ error: 'Invitación inválida o expirada' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -288,7 +288,7 @@ const aceptarInvitacion = async (req, res) => {
       }
     });
 
-    // Marcar invitaciÃ³n como aceptada
+    // Marcar invitación como aceptada
     await prisma.invitacion.update({
       where: { id: invitacion.id },
       data: { estado: 'aceptada' }
@@ -308,7 +308,7 @@ const aceptarInvitacion = async (req, res) => {
     });
   } catch (error) {
     console.error('[aceptarInvitacion]', error);
-    return res.status(500).json({ error: 'Error al aceptar invitaciÃ³n' });
+    return res.status(500).json({ error: 'Error al aceptar invitación' });
   }
 };
 
@@ -321,7 +321,7 @@ const reenviarInvitacion = async (req, res) => {
     });
 
     if (!invitacion) {
-      return res.status(404).json({ error: 'No se encontrÃ³ una invitaciÃ³n pendiente para este email' });
+      return res.status(404).json({ error: 'No se encontró una invitación pendiente para este email' });
     }
 
     const nuevoToken = crypto.randomBytes(32).toString('hex');
@@ -338,9 +338,9 @@ const reenviarInvitacion = async (req, res) => {
 
     await enviarInvitacion({ nombre: invitacion.nombre, email: invitacion.email, token: nuevoToken });
 
-    return res.json({ mensaje: 'InvitaciÃ³n reenviada correctamente' });
+    return res.json({ mensaje: 'Invitación reenviada correctamente' });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al reenviar invitaciÃ³n' });
+    return res.status(500).json({ error: 'Error al reenviar invitación' });
   }
 };
 
@@ -369,3 +369,4 @@ module.exports = {
   reenviarInvitacion,
   listarInvitaciones
 };
+
