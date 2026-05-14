@@ -131,16 +131,28 @@ const listar = async (req, res) => {
       return res.json({ usuarios });
     }
 
-    // OPTIMIZACIÓN: Obtener TODAS las tareas relevantes en una sola consulta
+    // OPTIMIZACIÓN: Obtener solo tareas relevantes (activas o terminadas hoy) en una sola consulta
     const ahora = new Date();
+    const hoyInicio = new Date(ahora);
+    hoyInicio.setHours(0, 0, 0, 0);
     const hoyFin = finDelDia(ahora);
     const semanaFin = finDeSemana(ahora);
 
     const todasTareas = await prisma.tarea.findMany({
       where: {
-        OR: [
-          { asignadoId: { in: usuarios.map(u => u.id) } },
-          { creadorId: { in: usuarios.map(u => u.id) } }
+        AND: [
+          {
+            OR: [
+              { asignadoId: { in: usuarios.map(u => u.id) } },
+              { creadorId: { in: usuarios.map(u => u.id) } }
+            ]
+          },
+          {
+            OR: [
+              { estado: { in: ['PENDIENTE', 'EN_PROGRESO'] } },
+              { AND: [{ estado: 'HECHO' }, { creadoEn: { gte: hoyInicio } }] }
+            ]
+          }
         ]
       },
       select: tareaResumenSelect,
