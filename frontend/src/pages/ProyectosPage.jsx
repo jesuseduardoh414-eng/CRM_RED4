@@ -14,9 +14,11 @@ import {
   Plus,
   FolderOpen, 
   ChevronRight, 
+  ChevronLeft,
   Pencil,
   Upload,
-  FileText
+  FileText,
+  Calendar
 } from 'lucide-react';
 
 // ── Configuraciones Visuales ────────────────────────────────────────────────
@@ -47,6 +49,134 @@ const formatFechaCorta = (fecha) => {
 };
 
 const esAdminUsuario = (usuario) => usuario?.rol?.toString().toUpperCase() === 'ADMIN';
+
+const dateKey = (date) => {
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+};
+
+const parseDateKey = (value) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+};
+
+const monthRangeFor = (value) => {
+  const base = value ? parseDateKey(value) : new Date();
+  return {
+    start: new Date(base.getFullYear(), base.getMonth(), 1, 12),
+    end: new Date(base.getFullYear(), base.getMonth() + 1, 0, 12),
+  };
+};
+
+const expandBlockedDates = (conflictos) => {
+  const blocked = new Map();
+  conflictos.forEach(conflicto => {
+    const start = new Date(conflicto.fechaInicio);
+    const end = conflicto.fechaFin ? new Date(conflicto.fechaFin) : new Date(start);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+
+    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12);
+    const last = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 12);
+    const maxDays = 370;
+    let count = 0;
+    while (cursor <= last && count < maxDays) {
+      const key = dateKey(cursor);
+      if (!blocked.has(key)) blocked.set(key, []);
+      blocked.get(key).push(conflicto);
+      cursor.setDate(cursor.getDate() + 1);
+      count += 1;
+    }
+  });
+  return blocked;
+};
+
+const ProjectDatePicker = ({ label, value, onChange, blockedDates, allowBlocked = false, required = false }) => {
+  const [open, setOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const base = value ? parseDateKey(value) : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
+  const selected = value ? parseDateKey(value) : null;
+  const firstDay = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
+  const cells = [
+    ...Array.from({ length: startOffset }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, idx) => new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), idx + 1, 12)),
+  ];
+
+  const moveMonth = (delta) => {
+    setVisibleMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  };
+
+  const handleSelect = (date) => {
+    const key = dateKey(date);
+    const isBlocked = blockedDates.has(key);
+    if (isBlocked && !allowBlocked) return;
+    onChange(key);
+    setOpen(false);
+  };
+
+  return (
+    <div className="space-y-2 relative">
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none flex items-center justify-between"
+      >
+        <span>{value ? parseDateKey(value).toLocaleDateString('es-MX') : 'dd/mm/aaaa'}</span>
+        <Calendar size={18} className="text-slate-500" />
+      </button>
+      {required && !value && <input className="sr-only" required value="" onChange={() => {}} />}
+
+      {open && (
+        <div className="absolute z-[1200] mt-2 w-[300px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <button type="button" onClick={() => moveMonth(-1)} className="p-2 rounded-lg hover:bg-slate-50 text-slate-500">
+              <ChevronLeft size={18} />
+            </button>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-900">
+              {visibleMonth.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+            </p>
+            <button type="button" onClick={() => moveMonth(1)} className="p-2 rounded-lg hover:bg-slate-50 text-slate-500">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+            {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'].map(day => <span key={day}>{day}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((date, idx) => {
+              if (!date) return <div key={`empty-${idx}`} className="h-9" />;
+              const key = dateKey(date);
+              const conflicts = blockedDates.get(key) || [];
+              const isBlocked = conflicts.length > 0;
+              const isSelected = selected && dateKey(selected) === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleSelect(date)}
+                  title={isBlocked ? conflicts.map(c => `${c.usuario?.nombre || 'Miembro'}: ${c.titulo}`).join('\n') : ''}
+                  disabled={isBlocked && !allowBlocked}
+                  className={`h-9 rounded-lg text-xs font-black transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : isBlocked && allowBlocked ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : isBlocked ? 'bg-red-50 text-red-400 border border-red-100 cursor-not-allowed opacity-70' : 'text-slate-700 hover:bg-slate-100'}`}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-300" /> Ocupado</span>
+            {allowBlocked && <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-300" /> Admin puede asignar</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
 const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
@@ -177,6 +307,14 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     .filter(u => !esAdminUsuario(u))
     .flatMap(u => (ocupados[u.id] || []).map(conflicto => ({ ...conflicto, usuario: u })))
     .sort((a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio));
+  const usuariosParaBloqueo = form.miembrosIds.length > 0
+    ? usuariosEnAreas.filter(u => form.miembrosIds.includes(u.id))
+    : usuariosEnAreas;
+  const fechasBloqueadas = expandBlockedDates(
+    usuariosParaBloqueo
+      .filter(u => !esAdminUsuario(u))
+      .flatMap(u => (ocupados[u.id] || []).map(conflicto => ({ ...conflicto, usuario: u })))
+  );
 
   useEffect(() => {
     const consultar = async () => {
@@ -188,10 +326,14 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
       setConsultandoDisponibilidad(true);
       try {
+        const rangoMes = monthRangeFor(form.fechaInicio);
+        const consultaInicio = rangoMes.start;
+        const consultaFin = form.fechaFin ? parseDateKey(form.fechaFin) : new Date(rangoMes.start.getFullYear(), rangoMes.start.getMonth() + 12, 0, 23, 59, 59);
+        consultaFin.setHours(23, 59, 59, 999);
         const data = await agendaService.consultarDisponibilidad({
           usuarios_ids: ids.join(','),
-          inicio: `${form.fechaInicio}T00:00:00`,
-          fin: form.fechaFin ? `${form.fechaFin}T23:59:59` : undefined,
+          inicio: consultaInicio.toISOString(),
+          fin: consultaFin.toISOString(),
           excluir_proyecto_id: proyecto?.id,
         });
         const porUsuario = {};
@@ -243,6 +385,18 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     if (form.fechaFin && new Date(`${form.fechaFin}T23:59:59`) <= new Date(`${form.fechaInicio}T00:00:00`)) {
       alert('La fecha fin debe ser posterior a la fecha inicio');
       return;
+    }
+    if (!usuarioActualEsAdmin) {
+      const inicio = parseDateKey(form.fechaInicio);
+      const fin = form.fechaFin ? parseDateKey(form.fechaFin) : inicio;
+      const cursor = new Date(inicio);
+      while (cursor <= fin) {
+        if (fechasBloqueadas.has(dateKey(cursor))) {
+          alert('El rango seleccionado cruza con tareas activas de los miembros.');
+          return;
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
     }
     setCargando(true);
     try {
@@ -359,14 +513,21 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA INICIO</label>
-                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} required />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA FIN</label>
-                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})} />
-              </div>
+              <ProjectDatePicker
+                label="FECHA INICIO"
+                value={form.fechaInicio}
+                onChange={fechaInicio => setForm({ ...form, fechaInicio })}
+                blockedDates={fechasBloqueadas}
+                allowBlocked={usuarioActualEsAdmin}
+                required
+              />
+              <ProjectDatePicker
+                label="FECHA FIN"
+                value={form.fechaFin}
+                onChange={fechaFin => setForm({ ...form, fechaFin })}
+                blockedDates={fechasBloqueadas}
+                allowBlocked={usuarioActualEsAdmin}
+              />
             </div>
 
             <div className="space-y-3">
