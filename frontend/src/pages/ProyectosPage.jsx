@@ -91,7 +91,9 @@ const expandBlockedDates = (conflictos) => {
   return blocked;
 };
 
-const ProjectDatePicker = ({ label, value, onChange, blockedDates, allowBlocked = false, required = false }) => {
+const esBloqueoReal = (conflicto) => conflicto.tipo !== 'proyecto';
+
+const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = false }) => {
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const base = value ? parseDateKey(value) : new Date();
@@ -112,8 +114,9 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, allowBlocked 
 
   const handleSelect = (date) => {
     const key = dateKey(date);
-    const isBlocked = blockedDates.has(key);
-    if (isBlocked && !allowBlocked) return;
+    const conflicts = blockedDates.get(key) || [];
+    const isHardBlocked = conflicts.some(esBloqueoReal);
+    if (isHardBlocked) return;
     onChange(key);
     setOpen(false);
   };
@@ -152,16 +155,17 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, allowBlocked 
               if (!date) return <div key={`empty-${idx}`} className="h-9" />;
               const key = dateKey(date);
               const conflicts = blockedDates.get(key) || [];
-              const isBlocked = conflicts.length > 0;
+              const isHardBlocked = conflicts.some(esBloqueoReal);
+              const hasProjectWarning = !isHardBlocked && conflicts.some(c => c.tipo === 'proyecto');
               const isSelected = selected && dateKey(selected) === key;
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={() => handleSelect(date)}
-                  title={isBlocked ? conflicts.map(c => `${c.usuario?.nombre || 'Miembro'}: ${c.titulo}`).join('\n') : ''}
-                  disabled={isBlocked && !allowBlocked}
-                  className={`h-9 rounded-lg text-xs font-black transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : isBlocked && allowBlocked ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : isBlocked ? 'bg-red-50 text-red-400 border border-red-100 cursor-not-allowed opacity-70' : 'text-slate-700 hover:bg-slate-100'}`}
+                  title={conflicts.length > 0 ? conflicts.map(c => `${c.usuario?.nombre || 'Miembro'}: ${c.titulo}`).join('\n') : ''}
+                  disabled={isHardBlocked}
+                  className={`h-9 rounded-lg text-xs font-black transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : isHardBlocked ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-80' : hasProjectWarning ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'text-slate-700 hover:bg-slate-100'}`}
                 >
                   {date.getDate()}
                 </button>
@@ -169,8 +173,8 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, allowBlocked 
             })}
           </div>
           <div className="mt-4 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-300" /> Ocupado</span>
-            {allowBlocked && <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-300" /> Admin puede asignar</span>}
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-400" /> Tarea ocupada</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-300" /> Proyecto activo</span>
           </div>
         </div>
       )}
@@ -271,7 +275,6 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
 // ── Modal de Proyecto ────────────────────────────────────────────────────────
 const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   const { usuario: usuarioActual } = useAuth();
-  const usuarioActualEsAdmin = esAdminUsuario(usuarioActual);
   const areasIniciales = getAreasProyecto(proyecto?.area);
   const [form, setForm] = useState({
     nombre: proyecto?.nombre || '',
@@ -371,7 +374,8 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
       const usuario = usuariosSeleccionables.find(u => u.id === id);
-      if (!usuarioActualEsAdmin && !esAdminUsuario(usuario) && ocupados[id]?.length) return prev;
+      const tieneBloqueoReal = (ocupados[id] || []).some(esBloqueoReal);
+      if (!esAdminUsuario(usuario) && tieneBloqueoReal) return prev;
       return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
   };
@@ -386,17 +390,16 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       alert('La fecha fin debe ser posterior a la fecha inicio');
       return;
     }
-    if (!usuarioActualEsAdmin) {
-      const inicio = parseDateKey(form.fechaInicio);
-      const fin = form.fechaFin ? parseDateKey(form.fechaFin) : inicio;
-      const cursor = new Date(inicio);
-      while (cursor <= fin) {
-        if (fechasBloqueadas.has(dateKey(cursor))) {
-          alert('El rango seleccionado cruza con tareas activas de los miembros.');
-          return;
-        }
-        cursor.setDate(cursor.getDate() + 1);
+    const inicio = parseDateKey(form.fechaInicio);
+    const fin = form.fechaFin ? parseDateKey(form.fechaFin) : inicio;
+    const cursor = new Date(inicio);
+    while (cursor <= fin) {
+      const conflictosDia = fechasBloqueadas.get(dateKey(cursor)) || [];
+      if (conflictosDia.some(esBloqueoReal)) {
+        alert('El rango seleccionado cruza con tareas activas de los miembros.');
+        return;
       }
+      cursor.setDate(cursor.getDate() + 1);
     }
     setCargando(true);
     try {
@@ -407,7 +410,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       formData.append('area', form.areas.join(','));
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
-      const idsPermitidos = new Set(usuariosEnAreas.filter(u => usuarioActualEsAdmin || esAdminUsuario(u) || !ocupados[u.id]?.length).map(u => u.id));
+      const idsPermitidos = new Set(usuariosEnAreas.filter(u => esAdminUsuario(u) || !(ocupados[u.id] || []).some(esBloqueoReal)).map(u => u.id));
       formData.append('miembrosIds', JSON.stringify(form.miembrosIds.filter(id => idsPermitidos.has(id))));
       
       archivos.forEach(file => {
@@ -493,16 +496,17 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                       {grupo.usuarios.map(u => {
                         const isSelected = form.miembrosIds.includes(u.id);
                         const conflictos = esAdminUsuario(u) ? [] : ocupados[u.id] || [];
-                        const disabled = !usuarioActualEsAdmin && conflictos.length > 0;
+                        const tieneBloqueoReal = conflictos.some(esBloqueoReal);
+                        const tieneProyectoActivo = !tieneBloqueoReal && conflictos.some(c => c.tipo === 'proyecto');
                         return (
                           <button
                             key={u.id}
                             type="button"
                             onClick={() => toggleMiembro(u.id)}
                             title={conflictos.length > 0 ? `Tiene tareas/eventos: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : disabled ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-70' : conflictos.length > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : tieneBloqueoReal ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-70' : tieneProyectoActivo ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
                           >
-                            {isSelected ? 'OK ' : conflictos.length > 0 ? 'Con tareas ' : '+ '}{u.nombre}
+                            {isSelected ? 'OK ' : tieneBloqueoReal ? 'Con tareas ' : tieneProyectoActivo ? 'En proyecto ' : '+ '}{u.nombre}
                           </button>
                         );
                       })}
@@ -518,7 +522,6 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 value={form.fechaInicio}
                 onChange={fechaInicio => setForm({ ...form, fechaInicio })}
                 blockedDates={fechasBloqueadas}
-                allowBlocked={usuarioActualEsAdmin}
                 required
               />
               <ProjectDatePicker
@@ -526,7 +529,6 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 value={form.fechaFin}
                 onChange={fechaFin => setForm({ ...form, fechaFin })}
                 blockedDates={fechasBloqueadas}
-                allowBlocked={usuarioActualEsAdmin}
               />
             </div>
 

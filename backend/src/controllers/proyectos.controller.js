@@ -281,7 +281,7 @@ const crear = async (req, res) => {
     const errorFechas = validarRangoProyecto({ inicio, fin });
     if (errorFechas) return res.status(400).json({ error: errorFechas });
 
-    const ocupados = req.usuario.rol === 'ADMIN' ? [] : await consultarOcupados({ ids, inicio, fin });
+    const ocupados = await consultarOcupados({ ids, inicio, fin });
     if (ocupados.length > 0) {
       const usuariosOcupados = await prisma.usuario.findMany({
         where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },
@@ -386,7 +386,7 @@ const editar = async (req, res) => {
       const errorFechas = validarRangoProyecto({ inicio, fin });
       if (errorFechas) return res.status(400).json({ error: errorFechas });
 
-      const ocupados = req.usuario.rol === 'ADMIN' ? [] : await consultarOcupados({ ids, inicio, fin, proyectoId: id });
+      const ocupados = await consultarOcupados({ ids, inicio, fin, proyectoId: id });
       if (ocupados.length > 0) {
         const usuariosOcupados = await prisma.usuario.findMany({
           where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },

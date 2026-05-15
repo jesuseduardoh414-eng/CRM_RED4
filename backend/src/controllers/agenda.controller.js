@@ -491,48 +491,71 @@ const consultarDisponibilidad = async (req, res) => {
       return res.status(400).json({ error: 'Rango de fechas invalido' });
     }
 
-    const eventos = await prisma.evento.findMany({
-      where: {
-        id: excluir_id ? { not: excluir_id } : undefined,
-        proyectoId: null,
-        OR: [
-          { usuarioId: { in: ids } },
-          { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }
-        ],
-        fechaInicio: { lt: end },
-        fechaFin: { gt: start }
-      },
-      select: {
-        id: true,
-        titulo: true,
-        fechaInicio: true,
-        fechaFin: true,
-        usuarioId: true
-      }
-    });
-
-    const tareas = await prisma.tarea.findMany({
-      where: {
-        proyectoId: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
-        asignadoId: { in: ids },
-        estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
-        // Cruce de rangos: periodo consultado contra periodo real de cada tarea.
-        fechaInicio: { lt: end },
-        OR: [
-          { venceEn: { gt: start } },
-          { venceEn: null, fechaInicio: { gte: start } }
-        ]
-      },
-      select: {
-        id: true,
-        titulo: true,
-        fechaInicio: true,
-        venceEn: true,
-        asignadoId: true,
-        proyectoId: true,
-        proyecto: { select: { nombre: true } }
-      }
-    });
+    const [eventos, tareas, proyectos] = await Promise.all([
+      prisma.evento.findMany({
+        where: {
+          id: excluir_id ? { not: excluir_id } : undefined,
+          proyectoId: null,
+          OR: [
+            { usuarioId: { in: ids } },
+            { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }
+          ],
+          fechaInicio: { lt: end },
+          fechaFin: { gt: start }
+        },
+        select: {
+          id: true,
+          titulo: true,
+          fechaInicio: true,
+          fechaFin: true,
+          usuarioId: true
+        }
+      }),
+      prisma.tarea.findMany({
+        where: {
+          proyectoId: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
+          asignadoId: { in: ids },
+          estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
+          // Cruce de rangos: periodo consultado contra periodo real de cada tarea.
+          fechaInicio: { lt: end },
+          OR: [
+            { venceEn: { gt: start } },
+            { venceEn: null, fechaInicio: { gte: start } }
+          ]
+        },
+        select: {
+          id: true,
+          titulo: true,
+          fechaInicio: true,
+          venceEn: true,
+          asignadoId: true,
+          proyectoId: true,
+          proyecto: { select: { nombre: true } }
+        }
+      }),
+      prisma.proyecto.findMany({
+        where: {
+          id: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
+          estado: { not: 'CERRADO' },
+          miembros: { some: { id: { in: ids } } },
+          fechaInicio: { lt: end },
+          OR: [
+            { fechaFin: null },
+            { fechaFin: { gt: start } }
+          ]
+        },
+        select: {
+          id: true,
+          nombre: true,
+          fechaInicio: true,
+          fechaFin: true,
+          miembros: {
+            where: { id: { in: ids } },
+            select: { id: true }
+          }
+        }
+      })
+    ]);
 
     const conflictos = [
       ...eventos.map(evento => ({ ...evento, tipo: 'evento' })),
@@ -545,7 +568,16 @@ const consultarDisponibilidad = async (req, res) => {
         proyectoId: tarea.proyectoId,
         proyecto: tarea.proyecto,
         tipo: 'tarea'
-      }))
+      })),
+      ...proyectos.flatMap(proyecto => proyecto.miembros.map(miembro => ({
+        id: `proyecto-${proyecto.id}-${miembro.id}`,
+        titulo: `Proyecto: ${proyecto.nombre}`,
+        fechaInicio: proyecto.fechaInicio,
+        fechaFin: proyecto.fechaFin,
+        usuarioId: miembro.id,
+        proyectoId: proyecto.id,
+        tipo: 'proyecto'
+      })))
     ];
 
     return res.json({ conflictos });
