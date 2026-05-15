@@ -144,12 +144,17 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   }, []);
 
   // Mostrar todos los usuarios, pero agrupados o resaltados por el área seleccionada
-  const usuariosEnAreas = usuarios.filter(u => form.areas.includes(u.area));
-  const usuariosPorArea = form.areas.map(area => ({
-    area,
-    usuarios: usuariosEnAreas.filter(u => u.area === area),
-  }));
+  const usuariosEnAreas = usuarios.filter(u => form.areas.includes(u.area) || u.rol === 'ADMIN');
+  const admins = usuarios.filter(u => u.rol === 'ADMIN');
+  const usuariosPorArea = [
+    ...form.areas.map(area => ({
+      area,
+      usuarios: usuariosEnAreas.filter(u => u.area === area && u.rol !== 'ADMIN'),
+    })),
+    ...(admins.length > 0 ? [{ area: 'ADMIN', usuarios: admins }] : []),
+  ];
   const conflictosEnAreas = usuariosEnAreas
+    .filter(u => u.rol !== 'ADMIN')
     .flatMap(u => (ocupados[u.id] || []).map(conflicto => ({ ...conflicto, usuario: u })))
     .sort((a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio));
 
@@ -189,7 +194,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     setForm(prev => {
       const exists = prev.areas.includes(area);
       const areas = exists ? prev.areas.filter(a => a !== area) : [...prev.areas, area];
-      const miembrosPermitidos = usuarios.filter(u => areas.includes(u.area)).map(u => u.id);
+      const miembrosPermitidos = usuarios.filter(u => areas.includes(u.area) || u.rol === 'ADMIN').map(u => u.id);
       return {
         ...prev,
         areas,
@@ -202,7 +207,8 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     setForm(prev => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
-      if (ocupados[id]?.length) return prev;
+      const usuario = usuarios.find(u => u.id === id);
+      if (usuario?.rol !== 'ADMIN' && ocupados[id]?.length) return prev;
       return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
   };
@@ -222,7 +228,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       formData.append('area', form.areas.join(','));
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
-      const idsPermitidos = new Set(usuariosEnAreas.filter(u => !ocupados[u.id]?.length).map(u => u.id));
+      const idsPermitidos = new Set(usuariosEnAreas.filter(u => u.rol === 'ADMIN' || !ocupados[u.id]?.length).map(u => u.id));
       formData.append('miembrosIds', JSON.stringify(form.miembrosIds.filter(id => idsPermitidos.has(id))));
       
       archivos.forEach(file => {
@@ -299,7 +305,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 {usuariosPorArea.map(grupo => (
                   <div key={grupo.area} className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
-                      {AREA_CONF[grupo.area]?.label || grupo.area}
+                      {grupo.area === 'ADMIN' ? 'Administradores' : AREA_CONF[grupo.area]?.label || grupo.area}
                     </p>
                     <div className="flex flex-wrap gap-2 min-h-[36px]">
                       {grupo.usuarios.length === 0 && (
@@ -307,7 +313,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                       )}
                       {grupo.usuarios.map(u => {
                         const isSelected = form.miembrosIds.includes(u.id);
-                        const conflictos = ocupados[u.id] || [];
+                        const conflictos = u.rol === 'ADMIN' ? [] : ocupados[u.id] || [];
                         const disabled = conflictos.length > 0;
                         return (
                           <button

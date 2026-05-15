@@ -38,9 +38,13 @@ const validarMiembrosPorArea = async (ids, area) => {
   const areas = areasDeProyecto(area);
   const usuarios = await prisma.usuario.findMany({
     where: { id: { in: ids } },
-    select: { id: true, nombre: true, area: true }
+    select: { id: true, nombre: true, area: true, rol: true }
   });
-  const idsValidos = new Set(usuarios.filter(u => areas.includes(u.area)).map(u => u.id));
+  const idsValidos = new Set(
+    usuarios
+      .filter(u => u.rol === 'ADMIN' || areas.includes(u.area))
+      .map(u => u.id)
+  );
   return {
     usuarios,
     invalidos: ids.filter(id => !idsValidos.has(id)),
@@ -49,14 +53,21 @@ const validarMiembrosPorArea = async (ids, area) => {
 
 const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
   if (ids.length === 0) return [];
+  const admins = await prisma.usuario.findMany({
+    where: { id: { in: ids }, rol: 'ADMIN' },
+    select: { id: true }
+  });
+  const adminIds = new Set(admins.map(u => u.id));
+  const idsRevisar = ids.filter(id => !adminIds.has(id));
+  if (idsRevisar.length === 0) return [];
 
   const [eventos, proyectos] = await Promise.all([
     prisma.evento.findMany({
       where: {
         proyectoId: proyectoId ? { not: proyectoId } : undefined,
         OR: [
-          { usuarioId: { in: ids } },
-          { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }
+          { usuarioId: { in: idsRevisar } },
+          { invitados: { some: { usuarioId: { in: idsRevisar }, estado: 'aceptado' } } }
         ],
         fechaInicio: { lt: fin },
         fechaFin: { gt: inicio }
@@ -67,7 +78,7 @@ const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
       where: {
         id: proyectoId ? { not: proyectoId } : undefined,
         estado: { not: 'CERRADO' },
-        miembros: { some: { id: { in: ids } } },
+        miembros: { some: { id: { in: idsRevisar } } },
         fechaInicio: { lt: fin },
         OR: [
           { fechaFin: null },
@@ -76,7 +87,7 @@ const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
       },
       select: {
         nombre: true,
-        miembros: { where: { id: { in: ids } }, select: { id: true } }
+        miembros: { where: { id: { in: idsRevisar } }, select: { id: true } }
       }
     })
   ]);
