@@ -34,7 +34,8 @@ const NotificationCenter = () => {
     }, 15000);
 
     // Solo configurar Realtime si Supabase está inicializado
-    if (!supabase) return () => clearInterval(interval);
+    const realtimeEnabled = import.meta.env.VITE_ENABLE_REALTIME === 'true';
+    if (!supabase || !realtimeEnabled) return () => clearInterval(interval);
 
     const channel = supabase
       .channel('public:notificaciones')
@@ -55,7 +56,7 @@ const NotificationCenter = () => {
       )
       .subscribe((status, err) => {
         console.log(`📡 [Realtime] Estado: ${status}`);
-        if (err) console.error('❌ [Realtime] Error:', err);
+        if (err && status !== 'CHANNEL_ERROR') console.error('[Realtime] Error:', err);
       });
 
     return () => {
@@ -218,3 +219,4 @@ const NotificationCenter = () => {
 };
 
 export default NotificationCenter;
+
