@@ -3,8 +3,12 @@ const prisma = require('../lib/prisma');
 
 const DIAS_LABORALES_DEFAULT = [1, 2, 3, 4, 5];
 const TIPOS_NO_LABORALES = ['festivo', 'vacacion', 'permiso'];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const getDateKeyUTC = (date) => date.toISOString().split('T')[0];
+const getFinTareaParaDisponibilidad = (tarea) => (
+  tarea.venceEn ? tarea.venceEn : new Date(tarea.fechaInicio.getTime() + ONE_DAY_MS)
+);
 const getGlobalHoliday = (date) => {
   const year = date.getUTCFullYear();
   const holidays = [
@@ -481,7 +485,11 @@ const consultarDisponibilidad = async (req, res) => {
   try {
     const ids = usuarios_ids.split(',').map(id => parseInt(id));
     const start = new Date(inicio);
-    const end = fin ? new Date(fin) : new Date(start.getTime() + 3600000);
+    const end = fin ? new Date(fin) : new Date(start.getTime() + ONE_DAY_MS);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      return res.status(400).json({ error: 'Rango de fechas invalido' });
+    }
 
     const eventos = await prisma.evento.findMany({
       where: {
@@ -508,6 +516,7 @@ const consultarDisponibilidad = async (req, res) => {
         proyectoId: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
         asignadoId: { in: ids },
         estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
+        // Cruce de rangos: periodo consultado contra periodo real de cada tarea.
         fechaInicio: { lt: end },
         OR: [
           { venceEn: { gt: start } },
@@ -531,7 +540,7 @@ const consultarDisponibilidad = async (req, res) => {
         id: `tarea-${tarea.id}`,
         titulo: `Tarea: ${tarea.titulo}`,
         fechaInicio: tarea.fechaInicio,
-        fechaFin: tarea.venceEn,
+        fechaFin: getFinTareaParaDisponibilidad(tarea),
         usuarioId: tarea.asignadoId,
         proyectoId: tarea.proyectoId,
         proyecto: tarea.proyecto,

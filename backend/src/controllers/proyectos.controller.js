@@ -24,14 +24,30 @@ const areasDeProyecto = (area) => (area || 'DESARROLLO')
   .map(a => a.trim())
   .filter(Boolean);
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 const getRangoProyecto = (fechaInicio, fechaFin) => {
   const inicio = fechaInicio ? new Date(fechaInicio) : new Date();
-  const fin = fechaFin ? new Date(fechaFin) : new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+  const fin = fechaFin ? new Date(fechaFin) : new Date(inicio.getTime() + ONE_DAY_MS);
   if (fechaFin && /^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
     fin.setDate(fin.getDate() + 1);
   }
   return { inicio, fin };
 };
+
+const validarRangoProyecto = ({ inicio, fin }) => {
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+    return 'Las fechas del proyecto no son validas';
+  }
+  if (fin <= inicio) {
+    return 'La fecha fin del proyecto debe ser posterior a la fecha inicio';
+  }
+  return null;
+};
+
+const getFinTareaParaDisponibilidad = (tarea) => (
+  tarea.venceEn ? tarea.venceEn : new Date(tarea.fechaInicio.getTime() + ONE_DAY_MS)
+);
 
 const validarMiembrosPorArea = async (ids, area) => {
   if (ids.length === 0) return { usuarios: [], invalidos: [] };
@@ -79,6 +95,7 @@ const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
         proyectoId: proyectoId ? { not: proyectoId } : undefined,
         asignadoId: { in: idsRevisar },
         estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
+        // Cruce de rangos: periodo del proyecto contra periodo real de cada tarea.
         fechaInicio: { lt: fin },
         OR: [
           { venceEn: { gt: inicio } },
@@ -102,7 +119,7 @@ const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
       titulo: `Tarea: ${t.titulo}`,
       proyecto: t.proyecto?.nombre || null,
       fechaInicio: t.fechaInicio,
-      fechaFin: t.venceEn,
+      fechaFin: getFinTareaParaDisponibilidad(t),
     })),
   ];
 };
@@ -261,6 +278,9 @@ const crear = async (req, res) => {
     }
 
     const { inicio, fin } = getRangoProyecto(fechaInicio, fechaFin);
+    const errorFechas = validarRangoProyecto({ inicio, fin });
+    if (errorFechas) return res.status(400).json({ error: errorFechas });
+
     const ocupados = req.usuario.rol === 'ADMIN' ? [] : await consultarOcupados({ ids, inicio, fin });
     if (ocupados.length > 0) {
       const usuariosOcupados = await prisma.usuario.findMany({
@@ -363,6 +383,9 @@ const editar = async (req, res) => {
       }
 
       const { inicio, fin } = getRangoProyecto(fechaInicio || existente.fechaInicio, fechaFin !== undefined ? fechaFin : existente.fechaFin);
+      const errorFechas = validarRangoProyecto({ inicio, fin });
+      if (errorFechas) return res.status(400).json({ error: errorFechas });
+
       const ocupados = req.usuario.rol === 'ADMIN' ? [] : await consultarOcupados({ ids, inicio, fin, proyectoId: id });
       if (ocupados.length > 0) {
         const usuariosOcupados = await prisma.usuario.findMany({

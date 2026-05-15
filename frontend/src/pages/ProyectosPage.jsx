@@ -240,6 +240,10 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       alert('Selecciona al menos un area');
       return;
     }
+    if (form.fechaFin && new Date(`${form.fechaFin}T23:59:59`) <= new Date(`${form.fechaInicio}T00:00:00`)) {
+      alert('La fecha fin debe ser posterior a la fecha inicio');
+      return;
+    }
     setCargando(true);
     try {
       const formData = new FormData();
