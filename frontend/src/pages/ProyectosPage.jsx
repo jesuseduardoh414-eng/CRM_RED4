@@ -505,17 +505,16 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                       {grupo.usuarios.map(u => {
                         const isSelected = form.miembrosIds.includes(u.id);
                         const conflictos = esAdminUsuario(u) ? [] : ocupados[u.id] || [];
-                        const tieneBloqueoReal = conflictos.some(esBloqueoReal);
-                        const tieneProyectoActivo = !tieneBloqueoReal && conflictos.some(c => c.tipo === 'proyecto');
+                        const tieneProyectoActivo = conflictos.some(c => c.tipo === 'proyecto');
                         return (
                           <button
                             key={u.id}
                             type="button"
                             onClick={() => toggleMiembro(u.id)}
                             title={conflictos.length > 0 ? `Tiene tareas/eventos: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : tieneBloqueoReal ? 'bg-red-50 text-red-500 border border-red-100 hover:bg-red-100' : tieneProyectoActivo ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : tieneProyectoActivo ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
                           >
-                            {isSelected ? 'OK ' : tieneBloqueoReal ? 'Con tareas ' : tieneProyectoActivo ? 'En proyecto ' : '+ '}{u.nombre}
+                            {isSelected ? 'OK ' : tieneProyectoActivo ? 'En proyecto ' : '+ '}{u.nombre}
                           </button>
                         );
                       })}
