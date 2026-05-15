@@ -122,13 +122,13 @@ const Layout = ({ children }) => {
           </button>
 
           <img
-            src="/logo.png"
+            src={collapsed ? '/logo - sideber.png' : '/logo.png'}
             alt="Red 4 Design"
-            className={`h-auto object-contain transition-all duration-300 ${collapsed ? 'w-10 max-w-[40px]' : 'w-full max-w-[180px] lg:max-w-[200px]'}`}
+            className={`h-auto object-contain transition-all duration-300 ${collapsed ? 'w-12 max-w-[48px]' : 'w-full max-w-[180px] lg:max-w-[200px]'}`}
           />
 
           {!collapsed && (
-            <div className="text-[10px] lg:text-xs text-white/40 font-black uppercase tracking-[0.15em] text-center">
+            <div className="text-[10px] lg:text-xs text-white/40 font-black uppercase tracking-[0.15em] text-center whitespace-nowrap">
               Panel Interno
             </div>
           )}
@@ -136,7 +136,7 @@ const Layout = ({ children }) => {
 
         <nav className={`flex-1 flex flex-col gap-1 overflow-y-auto ${collapsed ? 'px-3' : 'px-4'}`}>
           {!collapsed && (
-            <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest">
+            <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest whitespace-nowrap">
               Menú Principal
             </div>
           )}
@@ -148,19 +148,19 @@ const Layout = ({ children }) => {
               onClick={() => setOpen(false)}
               title={collapsed ? label : undefined}
               className={({ isActive }) => `
-                flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all
+                flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap
                 ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
               `}
             >
-              <Icon />
-              {!collapsed && <span className="flex-1">{label}</span>}
+              <span className="shrink-0 flex items-center justify-center"><Icon /></span>
+              {!collapsed && <span className="flex-1 min-w-0 truncate">{label}</span>}
             </NavLink>
           ))}
 
           {usuario?.rol === 'ADMIN' && (
             <>
               {!collapsed && (
-                <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest">
+                <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest whitespace-nowrap">
                   Administración
                 </div>
               )}
@@ -170,12 +170,12 @@ const Layout = ({ children }) => {
                 onClick={() => setOpen(false)}
                 title={collapsed ? 'Usuarios' : undefined}
                 className={({ isActive }) => `
-                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all
+                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap
                   ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
                 `}
               >
-                <IconGestion />
-                {!collapsed && <span>Usuarios</span>}
+                <span className="shrink-0 flex items-center justify-center"><IconGestion /></span>
+                {!collapsed && <span className="min-w-0 truncate">Usuarios</span>}
               </NavLink>
             </>
           )}
@@ -203,10 +203,10 @@ const Layout = ({ children }) => {
           <button
             onClick={handleLogout}
             title={collapsed ? 'Salir' : undefined}
-            className={`w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-bold hover:bg-red-500/20 transition-all flex items-center justify-center ${collapsed ? '' : 'gap-2'}`}
+            className={`w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-bold hover:bg-red-500/20 transition-all flex items-center justify-center whitespace-nowrap ${collapsed ? '' : 'gap-2'}`}
           >
-            <IconLogout />
-            {!collapsed && <span>Salir</span>}
+            <span className="shrink-0 flex items-center justify-center"><IconLogout /></span>
+            {!collapsed && <span className="truncate">Salir</span>}
           </button>
         </div>
       </aside>
@@ -219,16 +219,6 @@ const Layout = ({ children }) => {
             aria-label="Abrir menú"
           >
             <IconMenu />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setCollapsed((prev) => !prev)}
-            className="hidden lg:flex w-11 h-11 shrink-0 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-dim)] hover:text-[var(--color-primary)] hover:border-blue-200 hover:bg-blue-50 transition-all"
-            title={collapsed ? 'Expandir menú' : 'Ocultar menú'}
-            aria-label={collapsed ? 'Expandir menú lateral' : 'Ocultar menú lateral'}
-          >
-            {collapsed ? <ChevronRight size={20} strokeWidth={2.5} /> : <ChevronLeft size={20} strokeWidth={2.5} />}
           </button>
 
           <div className="relative flex-1 max-w-xl group">
