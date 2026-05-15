@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import NotificationCenter from './NotificationCenter';
 import { agendaService } from '../services/api';
 import {
-  LayoutDashboard,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
   FolderKanban,
-  Users,
-  ShieldCheck,
+  LayoutDashboard,
   LogOut,
   Menu,
-  Calendar,
   Search,
+  ShieldCheck,
+  Users,
 } from 'lucide-react';
 
 const IconDashboard = () => <LayoutDashboard size={20} strokeWidth={2.5} />;
@@ -34,7 +36,9 @@ const Layout = ({ children }) => {
   const { usuario, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('crm_sidebar_collapsed') === 'true');
   const [, setRecordatoriosCount] = useState(0);
 
   useEffect(() => {
@@ -83,7 +87,11 @@ const Layout = ({ children }) => {
 
   useEffect(() => {
     setOpen(false);
-  }, [navigate]);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    localStorage.setItem('crm_sidebar_collapsed', String(collapsed));
+  }, [collapsed]);
 
   const handleLogout = () => {
     logout();
@@ -96,78 +104,109 @@ const Layout = ({ children }) => {
       <aside
         className={`
           fixed lg:sticky top-0 h-screen z-[100] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
-          bg-[var(--color-sidebar)] flex flex-col w-[280px]
+          bg-[var(--color-sidebar)] flex flex-col
+          ${collapsed ? 'lg:w-[92px]' : 'lg:w-[280px]'}
+          w-[280px]
           ${open ? 'left-0' : '-left-[280px] lg:left-0'}
         `}
       >
-        <div className="p-8 lg:p-12 pb-8 flex flex-col items-center gap-4">
+        <div className={`relative flex flex-col items-center gap-4 ${collapsed ? 'px-3 py-8' : 'p-8 lg:p-12 pb-8'}`}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((prev) => !prev)}
+            className="hidden lg:flex absolute top-5 right-4 w-8 h-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition-all"
+            title={collapsed ? 'Expandir menú' : 'Ocultar menú'}
+            aria-label={collapsed ? 'Expandir menú lateral' : 'Ocultar menú lateral'}
+          >
+            {collapsed ? <ChevronRight size={18} strokeWidth={2.5} /> : <ChevronLeft size={18} strokeWidth={2.5} />}
+          </button>
+
           <img
             src="/logo.png"
             alt="Red 4 Design"
-            className="w-full max-w-[180px] lg:max-w-[200px] h-auto object-contain"
+            className={`h-auto object-contain transition-all duration-300 ${collapsed ? 'w-10 max-w-[40px]' : 'w-full max-w-[180px] lg:max-w-[200px]'}`}
           />
-          <div className="text-[10px] lg:text-xs text-white/40 font-black uppercase tracking-[0.15em] text-center">
-            Panel Interno
-          </div>
+
+          {!collapsed && (
+            <div className="text-[10px] lg:text-xs text-white/40 font-black uppercase tracking-[0.15em] text-center">
+              Panel Interno
+            </div>
+          )}
         </div>
 
-        <nav className="flex-1 px-4 flex flex-col gap-1 overflow-y-auto">
-          <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest">
-            Menú Principal
-          </div>
+        <nav className={`flex-1 flex flex-col gap-1 overflow-y-auto ${collapsed ? 'px-3' : 'px-4'}`}>
+          {!collapsed && (
+            <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest">
+              Menú Principal
+            </div>
+          )}
 
           {navLinks.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
               onClick={() => setOpen(false)}
+              title={collapsed ? label : undefined}
               className={({ isActive }) => `
-                flex items-center gap-4 px-5 py-3.5 rounded-xl text-sm font-bold transition-all
+                flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all
                 ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
               `}
             >
               <Icon />
-              <span className="flex-1">{label}</span>
+              {!collapsed && <span className="flex-1">{label}</span>}
             </NavLink>
           ))}
 
           {usuario?.rol === 'ADMIN' && (
             <>
-              <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest">
-                Administración
-              </div>
+              {!collapsed && (
+                <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest">
+                  Administración
+                </div>
+              )}
+
               <NavLink
                 to="/usuarios"
                 onClick={() => setOpen(false)}
+                title={collapsed ? 'Usuarios' : undefined}
                 className={({ isActive }) => `
-                  flex items-center gap-4 px-5 py-3.5 rounded-xl text-sm font-bold transition-all
+                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all
                   ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
                 `}
               >
-                <IconGestion /> Usuarios
+                <IconGestion />
+                {!collapsed && <span>Usuarios</span>}
               </NavLink>
             </>
           )}
         </nav>
 
-        <div className="p-6 border-t border-white/5">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center font-black text-white border-2 border-white/10">
+        <div className={`border-t border-white/5 ${collapsed ? 'p-3' : 'p-6'}`}>
+          <div className={`flex items-center ${collapsed ? 'justify-center mb-3' : 'gap-3 mb-5'}`}>
+            <div
+              className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center font-black text-white border-2 border-white/10"
+              title={collapsed ? usuario?.nombre : undefined}
+            >
               {usuario?.nombre?.charAt(0).toUpperCase()}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-white truncate">{usuario?.nombre}</div>
-              <div className="text-[11px] text-white/40 font-medium truncate">
-                {usuario?.email?.split('@')[0]}
+
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-white truncate">{usuario?.nombre}</div>
+                <div className="text-[11px] text-white/40 font-medium truncate">
+                  {usuario?.email?.split('@')[0]}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <button
             onClick={handleLogout}
-            className="w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-bold hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
+            title={collapsed ? 'Salir' : undefined}
+            className={`w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-bold hover:bg-red-500/20 transition-all flex items-center justify-center ${collapsed ? '' : 'gap-2'}`}
           >
-            <IconLogout /> Salir
+            <IconLogout />
+            {!collapsed && <span>Salir</span>}
           </button>
         </div>
       </aside>
@@ -177,8 +216,19 @@ const Layout = ({ children }) => {
           <button
             onClick={() => setOpen(true)}
             className="lg:hidden p-2 -ml-2 text-[var(--color-text)] hover:bg-slate-100 rounded-xl transition-colors"
+            aria-label="Abrir menú"
           >
             <IconMenu />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCollapsed((prev) => !prev)}
+            className="hidden lg:flex w-11 h-11 shrink-0 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-dim)] hover:text-[var(--color-primary)] hover:border-blue-200 hover:bg-blue-50 transition-all"
+            title={collapsed ? 'Expandir menú' : 'Ocultar menú'}
+            aria-label={collapsed ? 'Expandir menú lateral' : 'Ocultar menú lateral'}
+          >
+            {collapsed ? <ChevronRight size={20} strokeWidth={2.5} /> : <ChevronLeft size={20} strokeWidth={2.5} />}
           </button>
 
           <div className="relative flex-1 max-w-xl group">
