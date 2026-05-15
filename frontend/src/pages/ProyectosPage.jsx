@@ -386,11 +386,6 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     setForm(prev => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
-      const usuario = usuariosSeleccionables.find(u => u.id === id);
-      const tieneBloqueoReal = (ocupados[id] || []).some(conflicto => (
-        esBloqueoReal(conflicto) && conflictOverlapsRange(conflicto, prev.fechaInicio, prev.fechaFin)
-      ));
-      if (!esAdminUsuario(usuario) && tieneBloqueoReal) return prev;
       return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
   };
@@ -425,10 +420,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       formData.append('area', form.areas.join(','));
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
-      const idsPermitidos = new Set(usuariosEnAreas.filter(u => (
-        esAdminUsuario(u) || !(ocupados[u.id] || []).some(conflicto => esBloqueoReal(conflicto) && conflictOverlapsRange(conflicto, form.fechaInicio, form.fechaFin))
-      )).map(u => u.id));
-      formData.append('miembrosIds', JSON.stringify(form.miembrosIds.filter(id => idsPermitidos.has(id))));
+      formData.append('miembrosIds', JSON.stringify(form.miembrosIds));
       
       archivos.forEach(file => {
         formData.append('archivos', file);
@@ -513,16 +505,15 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                       {grupo.usuarios.map(u => {
                         const isSelected = form.miembrosIds.includes(u.id);
                         const conflictos = esAdminUsuario(u) ? [] : ocupados[u.id] || [];
-                        const conflictosEnRango = conflictos.filter(conflicto => conflictOverlapsRange(conflicto, form.fechaInicio, form.fechaFin));
-                        const tieneBloqueoReal = conflictosEnRango.some(esBloqueoReal);
-                        const tieneProyectoActivo = !tieneBloqueoReal && conflictosEnRango.some(c => c.tipo === 'proyecto');
+                        const tieneBloqueoReal = conflictos.some(esBloqueoReal);
+                        const tieneProyectoActivo = !tieneBloqueoReal && conflictos.some(c => c.tipo === 'proyecto');
                         return (
                           <button
                             key={u.id}
                             type="button"
                             onClick={() => toggleMiembro(u.id)}
                             title={conflictos.length > 0 ? `Tiene tareas/eventos: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : tieneBloqueoReal ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-70' : tieneProyectoActivo ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : tieneBloqueoReal ? 'bg-red-50 text-red-500 border border-red-100 hover:bg-red-100' : tieneProyectoActivo ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
                           >
                             {isSelected ? 'OK ' : tieneBloqueoReal ? 'Con tareas ' : tieneProyectoActivo ? 'En proyecto ' : '+ '}{u.nombre}
                           </button>
