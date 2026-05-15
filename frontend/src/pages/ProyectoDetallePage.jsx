@@ -2,7 +2,7 @@
 // Muestra info del proyecto, barra de progreso, contadores y lista de tareas
 // Vistas: Lista | Kanban | Gantt | Muro
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { tareasService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -25,7 +25,8 @@ import {
   LayoutGrid,
   CalendarRange,
   ChevronLeft,
-  AlertTriangle
+  AlertTriangle,
+  Search
 } from 'lucide-react';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
@@ -159,6 +160,7 @@ const ProyectoDetallePage = () => {
   const [tareaEditando, setTareaEditando] = useState(null);
   const [vista, setVista] = useState('lista');
   const [progresoServidor, setProgresoServidor] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -190,6 +192,15 @@ const ProyectoDetallePage = () => {
   const progresoMiembro = progresoServidor?.miembro?.porcentaje ?? stats.pct;
   const totalGeneral = progresoServidor?.general?.total ?? stats.total;
   const totalMiembro = progresoServidor?.miembro?.total ?? stats.total;
+
+  const tareasFiltradas = useMemo(() => {
+    if (!busqueda) return tareas;
+    const b = busqueda.toLowerCase();
+    return tareas.filter(t => 
+      t.titulo?.toLowerCase().includes(b) || 
+      t.descripcion?.toLowerCase().includes(b)
+    );
+  }, [tareas, busqueda]);
 
   const handleEliminar = async (t) => {
     if (!window.confirm(`¿Eliminar "${t.titulo}"?`)) return;
@@ -267,12 +278,38 @@ const ProyectoDetallePage = () => {
       </div>
 
       {/* Toolbar Vistas */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <ToggleVista vista={vista} onChange={setVista} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '300px' }}>
+          <ToggleVista vista={vista} onChange={setVista} />
+          
+          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dim)', opacity: 0.5 }} />
+            <input 
+              type="text"
+              placeholder="Buscar tareas..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 1rem 0.65rem 2.5rem',
+                background: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: '12px',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                outline: 'none',
+                transition: 'all 0.2s'
+              }}
+              onFocus={(e) => e.target.style.borderColor = 'var(--color-primary)'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
+            />
+          </div>
+        </div>
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--color-text-dim)' }}>Mostrando {tareas.length} tareas</span>
-          {/* Aquí podrían ir filtros adicionales */}
+          <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Mostrando {tareasFiltradas.length} {tareasFiltradas.length === 1 ? 'tarea' : 'tareas'}
+          </span>
         </div>
       </div>
 
@@ -280,19 +317,26 @@ const ProyectoDetallePage = () => {
       <div style={{ minHeight: '500px' }}>
         {vista === 'lista' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {tareas.map(t => (
-              <TareaCard 
-                key={t.id} 
-                tarea={t} 
-                onClick={(x) => { setTareaEditando(x); setModal(true); }}
-                onEliminar={handleEliminar}
-                onCambiarEstado={handleCambiarEstado}
-              />
-            ))}
+            {tareasFiltradas.length === 0 ? (
+              <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
+                <Search size={40} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
+                <p style={{ fontWeight: '700' }}>No se encontraron tareas que coincidan con tu búsqueda</p>
+              </div>
+            ) : (
+              tareasFiltradas.map(t => (
+                <TareaCard 
+                  key={t.id} 
+                  tarea={t} 
+                  onClick={(x) => { setTareaEditando(x); setModal(true); }}
+                  onEliminar={handleEliminar}
+                  onCambiarEstado={handleCambiarEstado}
+                />
+              ))
+            )}
           </div>
         )}
-        {vista === 'kanban' && <KanbanView tareas={tareas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} />}
-        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareas} />}
+        {vista === 'kanban' && <KanbanView tareas={tareasFiltradas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} />}
+        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradas} />}
       </div>
 
       {/* Modales */}
