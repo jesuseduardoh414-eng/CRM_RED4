@@ -6,7 +6,6 @@
  * GET  /api/tareas/plantilla/excel
  */
 
-const fs   = require('fs');
 const path = require('path');
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
@@ -31,7 +30,7 @@ const importar = async (req, res) => {
     return res.status(400).json({ error: 'No se recibió ningún archivo. Envía el archivo en el campo "archivo"' });
   }
 
-  const filePath = req.file.path;
+  const fileBuffer = req.file.buffer;
 
   try {
     // 1. Verificar que el proyecto existe
@@ -41,7 +40,6 @@ const importar = async (req, res) => {
     });
 
     if (!proyecto) {
-      fs.unlinkSync(filePath);
       return res.status(404).json({ error: 'Proyecto no encontrado' });
     }
 
@@ -49,7 +47,6 @@ const importar = async (req, res) => {
     if (req.usuario.rol !== 'ADMIN') {
       const esMiembro = proyecto.miembros.some(m => m.id === req.usuario.id);
       if (!esMiembro) {
-        fs.unlinkSync(filePath);
         return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
       }
     }
@@ -68,7 +65,6 @@ const importar = async (req, res) => {
         // Validar que el miembro pertenezca al proyecto
         const esMiembro = proyecto.miembros.some(m => m.id === miembroId);
         if (!esMiembro) {
-          fs.unlinkSync(filePath);
           return res.status(400).json({ error: 'El miembro seleccionado no pertenece a este proyecto' });
         }
         asignadoPorDefecto = miembroId;
@@ -78,7 +74,6 @@ const importar = async (req, res) => {
 
     // 4. Detectar tipo de archivo por extensión
     if (asignadoPorDefecto && !proyecto.miembros.some(m => m.id === asignadoPorDefecto)) {
-      fs.unlinkSync(filePath);
       return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
 
@@ -86,16 +81,12 @@ const importar = async (req, res) => {
     let resultado;
 
     if (ext === '.json') {
-      resultado = await procesarJSON(filePath, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
+      resultado = await procesarJSON(fileBuffer, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
     } else if (ext === '.xlsx' || ext === '.xls') {
-      resultado = await procesarExcel(filePath, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
+      resultado = await procesarExcel(fileBuffer, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
     } else {
-      fs.unlinkSync(filePath);
       return res.status(400).json({ error: 'Tipo de archivo no soportado. Usa .json, .xlsx o .xls' });
     }
-
-    // 4. Limpiar archivo temporal
-    fs.unlinkSync(filePath);
 
     // 5. Respuesta
     return res.status(200).json({
@@ -104,8 +95,6 @@ const importar = async (req, res) => {
     });
 
   } catch (error) {
-    // Limpieza en caso de error
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     console.error('[importar tareas]', error);
     return res.status(400).json({ error: error.message });
   }
