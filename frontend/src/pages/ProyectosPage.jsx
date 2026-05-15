@@ -191,10 +191,10 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   };
 
   const toggleMiembro = (id) => {
-    if (ocupados[id]?.length) return;
     setForm(prev => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
+      if (ocupados[id]?.length) return prev;
       return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
   };
@@ -214,7 +214,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       formData.append('area', form.areas.join(','));
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
-      const idsPermitidos = new Set(usuariosEnAreas.map(u => u.id));
+      const idsPermitidos = new Set(usuariosEnAreas.filter(u => !ocupados[u.id]?.length).map(u => u.id));
       formData.append('miembrosIds', JSON.stringify(form.miembrosIds.filter(id => idsPermitidos.has(id))));
       
       archivos.forEach(file => {
@@ -262,7 +262,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AREAS</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AREA RESPONSABLE</label>
                 <div className="grid grid-cols-1 gap-2">
                   {Object.keys(AREA_CONF).map(k => {
                     const selected = form.areas.includes(k);
@@ -282,6 +282,43 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               </div>
             </div>
 
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MIEMBROS DE LAS AREAS SELECCIONADAS</label>
+                {consultandoDisponibilidad && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Revisando agenda...</span>}
+              </div>
+              <div className="space-y-3">
+                {usuariosPorArea.map(grupo => (
+                  <div key={grupo.area} className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
+                      {AREA_CONF[grupo.area]?.label || grupo.area}
+                    </p>
+                    <div className="flex flex-wrap gap-2 min-h-[36px]">
+                      {grupo.usuarios.length === 0 && (
+                        <span className="text-xs font-bold text-slate-400">Sin miembros en esta area.</span>
+                      )}
+                      {grupo.usuarios.map(u => {
+                        const isSelected = form.miembrosIds.includes(u.id);
+                        const conflictos = ocupados[u.id] || [];
+                        const disabled = conflictos.length > 0;
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => toggleMiembro(u.id)}
+                            title={disabled ? `Ocupado: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : disabled ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-70' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                          >
+                            {isSelected ? 'OK ' : disabled ? 'Ocupado ' : '+ '}{u.nombre}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA INICIO</label>
@@ -293,7 +330,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="hidden">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MIEMBROS POR AREA ({form.areas.join(', ')})</label>
                 {consultandoDisponibilidad && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Revisando agenda...</span>}
