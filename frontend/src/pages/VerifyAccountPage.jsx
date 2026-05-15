@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import Spinner from '../components/Spinner';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 const VerifyAccountPage = () => {
   const { token } = useParams();
@@ -49,11 +50,9 @@ const VerifyAccountPage = () => {
 
         {estado === 'exito' && (
           <div style={{ animation: 'fadeSlideIn 0.4s ease' }}>
-            <div style={{ 
-              width: '70px', height: '70px', background: 'rgba(16, 185, 129, 0.1)', 
-              borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '2rem', margin: '0 auto 1.5rem', color: '#10b981', border: '2px solid #10b981'
-            }}>✅</div>
+            }}>
+              <CheckCircle2 size={40} strokeWidth={2.5} />
+            </div>
             <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>¡Cuenta Verificada!</h1>
             <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>
               {mensaje}<br/>
@@ -67,11 +66,9 @@ const VerifyAccountPage = () => {
 
         {estado === 'error' && (
           <div style={{ animation: 'fadeSlideIn 0.4s ease' }}>
-            <div style={{ 
-              width: '70px', height: '70px', background: 'rgba(239, 68, 68, 0.1)', 
-              borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '2rem', margin: '0 auto 1.5rem', color: '#ef4444', border: '2px solid #ef4444'
-            }}>❌</div>
+            }}>
+              <XCircle size={40} strokeWidth={2.5} />
+            </div>
             <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>Error de Verificación</h1>
             <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>{mensaje}</p>
             <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: '700', textDecoration: 'none' }}>

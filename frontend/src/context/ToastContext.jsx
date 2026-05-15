@@ -2,13 +2,14 @@
 // Provee: showToast({ message, type }) desde cualquier componente
 
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
 
 const ToastContext = createContext(null);
 
 const TIPOS = {
-  success: { color: '#fff', bg: '#10b981', border: '#059669', icon: '✅' },
-  error:   { color: '#fff', bg: '#ef4444', border: '#dc2626', icon: '❌' },
-  info:    { color: '#fff', bg: '#3b82f6', border: '#2563eb', icon: 'ℹ️' },
+  success: { color: '#fff', bg: '#10b981', border: '#059669', icon: <CheckCircle2 size={16} strokeWidth={3} /> },
+  error:   { color: '#fff', bg: '#ef4444', border: '#dc2626', icon: <XCircle size={16} strokeWidth={3} /> },
+  info:    { color: '#fff', bg: '#3b82f6', border: '#2563eb', icon: <Info size={16} strokeWidth={3} /> },
 };
 
 export const ToastProvider = ({ children }) => {
@@ -66,9 +67,13 @@ export const ToastProvider = ({ children }) => {
                   background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
                   cursor: 'pointer', width: '20px', height: '20px', borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.6rem', padding: 0,
+                  padding: 0, transition: 'all 0.2s'
                 }}
-              >✕</button>
+                onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'}
+                onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+              >
+                <X size={12} strokeWidth={3} />
+              </button>
             </div>
           );
         })}

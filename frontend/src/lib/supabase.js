@@ -4,7 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('⚠️ [Supabase] No se pudo inicializar el cliente Realtime. Faltan las variables VITE_SUPABASE_URL o VITE_SUPABASE_KEY en el entorno.');
+  console.error('[Supabase] No se pudo inicializar el cliente Realtime. Faltan las variables VITE_SUPABASE_URL o VITE_SUPABASE_KEY en el entorno.');
 }
 
 // Solo inicializamos si las variables existen para evitar que la app explote
@@ -16,7 +16,7 @@ if (supabaseUrl && supabaseKey && supabaseKey.startsWith('eyJ')) {
     console.error('Supabase init error', e);
   }
 } else {
-  console.error('⚠️ [Supabase] Key inválida o faltante. Debe empezar con "eyJ".');
+  console.error('[Supabase] Key inválida o faltante. Debe empezar con "eyJ".');
 }
 
 export const supabase = supabaseInstance;
