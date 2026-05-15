@@ -136,7 +136,14 @@ const listar = async (req, res) => {
 
     const where = esAdmin
       ? {}
-      : { miembros: { some: { id: req.usuario.id } } };
+      : {
+          OR: [
+            { miembros: { some: { id: req.usuario.id } } },
+            { creadorId: req.usuario.id },
+            { tareas: { some: { asignadoId: req.usuario.id } } },
+            { tareas: { some: { creadorId: req.usuario.id } } },
+          ],
+        };
 
     const proyectos = await prisma.proyecto.findMany({
       where,
