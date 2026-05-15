@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -16,8 +16,8 @@ import {
   Search
 } from 'lucide-react';
 
-// ── Íconos SVG (Material Style) ──────────────────────────────────────────────
-// Los íconos ahora vienen de lucide-react
+// â”€â”€ Ãconos SVG (Material Style) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Los Ã­conos ahora vienen de lucide-react
 const IconDashboard = () => <LayoutDashboard size={20} strokeWidth={2.5} />;
 const IconProyectos = () => <FolderKanban size={20} strokeWidth={2.5} />;
 const IconEquipo     = () => <Users size={20} strokeWidth={2.5} />;
@@ -53,7 +53,7 @@ const Layout = ({ children }) => {
         
         setRecordatoriosCount(recordatorios.length + pendientes.length);
 
-        // Notificar recordatorios próximos
+        // Notificar recordatorios prÃ³ximos
         const yaNotificados = JSON.parse(localStorage.getItem('crm_recordatorios_vistos') || '[]');
         const ahora = new Date();
 
@@ -84,21 +84,21 @@ const Layout = ({ children }) => {
     return () => clearInterval(interval);
   }, [usuario, showToast]);
 
-  // Cerrar sidebar al cambiar de ruta en móvil
+  // Cerrar sidebar al cambiar de ruta en mÃ³vil
   useEffect(() => {
     setOpen(false);
   }, [navigate]);
 
   const handleLogout = () => {
     logout();
-    showToast('Sesión cerrada', 'info');
+    showToast('SesiÃ³n cerrada', 'info');
     navigate('/login');
   };
 
   return (
     <div className="flex min-h-screen bg-[var(--color-surface)] relative overflow-hidden">
 
-      {/* ── Sidebar ─────────────────────────────────────────────────── */}
+      {/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <aside 
         className={`
           fixed lg:sticky top-0 h-screen z-[100] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
@@ -118,9 +118,9 @@ const Layout = ({ children }) => {
           </div>
         </div>
 
-        {/* Navegación */}
+        {/* NavegaciÃ³n */}
         <nav className="flex-1 px-4 flex flex-col gap-1 overflow-y-auto">
-          <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest">Menú Principal</div>
+          <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest">MenÃº Principal</div>
           {navLinks.map(({ to, label, Icon }) => (
             <NavLink
               key={to} to={to} onClick={() => setOpen(false)}
@@ -136,7 +136,7 @@ const Layout = ({ children }) => {
 
           {usuario?.rol === 'ADMIN' && (
             <>
-              <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest">Administración</div>
+              <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest">AdministraciÃ³n</div>
               <NavLink
                 to="/usuarios" onClick={() => setOpen(false)}
                 className={({ isActive }) => `
@@ -171,7 +171,7 @@ const Layout = ({ children }) => {
         </div>
       </aside>
 
-      {/* ── Content Area ───────────────────────────────────────────── */}
+      {/* â”€â”€ Content Area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <main className="flex-1 min-w-0 flex flex-col h-screen bg-[var(--color-bg-base)]">
         {/* Top Header */}
         <header className="h-16 lg:h-[70px] bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center px-4 lg:px-10 gap-4 lg:gap-8 sticky top-0 z-[90]">
@@ -182,7 +182,7 @@ const Layout = ({ children }) => {
             <IconMenu />
           </button>
           
-          {/* Barra de Búsqueda */}
+          {/* Barra de BÃºsqueda */}
           <div className="relative flex-1 max-w-xl group">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-50 transition-opacity">
               <Search size={18} />
@@ -192,7 +192,7 @@ const Layout = ({ children }) => {
               placeholder="Buscar..."
               className="w-full pl-10 pr-4 py-2.5 lg:py-3 rounded-xl bg-[var(--color-bg-base)] border border-[var(--color-border)] text-xs lg:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
-            <span className="hidden lg:block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-sm">⌘K</span>
+            <span className="hidden lg:block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-sm">âŒ˜K</span>
           </div>
 
           <div className="flex items-center gap-2 lg:gap-5 ml-auto">
@@ -206,7 +206,7 @@ const Layout = ({ children }) => {
         </div>
       </main>
 
-      {/* Overlay Móvil */}
+      {/* Overlay MÃ³vil */}
       <div 
         className={`
           fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99] transition-opacity duration-300

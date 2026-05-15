@@ -44,32 +44,43 @@ const MiembroCard = ({ miembro }) => {
   return (
     <div style={{
       background: 'var(--color-surface)',
-      border: `1px solid var(--color-border)`,
-      borderRadius: '1.25rem',
-      padding: '1.25rem',
-      transition: 'all 0.2s ease',
+      border: '1px solid var(--color-border)',
+      borderRadius: '1.5rem',
+      padding: '1.5rem',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       cursor: 'default',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.01)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '1rem',
     }}
-    onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; e.currentTarget.style.borderColor = 'var(--color-primary-20)'; }}
-    onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+    onMouseOver={e => { 
+      e.currentTarget.style.transform = 'translateY(-4px)'; 
+      e.currentTarget.style.boxShadow = 'var(--shadow-xl)'; 
+      e.currentTarget.style.borderColor = 'var(--color-primary-20)'; 
+    }}
+    onMouseOut={e => { 
+      e.currentTarget.style.transform = 'translateY(0)'; 
+      e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.01)'; 
+      e.currentTarget.style.borderColor = 'var(--color-border)'; 
+    }}
     >
       {/* Cabecera */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.65rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <div style={{
-          width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0,
-          background: areaConf.bg, border: `1.5px solid ${areaConf.color}40`,
+          width: '48px', height: '48px', borderRadius: '14px', flexShrink: 0,
+          background: areaConf.bg, border: `1.5px solid ${areaConf.color}30`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '900', fontSize: '1rem', color: areaConf.color,
-          boxShadow: `0 4px 12px ${areaConf.color}15`
+          fontWeight: '900', fontSize: '1.15rem', color: areaConf.color,
+          boxShadow: `0 8px 16px ${areaConf.color}15`
         }}>
           {miembro.nombre.charAt(0).toUpperCase()}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: '800', fontSize: '1.05rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' }}>
+          <div style={{ fontWeight: '800', fontSize: '1.1rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.02em' }}>
             {miembro.nombre}
           </div>
-          <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '600' }}>
             {miembro.email}
           </div>
         </div>
@@ -149,25 +160,25 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
       >
         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: estadoColor, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontWeight: '800', fontSize: '0.95rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' }}>
             {proyecto.nombre}
           </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: '0.1rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginTop: '0.15rem', fontWeight: '600' }}>
             {equipoData.length} miembro{equipoData.length !== 1 ? 's' : ''} asignados
           </div>
         </div>
         <span style={{
-          padding: '0.25rem 0.75rem', borderRadius: '999px',
-          fontSize: '0.7rem', fontWeight: '800',
+          padding: '0.35rem 0.85rem', borderRadius: '12px',
+          fontSize: '0.7rem', fontWeight: '900',
           background: areaConf.bg, color: areaConf.color, flexShrink: 0,
-          display: 'flex', alignItems: 'center', gap: '0.4rem',
-          border: `1px solid ${areaConf.color}20`,
-          textTransform: 'uppercase', letterSpacing: '0.05em'
+          display: 'flex', alignItems: 'center', gap: '0.45rem',
+          border: `1.2px solid ${areaConf.color}30`,
+          textTransform: 'uppercase', letterSpacing: '0.06em'
         }}>
-          {areaConf.icon && <span style={{ display: 'flex' }}>{areaConf.icon}</span>}
+          {areaConf.icon && <span style={{ display: 'flex', opacity: 0.8 }}>{areaConf.icon}</span>}
           {areaConf.label}
         </span>
-        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>▾</span>
+        <span style={{ color: 'var(--color-text-dim)', fontSize: '0.85rem', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0 }}>▾</span>
       </button>
 
       {/* Equipo del proyecto */}
