@@ -17,7 +17,7 @@ const { listar: listarAdjuntos, subir: subirAdjunto } = require('../controllers/
 
 router.get('/',              listar);
 router.post('/',             soloAdmin, upload.array('archivos', 5), crear);
-router.put('/:id',           soloAdmin, editar);
+router.put('/:id',           soloAdmin, upload.array('archivos', 5), editar);
 router.delete('/:id',        soloAdmin, eliminar);
 router.get('/:id/equipo',    equipo); // Equipo asignado al proyecto
 router.get('/:id/logs',      listarPorProyecto); // Historial de actividad
