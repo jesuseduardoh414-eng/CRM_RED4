@@ -22,7 +22,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 
-const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION'];
+const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION', 'MARKETING'];
 const ROLES = ['MIEMBRO', 'ADMIN'];
 
 const actividadVacia = () => ({

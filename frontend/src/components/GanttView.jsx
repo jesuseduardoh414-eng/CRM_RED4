@@ -13,6 +13,7 @@ const AREA_COLORS = {
   DESARROLLO:     { bar: '#00a2ff', text: '#fff' },
   ADMINISTRACION: { bar: '#ff9100', text: '#fff' },
   COMUNICACION:   { bar: '#d500f9', text: '#fff' },
+  MARKETING:      { bar: '#db2777', text: '#fff' },
   DEFAULT:        { bar: '#6c757d', text: '#fff' },
 };
 

@@ -242,6 +242,7 @@ enum Area {
   DESARROLLO
   ADMINISTRACION
   COMUNICACION
+  MARKETING
 }
 
 enum Rol {

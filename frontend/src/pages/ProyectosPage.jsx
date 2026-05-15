@@ -18,7 +18,8 @@ import {
   Pencil,
   Upload,
   FileText,
-  Calendar
+  Calendar,
+  Megaphone
 } from 'lucide-react';
 
 // ── Configuraciones Visuales ────────────────────────────────────────────────
