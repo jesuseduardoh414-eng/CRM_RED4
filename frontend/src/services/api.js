@@ -17,7 +17,15 @@ const getHeaders = (isMultipart = false) => {
 };
 
 const handleResponse = async (res) => {
-  const data = await res.json();
+  const raw = await res.text();
+  let data = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = { error: raw };
+    }
+  }
   if (!res.ok) throw new Error(data.error || 'Error en la petición');
   return data;
 };

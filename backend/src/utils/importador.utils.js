@@ -113,9 +113,9 @@ const validarFila = (raw, indice) => {
 const procesarJSON = async (filePath, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
   let raw;
   try {
-    const contenido = fs.readFileSync(filePath, 'utf-8');
+    const contenido = fs.readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, '').trim();
     raw = JSON.parse(contenido);
-  } catch {
+  } catch (error) {
     throw new Error('El archivo JSON no es válido o está mal formateado');
   }
 

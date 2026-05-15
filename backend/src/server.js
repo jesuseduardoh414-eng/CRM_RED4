@@ -41,6 +41,23 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, mensaje: 'Servidor CRM funcionando' });
 });
 
+app.use((err, _req, res, _next) => {
+  if (!err) {
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'El archivo excede el tamano maximo de 5 MB' });
+    }
+    return res.status(400).json({ error: err.message || 'Error al subir el archivo' });
+  }
+
+  return res.status(err.statusCode || 400).json({
+    error: err.message || 'Error interno del servidor',
+  });
+});
+
 // Inicio del servidor (solo si no estamos en Vercel/Producción)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, '0.0.0.0', () => {

@@ -99,6 +99,21 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 
   const fmt = FORMAT_INFO[tab];
 
+  const validarArchivo = (file, tipoActual) => {
+    if (!file) return null;
+    const nombre = String(file.name || '').toLowerCase();
+
+    if (tipoActual === 'json' && !nombre.endsWith('.json')) {
+      return 'El archivo seleccionado no es un JSON valido. Cambia a la pestana Excel o sube un archivo .json.';
+    }
+
+    if (tipoActual === 'excel' && !(nombre.endsWith('.xlsx') || nombre.endsWith('.xls'))) {
+      return 'El archivo seleccionado no es un Excel valido. Cambia a la pestana JSON o sube un archivo .xlsx/.xls.';
+    }
+
+    return null;
+  };
+
   const handleTabChange = (t) => {
     setTab(t);
     setArchivo(null);
@@ -108,7 +123,18 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
   };
 
   const handleFileChange = (e) => {
-    setArchivo(e.target.files[0] || null);
+    const file = e.target.files[0] || null;
+    const errorArchivo = validarArchivo(file, tab);
+
+    if (errorArchivo) {
+      setArchivo(null);
+      setResultado(null);
+      setErrorGlobal(errorArchivo);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+
+    setArchivo(file);
     setResultado(null);
     setErrorGlobal('');
   };
@@ -277,7 +303,23 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
             }}
               onClick={() => inputRef.current?.click()}
               onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { setArchivo(f); setResultado(null); setErrorGlobal(''); } }}
+              onDrop={e => {
+                e.preventDefault();
+                const f = e.dataTransfer.files[0];
+                if (!f) return;
+
+                const errorArchivo = validarArchivo(f, tab);
+                if (errorArchivo) {
+                  setArchivo(null);
+                  setResultado(null);
+                  setErrorGlobal(errorArchivo);
+                  return;
+                }
+
+                setArchivo(f);
+                setResultado(null);
+                setErrorGlobal('');
+              }}
             >
               <input ref={inputRef} type="file" accept={fmt.ext} style={{ display: 'none' }} onChange={handleFileChange} />
               {archivo ? (
