@@ -73,11 +73,22 @@ const listar = async (req, res) => {
     });
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
 
-    // Verificar permisos: ADMIN puede todo, MIEMBRO debe ser parte del equipo
+    // Verificar permisos: ADMIN puede todo; MIEMBRO puede entrar si participa en el proyecto
     const esAdmin = req.usuario.rol === 'ADMIN';
     if (!esAdmin) {
       const esMiembro = proyecto.miembros.some(m => m.id === req.usuario.id);
-      if (!esMiembro) {
+      const participaPorTarea = await prisma.tarea.findFirst({
+        where: {
+          proyectoId,
+          OR: [
+            { asignadoId: req.usuario.id },
+            { creadorId: req.usuario.id },
+          ],
+        },
+        select: { id: true },
+      });
+      const esCreadorProyecto = proyecto.creador?.id === req.usuario.id;
+      if (!esMiembro && !participaPorTarea && !esCreadorProyecto) {
         return res.status(403).json({ error: 'No tienes permiso para ver las tareas de este proyecto' });
       }
     }
