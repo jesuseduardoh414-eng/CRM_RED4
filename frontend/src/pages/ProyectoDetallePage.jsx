@@ -162,7 +162,7 @@ const ProyectoDetallePage = () => {
   const [vista, setVista] = useState('lista');
   const [progresoServidor, setProgresoServidor] = useState(null);
   const [busqueda, setBusqueda] = useState('');
-  const [limite, setLimite] = useState(20);
+  const [limite, setLimite] = useState(10);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -343,7 +343,7 @@ const ProyectoDetallePage = () => {
                   <p style={{ fontWeight: '700' }}>No se encontraron tareas que coincidan con tu búsqueda</p>
                 </div>
               ) : (
-                tareasFiltradas.slice(0, (tareasFiltradas.length > 20 && limite === 20) ? 10 : limite).map(t => (
+                tareasFiltradas.slice(0, limite).map(t => (
                   <TareaCard 
                     key={t.id} 
                     tarea={t} 
@@ -355,13 +355,13 @@ const ProyectoDetallePage = () => {
               )}
             </div>
             
-            {tareasFiltradas.length > 20 && limite === 20 && (
+            {tareasFiltradas.length > limite && (
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
                 <button 
-                  onClick={() => setLimite(tareasFiltradas.length)}
+                  onClick={() => setLimite(prev => prev + 10)}
                   className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm uppercase tracking-widest flex items-center gap-2"
                 >
-                  Ver todas las tareas ({tareasFiltradas.length - 10} más) <ArrowRight size={14} />
+                  Ver más tareas ({tareasFiltradas.length - limite} restantes) <Plus size={14} />
                 </button>
               </div>
             )}
