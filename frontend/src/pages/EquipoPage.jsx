@@ -11,6 +11,7 @@ import {
   BarChart3, 
   Megaphone, 
   User, 
+  ChevronDown, 
   ClipboardList, 
   Zap, 
   CheckCircle2,
@@ -181,7 +182,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
           {areaConf.icon && <span style={{ display: 'flex', opacity: 0.8 }}>{areaConf.icon}</span>}
           {areaConf.label}
         </span>
-        <span style={{ color: 'var(--color-text-dim)', fontSize: '0.85rem', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0 }}>▾</span>
+        <span style={{ color: 'var(--color-text-dim)', display: 'flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0 }}><ChevronDown size={18} strokeWidth={2.5} /></span>
       </button>
 
       {/* Equipo del proyecto */}
@@ -277,3 +278,4 @@ const EquipoPage = () => {
 };
 
 export default EquipoPage;
+
