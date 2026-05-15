@@ -1,4 +1,4 @@
-﻿// PÃ¡gina Mi Equipo â€” vista por proyecto
+// Página Mi Equipo — vista por proyecto
 // ADMIN: ve el equipo de cada proyecto (todos los proyectos)
 // MIEMBRO: ve el equipo de sus proyectos asignados
 
@@ -18,8 +18,8 @@ import {
 
 const AREA_CONF = {
   DESARROLLO:     { label: 'Desarrollo',     color: '#818cf8', bg: 'rgba(129,140,248,0.08)',  icon: <Code2 size={16} /> },
-  ADMINISTRACION: { label: 'AdministraciÃ³n', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',   icon: <BarChart3 size={16} /> },
-  COMUNICACION:   { label: 'ComunicaciÃ³n',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: <Megaphone size={16} /> },
+  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',   icon: <BarChart3 size={16} /> },
+  COMUNICACION:   { label: 'Comunicación',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: <Megaphone size={16} /> },
 };
 
 const ROL_CONF = {
@@ -33,7 +33,7 @@ const ESTADO_COLOR = {
   CERRADO:  '#94a3b8',
 };
 
-// â”€â”€ Tarjeta de miembro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// —— Tarjeta de miembro —————————————————————————————————————————————————————
 const MiembroCard = ({ miembro }) => {
   const areaConf = AREA_CONF[miembro.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', icon: <User size={16} />, label: miembro.area };
   const rolConf  = ROL_CONF[miembro.rol] || ROL_CONF.MIEMBRO;
@@ -43,51 +43,67 @@ const MiembroCard = ({ miembro }) => {
 
   return (
     <div style={{
-      background: 'var(--color-surface-2)',
+      background: 'var(--color-surface)',
       border: `1px solid var(--color-border)`,
-      borderRadius: '0.75rem',
-      padding: '0.9rem 1rem',
-    }}>
+      borderRadius: '1.25rem',
+      padding: '1.25rem',
+      transition: 'all 0.2s ease',
+      cursor: 'default',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+    }}
+    onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; e.currentTarget.style.borderColor = 'var(--color-primary-20)'; }}
+    onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+    >
       {/* Cabecera */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.65rem' }}>
         <div style={{
-          width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-          background: areaConf.bg, border: `1.5px solid ${areaConf.color}`,
+          width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0,
+          background: areaConf.bg, border: `1.5px solid ${areaConf.color}40`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '800', fontSize: '0.875rem', color: areaConf.color,
+          fontWeight: '900', fontSize: '1rem', color: areaConf.color,
+          boxShadow: `0 4px 12px ${areaConf.color}15`
         }}>
           {miembro.nombre.charAt(0).toUpperCase()}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: '700', fontSize: '1.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontWeight: '800', fontSize: '1.05rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' }}>
             {miembro.nombre}
           </div>
-          <div style={{ fontSize: '1rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>
             {miembro.email}
           </div>
         </div>
       </div>
 
-      {/* Badges Ã¡rea + rol */}
-      <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
+      {/* Badges área + rol */}
+      <div style={{ display: 'flex', gap: '0.45rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
         <span style={{
-          padding: '0.2rem 0.65rem', borderRadius: '999px',
-          fontSize: '0.85rem', fontWeight: '700',
+          padding: '0.25rem 0.75rem', borderRadius: '999px',
+          fontSize: '0.8rem', fontWeight: '800',
           background: areaConf.bg, color: areaConf.color,
-        }}>{areaConf.icon} {areaConf.label}</span>
+          display: 'flex', alignItems: 'center', gap: '0.4rem',
+          border: `1px solid ${areaConf.color}20`
+        }}>
+          {areaConf.icon} 
+          <span style={{ position: 'relative', top: '0.5px' }}>{areaConf.label}</span>
+        </span>
         <span style={{
-          padding: '0.2rem 0.65rem', borderRadius: '999px',
-          fontSize: '0.85rem', fontWeight: '700',
+          padding: '0.25rem 0.75rem', borderRadius: '999px',
+          fontSize: '0.8rem', fontWeight: '800',
           background: rolConf.bg, color: rolConf.color,
-        }}>{rolConf.label}</span>
+          border: `1px solid ${rolConf.color}20`,
+          display: 'flex', alignItems: 'center'
+        }}>
+          <span style={{ position: 'relative', top: '0.5px' }}>{rolConf.label}</span>
+        </span>
       </div>
 
       {/* Barra de progreso tareas */}
       {miembro.tareas.total > 0 && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--color-text-dim)', marginBottom: '0.4rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
             <span>{miembro.tareas.hechas}/{miembro.tareas.total} tareas</span>
-            <span style={{ fontWeight: '700', color: pct === 100 ? '#34d399' : areaConf.color }}>{pct}%</span>
+            <span style={{ color: pct === 100 ? '#34d399' : areaConf.color }}>{pct}%</span>
           </div>
           <div style={{ height: '4px', background: 'var(--color-surface-3)', borderRadius: '999px', overflow: 'hidden' }}>
             <div style={{
@@ -97,10 +113,10 @@ const MiembroCard = ({ miembro }) => {
               transition: 'width 0.4s ease',
             }} />
           </div>
-          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.4rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', alignItems: 'center' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><ClipboardList size={12} /> {miembro.tareas.pendientes}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><Zap size={12} /> {miembro.tareas.enProgreso}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><CheckCircle2 size={12} /> {miembro.tareas.hechas}</span>
+          <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.6rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: '600' }}><ClipboardList size={14} strokeWidth={2.5} /> {miembro.tareas.pendientes}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: '600' }}><Zap size={14} strokeWidth={2.5} /> {miembro.tareas.enProgreso}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: '600' }}><CheckCircle2 size={14} strokeWidth={2.5} /> {miembro.tareas.hechas}</span>
           </div>
         </div>
       )}
@@ -108,7 +124,7 @@ const MiembroCard = ({ miembro }) => {
   );
 };
 
-// â”€â”€ SecciÃ³n de proyecto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// —— Sección de proyecto —————————————————————————————————————————————————————
 const ProyectoEquipo = ({ proyecto, equipoData }) => {
   const [open, setOpen] = useState(true);
   const estadoColor = ESTADO_COLOR[proyecto.estado] || '#94a3b8';
@@ -120,7 +136,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
       border: '1px solid var(--color-border)',
       borderRadius: '1rem', overflow: 'hidden',
     }}>
-      {/* Cabecera del proyecto â€” clickeable para colapsar */}
+      {/* Cabecera del proyecto — clickeable para colapsar */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{
@@ -141,11 +157,17 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
           </div>
         </div>
         <span style={{
-          padding: '0.15rem 0.65rem', borderRadius: '999px',
-          fontSize: '0.68rem', fontWeight: '700',
+          padding: '0.25rem 0.75rem', borderRadius: '999px',
+          fontSize: '0.7rem', fontWeight: '800',
           background: areaConf.bg, color: areaConf.color, flexShrink: 0,
-        }}>{areaConf.label}</span>
-        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>â–¾</span>
+          display: 'flex', alignItems: 'center', gap: '0.4rem',
+          border: `1px solid ${areaConf.color}20`,
+          textTransform: 'uppercase', letterSpacing: '0.05em'
+        }}>
+          {areaConf.icon && <span style={{ display: 'flex' }}>{areaConf.icon}</span>}
+          {areaConf.label}
+        </span>
+        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>▾</span>
       </button>
 
       {/* Equipo del proyecto */}
@@ -174,7 +196,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
   );
 };
 
-// â”€â”€ PÃ¡gina principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// —— Página principal ————————————————————————————————————————————————————————
 const EquipoPage = () => {
   const { usuario }               = useAuth();
   const [datos, setDatos]         = useState([]); // [{ proyecto, equipo }]
@@ -227,7 +249,7 @@ const EquipoPage = () => {
           background: 'var(--color-surface-2)', border: '1px dashed var(--color-border)',
           borderRadius: '1rem', color: 'var(--color-text-muted)',
         }}>
-          No tienes proyectos asignados aÃºn.
+          No tienes proyectos asignados aún.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
