@@ -93,6 +93,21 @@ const expandBlockedDates = (conflictos) => {
 
 const esBloqueoReal = (conflicto) => conflicto.tipo !== 'proyecto';
 
+const conflictOverlapsRange = (conflicto, startKey, endKey) => {
+  if (!startKey) return false;
+  const rangeStart = parseDateKey(startKey);
+  const rangeEnd = parseDateKey(endKey || startKey);
+  const conflictStart = new Date(conflicto.fechaInicio);
+  const conflictEnd = conflicto.fechaFin ? new Date(conflicto.fechaFin) : new Date(conflictStart);
+  if (Number.isNaN(conflictStart.getTime()) || Number.isNaN(conflictEnd.getTime())) return false;
+
+  const start = new Date(conflictStart.getFullYear(), conflictStart.getMonth(), conflictStart.getDate(), 0, 0, 0, 0);
+  const end = new Date(conflictEnd.getFullYear(), conflictEnd.getMonth(), conflictEnd.getDate(), 23, 59, 59, 999);
+  rangeStart.setHours(0, 0, 0, 0);
+  rangeEnd.setHours(23, 59, 59, 999);
+  return start <= rangeEnd && end >= rangeStart;
+};
+
 const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = false }) => {
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -310,9 +325,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     .filter(u => !esAdminUsuario(u))
     .flatMap(u => (ocupados[u.id] || []).map(conflicto => ({ ...conflicto, usuario: u })))
     .sort((a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio));
-  const usuariosParaBloqueo = form.miembrosIds.length > 0
-    ? usuariosEnAreas.filter(u => form.miembrosIds.includes(u.id))
-    : usuariosEnAreas;
+  const usuariosParaBloqueo = usuariosEnAreas.filter(u => form.miembrosIds.includes(u.id));
   const fechasBloqueadas = expandBlockedDates(
     usuariosParaBloqueo
       .filter(u => !esAdminUsuario(u))
@@ -374,7 +387,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
       const usuario = usuariosSeleccionables.find(u => u.id === id);
-      const tieneBloqueoReal = (ocupados[id] || []).some(esBloqueoReal);
+      const tieneBloqueoReal = (ocupados[id] || []).some(conflicto => (
+        esBloqueoReal(conflicto) && conflictOverlapsRange(conflicto, prev.fechaInicio, prev.fechaFin)
+      ));
       if (!esAdminUsuario(usuario) && tieneBloqueoReal) return prev;
       return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
@@ -410,7 +425,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       formData.append('area', form.areas.join(','));
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
-      const idsPermitidos = new Set(usuariosEnAreas.filter(u => esAdminUsuario(u) || !(ocupados[u.id] || []).some(esBloqueoReal)).map(u => u.id));
+      const idsPermitidos = new Set(usuariosEnAreas.filter(u => (
+        esAdminUsuario(u) || !(ocupados[u.id] || []).some(conflicto => esBloqueoReal(conflicto) && conflictOverlapsRange(conflicto, form.fechaInicio, form.fechaFin))
+      )).map(u => u.id));
       formData.append('miembrosIds', JSON.stringify(form.miembrosIds.filter(id => idsPermitidos.has(id))));
       
       archivos.forEach(file => {
@@ -496,8 +513,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                       {grupo.usuarios.map(u => {
                         const isSelected = form.miembrosIds.includes(u.id);
                         const conflictos = esAdminUsuario(u) ? [] : ocupados[u.id] || [];
-                        const tieneBloqueoReal = conflictos.some(esBloqueoReal);
-                        const tieneProyectoActivo = !tieneBloqueoReal && conflictos.some(c => c.tipo === 'proyecto');
+                        const conflictosEnRango = conflictos.filter(conflicto => conflictOverlapsRange(conflicto, form.fechaInicio, form.fechaFin));
+                        const tieneBloqueoReal = conflictosEnRango.some(esBloqueoReal);
+                        const tieneProyectoActivo = !tieneBloqueoReal && conflictosEnRango.some(c => c.tipo === 'proyecto');
                         return (
                           <button
                             key={u.id}
