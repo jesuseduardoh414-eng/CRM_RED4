@@ -9,6 +9,20 @@ const getDateKeyUTC = (date) => date.toISOString().split('T')[0];
 const getFinTareaParaDisponibilidad = (tarea) => (
   tarea.venceEn ? tarea.venceEn : new Date(tarea.fechaInicio.getTime() + ONE_DAY_MS)
 );
+const ajustarFechaTodoElDia = (value, endOfDay = false) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  if (
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  ) {
+    date.setUTCHours(endOfDay ? 23 : 12, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  }
+  return date;
+};
 const getGlobalHoliday = (date) => {
   const year = date.getUTCFullYear();
   const holidays = [
@@ -139,11 +153,15 @@ const listar = async (req, res) => {
           proyecto:  { select: { id: true, nombre: true } }
         },
       }),
-      // Tareas asignadas al usuario con fecha de vencimiento
+      // Tareas asignadas al usuario que cruzan con el rango consultado
       prisma.tarea.findMany({
         where: { 
-          asignadoId: usuarioId, 
-          venceEn: { gte: desde, lte: hasta } 
+          asignadoId: usuarioId,
+          fechaInicio: { lte: hasta },
+          OR: [
+            { venceEn: { gte: desde } },
+            { venceEn: null, fechaInicio: { gte: desde } }
+          ]
         },
         include: { proyecto: { select: { nombre: true } } }
       })
@@ -161,18 +179,17 @@ const listar = async (req, res) => {
       // Ajuste de zona horaria: Si la fecha viene a medianoche (00:00:00),
       // al convertirla a local en México (UTC-6) se atrasa un día.
       // La ponemos a mediodía (12:00:00) para asegurar que caiga en el día correcto.
-      const fechaAjustada = new Date(t.venceEn);
-      if (fechaAjustada.getUTCHours() === 0) {
-        fechaAjustada.setUTCHours(12);
-      }
+      const fechaInicio = ajustarFechaTodoElDia(t.fechaInicio);
+      const fechaFin = ajustarFechaTodoElDia(t.venceEn || t.fechaInicio, true);
 
       return {
         id: `tarea-${t.id}`,
         titulo: `TAREA: ${t.titulo}`,
         tipo: 'tarea',
-        fechaInicio: fechaAjustada,
-        todoElDia: true, 
-        color: '#f59e0b', // Color naranja para tareas
+        fechaInicio,
+        fechaFin,
+        todoElDia: true,
+        color: '#f59e0b',
         proyecto: t.proyecto,
         esLectura: true 
       };
@@ -380,7 +397,7 @@ const crear = async (req, res) => {
       });
     }
 
-    // Crear notificaciones de forma sÃ­ncrona para asegurar el envÃ­o
+    // Crear notificaciones de forma síncrona para asegurar el envío
     if (es_global || listadoInvitados.length > 1) {
       const idsFinales = listadoInvitados.map(i => i.usuarioId);
       await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo, !!es_global);
@@ -401,7 +418,7 @@ const responderInvitacion = async (req, res) => {
   const usuarioId = req.usuario.id;
 
   if (!['aceptado', 'rechazado'].includes(estado)) {
-    return res.status(400).json({ error: 'Estado de respuesta invÃ¡lido' });
+    return res.status(400).json({ error: 'Estado de respuesta inválido' });
   }
 
   try {
@@ -480,7 +497,7 @@ const eliminar = async (req, res) => {
 // €€ GET /api/agenda/disponibilidad €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const consultarDisponibilidad = async (req, res) => {
   const { usuarios_ids, inicio, fin, excluir_id, excluir_proyecto_id } = req.query;
-  if (!usuarios_ids || !inicio) return res.status(400).json({ error: 'Faltan parÃ¡metros' });
+  if (!usuarios_ids || !inicio) return res.status(400).json({ error: 'Faltan parámetros' });
 
   try {
     const ids = usuarios_ids.split(',').map(id => parseInt(id));
@@ -713,7 +730,7 @@ const crearDiaEspecial = async (req, res) => {
     return res.status(201).json({ dia });
   } catch (error) {
     console.error('[agenda.crearDia]', error);
-    return res.status(500).json({ error: 'Error al crear dÃ­a especial' });
+    return res.status(500).json({ error: 'Error al crear día especial' });
   }
 };
 
