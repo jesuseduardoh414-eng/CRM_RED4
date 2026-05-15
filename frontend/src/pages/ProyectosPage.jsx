@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { proyectosService, usuariosService } from '../services/api';
+import { agendaService, proyectosService, usuariosService } from '../services/api';
 import Spinner from '../components/Spinner';
 import { 
   Code2, 
@@ -32,9 +32,18 @@ const ESTADOS = [
   { value: 'CERRADO',  label: 'Cerrado',  color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
 ];
 
+const getAreasProyecto = (area) => {
+  if (!area) return ['DESARROLLO'];
+  return area.split(',').map(a => a.trim()).filter(Boolean);
+};
+
+const getLabelAreas = (area) => getAreasProyecto(area)
+  .map(a => AREA_CONF[a]?.label || a)
+  .join(', ');
+
 // ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
 const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
-  const area = AREA_CONF[proyecto.area] || { label: proyecto.area, color: '#94a3b8', bg: 'rgba(255,255,255,0.05)', icon: <Folder size={14} /> };
+  const areaLabel = getLabelAreas(proyecto.area);
   const estado = ESTADOS.find(e => e.value === proyecto.estado) || ESTADOS[0];
   const total = proyecto._count?.tareas || 0;
   const progreso = proyecto.progreso || 0; 
@@ -52,7 +61,7 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
               {estado.label}
             </span>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              {area.label}
+              {areaLabel}
             </span>
           </div>
         </div>
@@ -109,11 +118,12 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
 
 // ── Modal de Proyecto ────────────────────────────────────────────────────────
 const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
+  const areasIniciales = getAreasProyecto(proyecto?.area);
   const [form, setForm] = useState({
     nombre: proyecto?.nombre || '',
     descripcion: proyecto?.descripcion || '',
     estado: proyecto?.estado || 'ACTIVO',
-    area: proyecto?.area || 'DESARROLLO',
+    areas: areasIniciales,
     fechaInicio: proyecto?.fechaInicio ? proyecto.fechaInicio.slice(0, 10) : new Date().toISOString().slice(0, 10),
     fechaFin: proyecto?.fechaFin ? proyecto.fechaFin.slice(0, 10) : '',
     miembrosIds: proyecto?.miembros?.map(m => m.id) || [],
@@ -121,16 +131,67 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [archivos, setArchivos] = useState([]);
+  const [ocupados, setOcupados] = useState({});
+  const [consultandoDisponibilidad, setConsultandoDisponibilidad] = useState(false);
 
   useEffect(() => {
     usuariosService.listar().then(d => setUsuarios(d.usuarios)).catch(console.error);
   }, []);
 
   // Mostrar todos los usuarios, pero agrupados o resaltados por el área seleccionada
-  const usuariosEnArea = usuarios.filter(u => u.area === form.area);
-  const otrosUsuarios = usuarios.filter(u => u.area !== form.area);
+  const usuariosEnAreas = usuarios.filter(u => form.areas.includes(u.area));
+  const usuariosPorArea = form.areas.map(area => ({
+    area,
+    usuarios: usuariosEnAreas.filter(u => u.area === area),
+  }));
+
+  useEffect(() => {
+    const consultar = async () => {
+      const ids = usuariosEnAreas.map(u => u.id);
+      if (ids.length === 0 || !form.fechaInicio || !form.fechaFin) {
+        setOcupados({});
+        return;
+      }
+
+      setConsultandoDisponibilidad(true);
+      try {
+        const data = await agendaService.consultarDisponibilidad({
+          usuarios_ids: ids.join(','),
+          inicio: `${form.fechaInicio}T00:00:00`,
+          fin: `${form.fechaFin}T23:59:59`,
+        });
+        const porUsuario = {};
+        data.conflictos?.forEach(conflicto => {
+          if (!porUsuario[conflicto.usuarioId]) porUsuario[conflicto.usuarioId] = [];
+          porUsuario[conflicto.usuarioId].push(conflicto);
+        });
+        setOcupados(porUsuario);
+      } catch (error) {
+        console.error(error);
+        setOcupados({});
+      } finally {
+        setConsultandoDisponibilidad(false);
+      }
+    };
+
+    consultar();
+  }, [form.areas, form.fechaInicio, form.fechaFin, usuarios]);
+
+  const toggleArea = (area) => {
+    setForm(prev => {
+      const exists = prev.areas.includes(area);
+      const areas = exists ? prev.areas.filter(a => a !== area) : [...prev.areas, area];
+      const miembrosPermitidos = usuarios.filter(u => areas.includes(u.area)).map(u => u.id);
+      return {
+        ...prev,
+        areas,
+        miembrosIds: prev.miembrosIds.filter(id => miembrosPermitidos.includes(id)),
+      };
+    });
+  };
 
   const toggleMiembro = (id) => {
+    if (ocupados[id]?.length) return;
     setForm(prev => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
@@ -140,16 +201,21 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (form.areas.length === 0) {
+      alert('Selecciona al menos un area');
+      return;
+    }
     setCargando(true);
     try {
       const formData = new FormData();
       formData.append('nombre', form.nombre);
       formData.append('descripcion', form.descripcion);
       formData.append('estado', form.estado);
-      formData.append('area', form.area);
+      formData.append('area', form.areas.join(','));
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
-      formData.append('miembrosIds', JSON.stringify(form.miembrosIds));
+      const idsPermitidos = new Set(usuariosEnAreas.map(u => u.id));
+      formData.append('miembrosIds', JSON.stringify(form.miembrosIds.filter(id => idsPermitidos.has(id))));
       
       archivos.forEach(file => {
         formData.append('archivos', file);
@@ -196,10 +262,23 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ÁREA RESPONSABLE</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.area} onChange={e => setForm({...form, area: e.target.value, miembrosIds: []})}>
-                  {Object.keys(AREA_CONF).map(k => <option key={k} value={k}>{AREA_CONF[k].label}</option>)}
-                </select>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AREAS</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {Object.keys(AREA_CONF).map(k => {
+                    const selected = form.areas.includes(k);
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => toggleArea(k)}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all ${selected ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/15' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-white'}`}
+                      >
+                        <span>{AREA_CONF[k].label}</span>
+                        <span>{selected ? 'Seleccionada' : 'Agregar'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -215,15 +294,21 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
             </div>
 
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">RESPONSABLES DEL ÁREA ({form.area})</label>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MIEMBROS POR AREA ({form.areas.join(', ')})</label>
+                {consultandoDisponibilidad && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Revisando agenda...</span>}
+              </div>
               <div className="flex flex-wrap gap-2 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50">
-                {usuariosEnArea.map(u => {
+                {usuariosPorArea.flatMap(grupo => grupo.usuarios).map(u => {
                   const isSelected = form.miembrosIds.includes(u.id);
+                  const conflictos = ocupados[u.id] || [];
+                  const disabled = conflictos.length > 0;
                   return (
                     <button
                       key={u.id} type="button"
                       onClick={() => toggleMiembro(u.id)}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                      title={disabled ? `Ocupado: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : disabled ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-70' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
                     >
                       {isSelected ? '✓ ' : '+ '}{u.nombre}
                     </button>
@@ -233,9 +318,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
             </div>
 
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OTROS MIEMBROS</label>
-              <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 min-h-[60px]">
-                {otrosUsuarios.map(u => {
+              <label className="hidden">OTROS MIEMBROS</label>
+              <div className="hidden">
+                {[].map(u => {
                   const isSelected = form.miembrosIds.includes(u.id);
                   return (
                     <button

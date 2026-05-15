@@ -12,6 +12,110 @@ const INCLUDE_PROYECTO = {
   _count:  { select: { tareas: true } },
 };
 
+const parseJsonArray = (value) => {
+  if (!value) return [];
+  return typeof value === 'string' ? JSON.parse(value) : value;
+};
+
+const normalizarIds = (ids) => [...new Set(ids.map(id => Number(id)).filter(id => !Number.isNaN(id)))];
+
+const areasDeProyecto = (area) => (area || 'DESARROLLO')
+  .split(',')
+  .map(a => a.trim())
+  .filter(Boolean);
+
+const getRangoProyecto = (fechaInicio, fechaFin) => {
+  const inicio = fechaInicio ? new Date(fechaInicio) : new Date();
+  const fin = fechaFin ? new Date(fechaFin) : new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+  if (fechaFin && /^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
+    fin.setDate(fin.getDate() + 1);
+  }
+  return { inicio, fin };
+};
+
+const validarMiembrosPorArea = async (ids, area) => {
+  if (ids.length === 0) return { usuarios: [], invalidos: [] };
+  const areas = areasDeProyecto(area);
+  const usuarios = await prisma.usuario.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, nombre: true, area: true }
+  });
+  const idsValidos = new Set(usuarios.filter(u => areas.includes(u.area)).map(u => u.id));
+  return {
+    usuarios,
+    invalidos: ids.filter(id => !idsValidos.has(id)),
+  };
+};
+
+const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
+  if (ids.length === 0) return [];
+
+  const [eventos, proyectos] = await Promise.all([
+    prisma.evento.findMany({
+      where: {
+        proyectoId: proyectoId ? { not: proyectoId } : undefined,
+        OR: [
+          { usuarioId: { in: ids } },
+          { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }
+        ],
+        fechaInicio: { lt: fin },
+        fechaFin: { gt: inicio }
+      },
+      select: { titulo: true, usuarioId: true }
+    }),
+    prisma.proyecto.findMany({
+      where: {
+        id: proyectoId ? { not: proyectoId } : undefined,
+        estado: { not: 'CERRADO' },
+        miembros: { some: { id: { in: ids } } },
+        fechaInicio: { lt: fin },
+        OR: [
+          { fechaFin: null },
+          { fechaFin: { gt: inicio } }
+        ]
+      },
+      select: {
+        nombre: true,
+        miembros: { where: { id: { in: ids } }, select: { id: true } }
+      }
+    })
+  ]);
+
+  return [
+    ...eventos.map(e => ({ usuarioId: e.usuarioId, titulo: e.titulo })),
+    ...proyectos.flatMap(p => p.miembros.map(m => ({ usuarioId: m.id, titulo: `Proyecto: ${p.nombre}` }))),
+  ];
+};
+
+const sincronizarCalendarioProyecto = async ({ proyecto, ids }) => {
+  await prisma.evento.deleteMany({ where: { proyectoId: proyecto.id } });
+
+  if (ids.length === 0 || !proyecto.fechaInicio || !proyecto.fechaFin) return;
+  const fechaFinEvento = new Date(proyecto.fechaFin);
+  if (
+    fechaFinEvento.getHours() === 0 &&
+    fechaFinEvento.getMinutes() === 0 &&
+    fechaFinEvento.getSeconds() === 0
+  ) {
+    fechaFinEvento.setDate(fechaFinEvento.getDate() + 1);
+  }
+
+  await prisma.evento.createMany({
+    data: ids.map(usuarioId => ({
+      usuarioId,
+      titulo: `Proyecto: ${proyecto.nombre}`,
+      descripcion: proyecto.descripcion || null,
+      tipo: 'dia_completo',
+      fechaInicio: proyecto.fechaInicio,
+      fechaFin: fechaFinEvento,
+      todoElDia: true,
+      color: '#2563eb',
+      proyectoId: proyecto.id,
+      creadoPorId: proyecto.creadorId,
+    }))
+  });
+};
+
 // €€ GET /api/proyectos €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 // ADMIN: todos los proyectos
 // MIEMBRO: solo proyectos donde es miembro explÃ­cito
@@ -109,28 +213,44 @@ const crear = async (req, res) => {
 
   try {
     // Procesar IDs de miembros (pueden venir como string JSON en multipart)
-    let ids = [];
-    if (miembrosIds) {
-      ids = typeof miembrosIds === 'string' ? JSON.parse(miembrosIds) : miembrosIds;
+    const ids = normalizarIds(parseJsonArray(miembrosIds));
+    const idsProyecto = ids.includes(req.usuario.id) ? ids : [...ids, req.usuario.id];
+
+    const areaProyecto = area || 'DESARROLLO';
+    const { invalidos } = await validarMiembrosPorArea(ids, areaProyecto);
+    if (invalidos.length > 0) {
+      return res.status(400).json({ error: 'Solo puedes asignar miembros de las areas seleccionadas' });
     }
-    // Asegurar que el creador sea miembro
-    if (!ids.includes(req.usuario.id)) ids.push(req.usuario.id);
+
+    const { inicio, fin } = getRangoProyecto(fechaInicio, fechaFin);
+    const ocupados = await consultarOcupados({ ids, inicio, fin });
+    if (ocupados.length > 0) {
+      const usuariosOcupados = await prisma.usuario.findMany({
+        where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },
+        select: { nombre: true }
+      });
+      return res.status(400).json({
+        error: `No se puede asignar el proyecto: ${usuariosOcupados.map(u => u.nombre).join(', ')} tiene agenda ocupada`
+      });
+    }
 
     const proyecto = await prisma.proyecto.create({
       data: {
         nombre:      nombre.trim(),
         descripcion: descripcion?.trim() || null,
         estado:      estado || 'ACTIVO',
-        area:        area || 'DESARROLLO',
+        area:        areaProyecto,
         fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date(),
         fechaFin:    fechaFin ? new Date(fechaFin) : null,
         creadorId:   req.usuario.id,
         miembros: {
-          connect: ids.map(id => ({ id: Number(id) }))
+          connect: idsProyecto.map(id => ({ id: Number(id) }))
         }
       },
       include: INCLUDE_PROYECTO,
     });
+
+    await sincronizarCalendarioProyecto({ proyecto, ids });
 
     // 1. Crear comentario inicial si existe
     if (primerComentario && primerComentario.trim() !== '') {
@@ -164,7 +284,7 @@ const crear = async (req, res) => {
       req.usuario.id,
       proyecto.id,
       'CREAR_PROYECTO',
-      `${req.usuario.nombre} creó el proyecto "${proyecto.nombre}" con ${ids.length} miembros`
+      `${req.usuario.nombre} creó el proyecto "${proyecto.nombre}" con ${idsProyecto.length} miembros`
     );
 
     return res.status(201).json({ mensaje: 'Proyecto creado', proyecto });
@@ -188,11 +308,32 @@ const editar = async (req, res) => {
       ...(nombre      && { nombre: nombre.trim() }),
       ...(descripcion !== undefined && { descripcion: descripcion?.trim() || null }),
       ...(estado      && { estado }),
+      ...(area        && { area }),
+      ...(fechaInicio && { fechaInicio: new Date(fechaInicio) }),
+      ...(fechaFin !== undefined && { fechaFin: fechaFin ? new Date(fechaFin) : null }),
     };
 
     // Actualizar miembros si se envÃ­an
+    let ids = null;
     if (miembrosIds) {
-      const ids = typeof miembrosIds === 'string' ? JSON.parse(miembrosIds) : miembrosIds;
+      ids = normalizarIds(parseJsonArray(miembrosIds));
+      const areaProyecto = area || existente.area;
+      const { invalidos } = await validarMiembrosPorArea(ids, areaProyecto);
+      if (invalidos.length > 0) {
+        return res.status(400).json({ error: 'Solo puedes asignar miembros de las areas seleccionadas' });
+      }
+
+      const { inicio, fin } = getRangoProyecto(fechaInicio || existente.fechaInicio, fechaFin !== undefined ? fechaFin : existente.fechaFin);
+      const ocupados = await consultarOcupados({ ids, inicio, fin, proyectoId: id });
+      if (ocupados.length > 0) {
+        const usuariosOcupados = await prisma.usuario.findMany({
+          where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },
+          select: { nombre: true }
+        });
+        return res.status(400).json({
+          error: `No se puede asignar el proyecto: ${usuariosOcupados.map(u => u.nombre).join(', ')} tiene agenda ocupada`
+        });
+      }
       dataUpdate.miembros = {
         set: ids.map(mid => ({ id: Number(mid) }))
       };
@@ -203,6 +344,10 @@ const editar = async (req, res) => {
       data: dataUpdate,
       include: INCLUDE_PROYECTO,
     });
+
+    if (ids) {
+      await sincronizarCalendarioProyecto({ proyecto, ids });
+    }
 
     // Registrar en el Log de Actividad
     await registrarActividad(
