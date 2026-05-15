@@ -162,6 +162,7 @@ const ProyectoDetallePage = () => {
   const [vista, setVista] = useState('lista');
   const [progresoServidor, setProgresoServidor] = useState(null);
   const [busqueda, setBusqueda] = useState('');
+  const [limite, setLimite] = useState(20);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -325,22 +326,44 @@ const ProyectoDetallePage = () => {
       {/* Content Canvas */}
       <div style={{ minHeight: '500px' }}>
         {vista === 'lista' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {tareasFiltradas.length === 0 ? (
-              <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
-                <Search size={40} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
-                <p style={{ fontWeight: '700' }}>No se encontraron tareas que coincidan con tu búsqueda</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '0.75rem', 
+              maxHeight: '70vh', 
+              overflowY: 'auto',
+              paddingRight: '0.5rem',
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'var(--color-border) transparent'
+            }}>
+              {tareasFiltradas.length === 0 ? (
+                <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
+                  <Search size={40} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
+                  <p style={{ fontWeight: '700' }}>No se encontraron tareas que coincidan con tu búsqueda</p>
+                </div>
+              ) : (
+                tareasFiltradas.slice(0, (tareasFiltradas.length > 20 && limite === 20) ? 10 : limite).map(t => (
+                  <TareaCard 
+                    key={t.id} 
+                    tarea={t} 
+                    onClick={(x) => { setTareaEditando(x); setModal(true); }}
+                    onEliminar={handleEliminar}
+                    onCambiarEstado={handleCambiarEstado}
+                  />
+                ))
+              )}
+            </div>
+            
+            {tareasFiltradas.length > 20 && limite === 20 && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+                <button 
+                  onClick={() => setLimite(tareasFiltradas.length)}
+                  className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm uppercase tracking-widest flex items-center gap-2"
+                >
+                  Ver todas las tareas ({tareasFiltradas.length - 10} más) <ArrowRight size={14} />
+                </button>
               </div>
-            ) : (
-              tareasFiltradas.map(t => (
-                <TareaCard 
-                  key={t.id} 
-                  tarea={t} 
-                  onClick={(x) => { setTareaEditando(x); setModal(true); }}
-                  onEliminar={handleEliminar}
-                  onCambiarEstado={handleCambiarEstado}
-                />
-              ))
             )}
           </div>
         )}
