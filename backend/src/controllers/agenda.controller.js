@@ -486,7 +486,7 @@ const consultarDisponibilidad = async (req, res) => {
     const eventos = await prisma.evento.findMany({
       where: {
         id: excluir_id ? { not: excluir_id } : undefined,
-        proyectoId: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : null,
+        proyectoId: null,
         OR: [
           { usuarioId: { in: ids } },
           { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }
@@ -503,40 +503,40 @@ const consultarDisponibilidad = async (req, res) => {
       }
     });
 
-    const proyectos = await prisma.proyecto.findMany({
+    const tareas = await prisma.tarea.findMany({
       where: {
-        id: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
-        estado: { not: 'CERRADO' },
-        miembros: { some: { id: { in: ids } } },
+        proyectoId: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
+        asignadoId: { in: ids },
+        estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
         fechaInicio: { lt: end },
         OR: [
-          { fechaFin: null },
-          { fechaFin: { gt: start } }
+          { venceEn: { gt: start } },
+          { venceEn: null, fechaInicio: { gte: start } }
         ]
       },
       select: {
         id: true,
-        nombre: true,
+        titulo: true,
         fechaInicio: true,
-        fechaFin: true,
-        miembros: {
-          where: { id: { in: ids } },
-          select: { id: true }
-        }
+        venceEn: true,
+        asignadoId: true,
+        proyectoId: true,
+        proyecto: { select: { nombre: true } }
       }
     });
 
     const conflictos = [
       ...eventos.map(evento => ({ ...evento, tipo: 'evento' })),
-      ...proyectos.flatMap(proyecto => proyecto.miembros.map(miembro => ({
-        id: `proyecto-${proyecto.id}-${miembro.id}`,
-        titulo: `Proyecto: ${proyecto.nombre}`,
-        fechaInicio: proyecto.fechaInicio,
-        fechaFin: proyecto.fechaFin,
-        usuarioId: miembro.id,
-        proyectoId: proyecto.id,
-        tipo: 'proyecto'
-      })))
+      ...tareas.map(tarea => ({
+        id: `tarea-${tarea.id}`,
+        titulo: `Tarea: ${tarea.titulo}`,
+        fechaInicio: tarea.fechaInicio,
+        fechaFin: tarea.venceEn,
+        usuarioId: tarea.asignadoId,
+        proyectoId: tarea.proyectoId,
+        proyecto: tarea.proyecto,
+        tipo: 'tarea'
+      }))
     ];
 
     return res.json({ conflictos });

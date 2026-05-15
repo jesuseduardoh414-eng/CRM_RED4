@@ -61,10 +61,10 @@ const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
   const idsRevisar = ids.filter(id => !adminIds.has(id));
   if (idsRevisar.length === 0) return [];
 
-  const [eventos, proyectos] = await Promise.all([
+  const [eventos, tareas] = await Promise.all([
     prisma.evento.findMany({
       where: {
-        proyectoId: proyectoId ? { not: proyectoId } : undefined,
+        proyectoId: null,
         OR: [
           { usuarioId: { in: idsRevisar } },
           { invitados: { some: { usuarioId: { in: idsRevisar }, estado: 'aceptado' } } }
@@ -74,27 +74,36 @@ const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
       },
       select: { titulo: true, usuarioId: true }
     }),
-    prisma.proyecto.findMany({
+    prisma.tarea.findMany({
       where: {
-        id: proyectoId ? { not: proyectoId } : undefined,
-        estado: { not: 'CERRADO' },
-        miembros: { some: { id: { in: idsRevisar } } },
+        proyectoId: proyectoId ? { not: proyectoId } : undefined,
+        asignadoId: { in: idsRevisar },
+        estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
         fechaInicio: { lt: fin },
         OR: [
-          { fechaFin: null },
-          { fechaFin: { gt: inicio } }
+          { venceEn: { gt: inicio } },
+          { venceEn: null, fechaInicio: { gte: inicio } }
         ]
       },
       select: {
-        nombre: true,
-        miembros: { where: { id: { in: idsRevisar } }, select: { id: true } }
+        titulo: true,
+        asignadoId: true,
+        fechaInicio: true,
+        venceEn: true,
+        proyecto: { select: { nombre: true } }
       }
     })
   ]);
 
   return [
     ...eventos.map(e => ({ usuarioId: e.usuarioId, titulo: e.titulo })),
-    ...proyectos.flatMap(p => p.miembros.map(m => ({ usuarioId: m.id, titulo: `Proyecto: ${p.nombre}` }))),
+    ...tareas.map(t => ({
+      usuarioId: t.asignadoId,
+      titulo: `Tarea: ${t.titulo}`,
+      proyecto: t.proyecto?.nombre || null,
+      fechaInicio: t.fechaInicio,
+      fechaFin: t.venceEn,
+    })),
   ];
 };
 
@@ -252,7 +261,7 @@ const crear = async (req, res) => {
     }
 
     const { inicio, fin } = getRangoProyecto(fechaInicio, fechaFin);
-    const ocupados = await consultarOcupados({ ids, inicio, fin });
+    const ocupados = req.usuario.rol === 'ADMIN' ? [] : await consultarOcupados({ ids, inicio, fin });
     if (ocupados.length > 0) {
       const usuariosOcupados = await prisma.usuario.findMany({
         where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },
@@ -354,7 +363,7 @@ const editar = async (req, res) => {
       }
 
       const { inicio, fin } = getRangoProyecto(fechaInicio || existente.fechaInicio, fechaFin !== undefined ? fechaFin : existente.fechaFin);
-      const ocupados = await consultarOcupados({ ids, inicio, fin, proyectoId: id });
+      const ocupados = req.usuario.rol === 'ADMIN' ? [] : await consultarOcupados({ ids, inicio, fin, proyectoId: id });
       if (ocupados.length > 0) {
         const usuariosOcupados = await prisma.usuario.findMany({
           where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },

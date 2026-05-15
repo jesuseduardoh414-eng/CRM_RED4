@@ -141,6 +141,7 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
 // ── Modal de Proyecto ────────────────────────────────────────────────────────
 const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   const { usuario: usuarioActual } = useAuth();
+  const usuarioActualEsAdmin = esAdminUsuario(usuarioActual);
   const areasIniciales = getAreasProyecto(proyecto?.area);
   const [form, setForm] = useState({
     nombre: proyecto?.nombre || '',
@@ -228,7 +229,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
       const usuario = usuariosSeleccionables.find(u => u.id === id);
-      if (!esAdminUsuario(usuario) && ocupados[id]?.length) return prev;
+      if (!usuarioActualEsAdmin && !esAdminUsuario(usuario) && ocupados[id]?.length) return prev;
       return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
   };
@@ -248,7 +249,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       formData.append('area', form.areas.join(','));
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
-      const idsPermitidos = new Set(usuariosEnAreas.filter(u => esAdminUsuario(u) || !ocupados[u.id]?.length).map(u => u.id));
+      const idsPermitidos = new Set(usuariosEnAreas.filter(u => usuarioActualEsAdmin || esAdminUsuario(u) || !ocupados[u.id]?.length).map(u => u.id));
       formData.append('miembrosIds', JSON.stringify(form.miembrosIds.filter(id => idsPermitidos.has(id))));
       
       archivos.forEach(file => {
@@ -334,16 +335,16 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                       {grupo.usuarios.map(u => {
                         const isSelected = form.miembrosIds.includes(u.id);
                         const conflictos = esAdminUsuario(u) ? [] : ocupados[u.id] || [];
-                        const disabled = conflictos.length > 0;
+                        const disabled = !usuarioActualEsAdmin && conflictos.length > 0;
                         return (
                           <button
                             key={u.id}
                             type="button"
                             onClick={() => toggleMiembro(u.id)}
-                            title={disabled ? `Ocupado: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : disabled ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-70' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                            title={conflictos.length > 0 ? `Tiene tareas/eventos: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : disabled ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-70' : conflictos.length > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
                           >
-                            {isSelected ? 'OK ' : disabled ? 'Ocupado ' : '+ '}{u.nombre}
+                            {isSelected ? 'OK ' : conflictos.length > 0 ? 'Con tareas ' : '+ '}{u.nombre}
                           </button>
                         );
                       })}
@@ -373,9 +374,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 {usuariosEnAreas.length === 0 ? (
-                  <p className="text-xs font-bold text-slate-400">Selecciona un area para ver proyectos activos de sus miembros.</p>
+                  <p className="text-xs font-bold text-slate-400">Selecciona un area para ver tareas activas de sus miembros.</p>
                 ) : conflictosEnAreas.length === 0 ? (
-                  <p className="text-xs font-bold text-emerald-600">Sin proyectos activos ni eventos en el rango seleccionado.</p>
+                  <p className="text-xs font-bold text-emerald-600">Sin tareas activas ni eventos en el rango seleccionado.</p>
                 ) : (
                   <div className="space-y-2">
                     {conflictosEnAreas.map(conflicto => (
