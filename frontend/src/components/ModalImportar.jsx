@@ -18,6 +18,8 @@ import {
   Users, 
   FileText, 
   Download, 
+  Inbox,
+  Loader2,
   UploadCloud, 
   File, 
   X, 
@@ -170,8 +172,9 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
         {/* ── Cabecera ──────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.25rem' }}>
-              📥 Importar tareas
+            <h2 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <Inbox size={22} color="var(--color-primary)" />
+              Importar tareas
             </h2>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem' }}>
               Crea múltiples tareas desde un archivo Excel o JSON.
@@ -444,9 +447,9 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
               onClick={handleImportar}
               disabled={cargando || !archivo}
               className="btn-primary"
-              style={{ flex: 1.5, padding: '0.75rem', fontSize: '0.9rem', opacity: !archivo ? 0.5 : 1 }}
+              style={{ flex: 1.5, padding: '0.75rem', fontSize: '0.9rem', opacity: !archivo ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
             >
-              {cargando ? '⏳ Procesando...' : '📥 Importar'}
+              {cargando ? <><Loader2 size={16} className="animate-spin" /> Procesando...</> : <><Inbox size={16} /> Importar</>}
             </button>
           )}
 
@@ -467,3 +470,4 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 };
 
 export default ModalImportar;
+
