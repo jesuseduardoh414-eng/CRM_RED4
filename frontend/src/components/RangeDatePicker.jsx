@@ -17,17 +17,15 @@ const RangeDatePicker = ({ from, to, onChange }) => {
   const range = { from, to };
 
   const handleSelect = (newRange) => {
-    if (newRange?.from && newRange?.to) {
-      onChange(newRange);
-      setIsOpen(false);
-    } else {
-      onChange(newRange);
-    }
+    onChange(newRange);
+    // No cerramos automáticamente para que el usuario vea la selección
   };
 
   const displayText = from && to 
     ? `${format(from, "dd MMM", { locale: es })} - ${format(to, "dd MMM", { locale: es })}`
-    : "Seleccionar rango";
+    : from
+      ? `${format(from, "dd MMM", { locale: es })} - ...`
+      : "Seleccionar rango";
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
@@ -48,7 +46,8 @@ const RangeDatePicker = ({ from, to, onChange }) => {
           color: 'var(--color-text)',
           cursor: 'pointer',
           transition: 'all 0.2s',
-          textAlign: 'left'
+          textAlign: 'left',
+          zIndex: 10
         }}
         onMouseOver={e => e.currentTarget.style.borderColor = 'var(--color-primary-40)'}
         onMouseOut={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
@@ -61,19 +60,20 @@ const RangeDatePicker = ({ from, to, onChange }) => {
         <>
           <div 
             onClick={() => setIsOpen(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
           />
           <div style={{
             position: 'absolute',
-            top: 'calc(100% + 0.5rem)',
+            bottom: 'calc(100% + 0.5rem)', // Abrimos hacia ARRIBA para que no se oculte en el modal
             left: 0,
-            zIndex: 999,
+            zIndex: 9999,
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
             borderRadius: '1.25rem',
             boxShadow: 'var(--shadow-2xl)',
             padding: '1rem',
             animation: 'fadeSlideIn 0.2s ease',
+            minWidth: '320px'
           }}>
             <style>{`
               .rdp { --rdp-accent-color: var(--color-primary); --rdp-background-color: var(--color-primary-10); margin: 0; }
@@ -86,16 +86,13 @@ const RangeDatePicker = ({ from, to, onChange }) => {
               onSelect={handleSelect}
               locale={es}
               numberOfMonths={1}
-              modifiersStyles={{
-                selected: { backgroundColor: 'var(--color-primary)', color: 'white' }
-              }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem', borderTop: '1px solid var(--color-border-light)', paddingTop: '0.75rem' }}>
               <button 
                 type="button"
                 onClick={() => setIsOpen(false)}
-                style={{ padding: '0.4rem 1rem', fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-text-dim)', border: 'none', background: 'none', cursor: 'pointer' }}
-              >Cerrar</button>
+                style={{ padding: '0.5rem 1.25rem', fontSize: '0.75rem', fontWeight: '900', color: 'white', border: 'none', background: 'var(--color-primary)', borderRadius: '8px', cursor: 'pointer', textTransform: 'uppercase' }}
+              >Aceptar</button>
             </div>
           </div>
         </>
