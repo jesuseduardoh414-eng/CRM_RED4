@@ -258,8 +258,11 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
     const t = tareas.find(x => x.id === Number(id));
     if (t && t.estado !== colKey) {
       setActualizando(id);
-      await onCambiarEstado(Number(id), colKey);
-      setActualizando(null);
+      try {
+        await onCambiarEstado(Number(id), colKey);
+      } finally {
+        setActualizando(null);
+      }
     }
     dragId.current = null;
   };

@@ -214,10 +214,33 @@ const ProyectoDetallePage = () => {
   };
 
   const handleCambiarEstado = async (id, est) => {
+    const tareaAnterior = tareas.find(x => x.id === id);
+    if (!tareaAnterior || tareaAnterior.estado === est) return;
+
+    const tareaOptimista = {
+      ...tareaAnterior,
+      estado: est,
+    };
+
+    setTareas(prev => prev.map(x => x.id === id ? tareaOptimista : x));
+
+    if (tareaEditando?.id === id) {
+      setTareaEditando(prev => prev ? { ...prev, estado: est } : prev);
+    }
+
     try {
       const { tarea } = await tareasService.actualizarEstado(id, est);
       setTareas(prev => prev.map(x => x.id === id ? tarea : x));
-    } catch (err) { showToast(err.message, 'error'); }
+      if (tareaEditando?.id === id) {
+        setTareaEditando(tarea);
+      }
+    } catch (err) {
+      setTareas(prev => prev.map(x => x.id === id ? tareaAnterior : x));
+      if (tareaEditando?.id === id) {
+        setTareaEditando(tareaAnterior);
+      }
+      showToast(err.message, 'error');
+    }
   };
 
   const handleActualizarTarea = async (id, datos) => {
