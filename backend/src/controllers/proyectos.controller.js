@@ -359,7 +359,12 @@ const editar = async (req, res) => {
   if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
 
   try {
-    const existente = await prisma.proyecto.findUnique({ where: { id } });
+    const existente = await prisma.proyecto.findUnique({
+      where: { id },
+      include: {
+        miembros: { select: { id: true } },
+      },
+    });
     if (!existente) return res.status(404).json({ error: 'Proyecto no encontrado' });
 
     let dataUpdate = {
@@ -376,6 +381,8 @@ const editar = async (req, res) => {
     if (miembrosIds) {
       ids = normalizarIds(parseJsonArray(miembrosIds));
       const idsProyecto = ids.includes(existente.creadorId) ? ids : [...ids, existente.creadorId];
+      const idsExistentes = new Set(existente.miembros.map(m => m.id));
+      const idsNuevos = ids.filter(mid => !idsExistentes.has(mid));
       const areaProyecto = area || existente.area;
       const { invalidos } = await validarMiembrosPorArea(ids, areaProyecto);
       if (invalidos.length > 0) {
@@ -386,7 +393,7 @@ const editar = async (req, res) => {
       const errorFechas = validarRangoProyecto({ inicio, fin });
       if (errorFechas) return res.status(400).json({ error: errorFechas });
 
-      const ocupados = await consultarOcupados({ ids, inicio, fin, proyectoId: id });
+      const ocupados = await consultarOcupados({ ids: idsNuevos, inicio, fin, proyectoId: id });
       if (ocupados.length > 0) {
         const usuariosOcupados = await prisma.usuario.findMany({
           where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },

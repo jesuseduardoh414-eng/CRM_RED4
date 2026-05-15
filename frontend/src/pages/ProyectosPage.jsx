@@ -305,6 +305,11 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   const [archivos, setArchivos] = useState([]);
   const [ocupados, setOcupados] = useState({});
   const [consultandoDisponibilidad, setConsultandoDisponibilidad] = useState(false);
+  const miembrosExistentes = new Set(
+    (proyecto?.miembros || [])
+      .filter(m => m.id !== usuarioActual?.id)
+      .map(m => m.id)
+  );
 
   useEffect(() => {
     usuariosService.listar().then(d => setUsuarios(d.usuarios)).catch(console.error);
@@ -325,7 +330,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     .filter(u => !esAdminUsuario(u))
     .flatMap(u => (ocupados[u.id] || []).map(conflicto => ({ ...conflicto, usuario: u })))
     .sort((a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio));
-  const usuariosParaBloqueo = usuariosEnAreas.filter(u => form.miembrosIds.includes(u.id));
+  const usuariosParaBloqueo = usuariosEnAreas.filter(u =>
+    form.miembrosIds.includes(u.id) && (!proyecto || !miembrosExistentes.has(u.id))
+  );
   const fechasBloqueadas = expandBlockedDates(
     usuariosParaBloqueo
       .filter(u => !esAdminUsuario(u))
