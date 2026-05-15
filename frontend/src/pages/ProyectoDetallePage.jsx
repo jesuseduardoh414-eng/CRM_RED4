@@ -465,9 +465,8 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
                 <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA LÍMITE</label>
-                <div className="flex flex-col gap-2">
-                  <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.venceEn} onChange={e => setForm({...form, venceEn: e.target.value})} />
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA LÍMITE</label>
                   <div className="flex gap-2">
                     <button 
                       type="button"
@@ -475,7 +474,7 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
                         const hoy = new Date().toISOString().slice(0, 10);
                         setForm({ ...form, venceEn: hoy });
                       }}
-                      className="flex-1 py-2 rounded-lg bg-slate-100 text-[10px] font-black text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
+                      className="px-3 py-1 rounded-lg bg-blue-50 text-[10px] font-black text-blue-600 hover:bg-blue-100 transition-all uppercase tracking-widest border border-blue-100"
                     >Hoy</button>
                     <button 
                       type="button"
@@ -483,10 +482,11 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
                         const mañana = new Date(); mañana.setDate(mañana.getDate() + 1);
                         setForm({ ...form, venceEn: mañana.toISOString().slice(0, 10) });
                       }}
-                      className="flex-1 py-2 rounded-lg bg-slate-100 text-[10px] font-black text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
+                      className="px-3 py-1 rounded-lg bg-slate-50 text-[10px] font-black text-slate-500 hover:bg-slate-100 transition-all uppercase tracking-widest border border-slate-100"
                     >Mañana</button>
                   </div>
                 </div>
+                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none focus:border-blue-500 transition-all" value={form.venceEn} onChange={e => setForm({...form, venceEn: e.target.value})} />
               </div>
             </div>
           </form>
