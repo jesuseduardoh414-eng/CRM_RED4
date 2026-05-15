@@ -41,6 +41,11 @@ const getLabelAreas = (area) => getAreasProyecto(area)
   .map(a => AREA_CONF[a]?.label || a)
   .join(', ');
 
+const formatFechaCorta = (fecha) => {
+  if (!fecha) return 'Sin fecha fin';
+  return new Date(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+};
+
 // ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
 const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
   const areaLabel = getLabelAreas(proyecto.area);
@@ -144,11 +149,14 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     area,
     usuarios: usuariosEnAreas.filter(u => u.area === area),
   }));
+  const conflictosEnAreas = usuariosEnAreas
+    .flatMap(u => (ocupados[u.id] || []).map(conflicto => ({ ...conflicto, usuario: u })))
+    .sort((a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio));
 
   useEffect(() => {
     const consultar = async () => {
       const ids = usuariosEnAreas.map(u => u.id);
-      if (ids.length === 0 || !form.fechaInicio || !form.fechaFin) {
+      if (ids.length === 0 || !form.fechaInicio) {
         setOcupados({});
         return;
       }
@@ -158,7 +166,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
         const data = await agendaService.consultarDisponibilidad({
           usuarios_ids: ids.join(','),
           inicio: `${form.fechaInicio}T00:00:00`,
-          fin: `${form.fechaFin}T23:59:59`,
+          fin: form.fechaFin ? `${form.fechaFin}T23:59:59` : undefined,
         });
         const porUsuario = {};
         data.conflictos?.forEach(conflicto => {
@@ -327,6 +335,36 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA FIN</label>
                 <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CALENDARIO DE RESPONSABLES</label>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {usuariosEnAreas.length} miembros visibles
+                </span>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                {usuariosEnAreas.length === 0 ? (
+                  <p className="text-xs font-bold text-slate-400">Selecciona un area para ver proyectos activos de sus miembros.</p>
+                ) : conflictosEnAreas.length === 0 ? (
+                  <p className="text-xs font-bold text-emerald-600">Sin proyectos activos ni eventos en el rango seleccionado.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {conflictosEnAreas.map(conflicto => (
+                      <div key={`${conflicto.id}-${conflicto.usuario.id}`} className="flex items-start justify-between gap-3 rounded-xl bg-white border border-slate-100 p-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-900 truncate">{conflicto.titulo}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{conflicto.usuario.nombre}</p>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-red-500">
+                          {formatFechaCorta(conflicto.fechaInicio)} - {formatFechaCorta(conflicto.fechaFin)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

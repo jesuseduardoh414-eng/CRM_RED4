@@ -483,9 +483,10 @@ const consultarDisponibilidad = async (req, res) => {
     const start = new Date(inicio);
     const end = fin ? new Date(fin) : new Date(start.getTime() + 3600000);
 
-    const conflictos = await prisma.evento.findMany({
+    const eventos = await prisma.evento.findMany({
       where: {
         id: excluir_id ? { not: excluir_id } : undefined,
+        proyectoId: null,
         OR: [
           { usuarioId: { in: ids } },
           { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }
@@ -501,6 +502,41 @@ const consultarDisponibilidad = async (req, res) => {
         usuarioId: true
       }
     });
+
+    const proyectos = await prisma.proyecto.findMany({
+      where: {
+        estado: { not: 'CERRADO' },
+        miembros: { some: { id: { in: ids } } },
+        fechaInicio: { lt: end },
+        OR: [
+          { fechaFin: null },
+          { fechaFin: { gt: start } }
+        ]
+      },
+      select: {
+        id: true,
+        nombre: true,
+        fechaInicio: true,
+        fechaFin: true,
+        miembros: {
+          where: { id: { in: ids } },
+          select: { id: true }
+        }
+      }
+    });
+
+    const conflictos = [
+      ...eventos.map(evento => ({ ...evento, tipo: 'evento' })),
+      ...proyectos.flatMap(proyecto => proyecto.miembros.map(miembro => ({
+        id: `proyecto-${proyecto.id}-${miembro.id}`,
+        titulo: `Proyecto: ${proyecto.nombre}`,
+        fechaInicio: proyecto.fechaInicio,
+        fechaFin: proyecto.fechaFin,
+        usuarioId: miembro.id,
+        proyectoId: proyecto.id,
+        tipo: 'proyecto'
+      })))
+    ];
 
     return res.json({ conflictos });
   } catch (error) {
