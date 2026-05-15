@@ -11,6 +11,7 @@ import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
 import Spinner    from '../components/Spinner';
 import ModalImportar from '../components/ModalImportar';
+import RangeDatePicker from '../components/RangeDatePicker';
 import { 
   Target, 
   ListTodo, 
@@ -446,47 +447,34 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PRIORIDAD</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
-                  {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ESTADO</label>
                 <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
                   {ESTADOS_TAREA.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA INICIO</label>
-                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})} />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PRIORIDAD</label>
+                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
+                  {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
               </div>
+
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA LÍMITE</label>
-                  <div className="flex gap-2">
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        const hoy = new Date().toISOString().slice(0, 10);
-                        setForm({ ...form, venceEn: hoy });
-                      }}
-                      className="px-3 py-1 rounded-lg bg-blue-50 text-[10px] font-black text-blue-600 hover:bg-blue-100 transition-all uppercase tracking-widest border border-blue-100"
-                    >Hoy</button>
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        const mañana = new Date(); mañana.setDate(mañana.getDate() + 1);
-                        setForm({ ...form, venceEn: mañana.toISOString().slice(0, 10) });
-                      }}
-                      className="px-3 py-1 rounded-lg bg-slate-50 text-[10px] font-black text-slate-500 hover:bg-slate-100 transition-all uppercase tracking-widest border border-slate-100"
-                    >Mañana</button>
-                  </div>
-                </div>
-                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none focus:border-blue-500 transition-all" value={form.venceEn} onChange={e => setForm({...form, venceEn: e.target.value})} />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DURACIÓN (INICIO - FIN)</label>
+                <RangeDatePicker 
+                  from={form.fechaInicio ? new Date(form.fechaInicio + 'T12:00:00') : null}
+                  to={form.venceEn ? new Date(form.venceEn + 'T12:00:00') : null}
+                  onChange={(range) => {
+                    setForm({
+                      ...form,
+                      fechaInicio: range?.from ? range.from.toISOString().slice(0, 10) : '',
+                      venceEn: range?.to ? range.to.toISOString().slice(0, 10) : ''
+                    });
+                  }}
+                />
               </div>
             </div>
           </form>
