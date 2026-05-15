@@ -1,4 +1,4 @@
-﻿// Dashboard â€” adaptado segÃºn el rol del usuario
+// Dashboard â€” adaptado segÃºn el rol del usuario
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -23,8 +23,8 @@ import {
 // â”€â”€â”€ ConfiguraciÃ³n Visual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const AREA_CONF = {
   DESARROLLO:     { label: 'Desarrollo',     color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={18} /> },
-  ADMINISTRACION: { label: 'AdministraciÃ³n', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  icon: <BarChart3 size={18} /> },
-  COMUNICACION:   { label: 'ComunicaciÃ³n',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={18} /> },
+  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  icon: <BarChart3 size={18} /> },
+  COMUNICACION:   { label: 'Comunicación',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={18} /> },
 };
 
 // Los Ã­conos ahora vienen de lucide-react
@@ -36,7 +36,7 @@ const IconCheck    = () => <CheckCircle2 size={20} strokeWidth={2.5} />;
 
 const saludo = () => {
   const h = new Date().getHours();
-  if (h < 12) return 'Buenos dÃ­as';
+  if (h < 12) return 'Buenos días';
   if (h < 19) return 'Buenas tardes';
   return 'Buenas noches';
 };
@@ -218,10 +218,10 @@ const DashboardMiembro = ({ usuario }) => {
           </div>
         </div>
 
-        {/* PrÃ³ximas Tareas */}
+        {/* Próximas Tareas */}
         {proximas.length > 0 && (
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>PrÃ³ximas a vencer</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>Próximas a vencer</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {proximas.map(t => (
                 <div key={t.id} style={{ background: 'var(--color-surface-2)', padding: '1rem', borderRadius: '0.85rem', border: '1px solid var(--color-border)' }}>

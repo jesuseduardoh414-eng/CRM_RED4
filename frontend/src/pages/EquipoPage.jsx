@@ -173,7 +173,8 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
           background: areaConf.bg, color: areaConf.color, flexShrink: 0,
           display: 'flex', alignItems: 'center', gap: '0.45rem',
           border: `1.2px solid ${areaConf.color}30`,
-          textTransform: 'uppercase', letterSpacing: '0.06em'
+          textTransform: 'uppercase', letterSpacing: '0.06em',
+          whiteSpace: 'nowrap'
         }}>
           {areaConf.icon && <span style={{ display: 'flex', opacity: 0.8 }}>{areaConf.icon}</span>}
           {areaConf.label}

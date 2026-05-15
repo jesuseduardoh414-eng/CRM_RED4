@@ -29,10 +29,10 @@ import Spinner from '../components/Spinner';
 const VISTAS = [
   { id: 'MES',     label: 'Mes',    icon: <LayoutGrid size={16} /> },
   { id: 'SEMANA',  label: 'Semana', icon: <Columns size={16} /> },
-  { id: 'DIA',     label: 'DÃ­a',    icon: <List size={16} /> },
+  { id: 'DIA',     label: 'Día',    icon: <List size={16} /> },
 ];
 
-const DIAS_SEMANA = ['Lunes', 'Martes', 'MiÃ©rcoles', 'Jueves', 'Viernes', 'SÃ¡bado', 'Domingo'];
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 const formatFechaLarga = (date) => date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric', day: 'numeric' });
 const formatMesAnio = (date) => date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
