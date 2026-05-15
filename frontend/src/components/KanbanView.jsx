@@ -183,8 +183,9 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onCambiarEstado, o
 };
 
 // ── Columna Kanban ───────────────────────────────────────────────────────────
-const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop }) => {
+const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, limite, onCargarMas }) => {
   const [dragOver, setDragOver] = useState(false);
+  const tareasVisibles = tareas.slice(0, (tareas.length > 20 && limite === 10) ? 10 : limite);
 
   return (
     <div className="flex-1 min-w-[300px] w-[85vw] md:w-auto md:max-w-[400px] flex flex-col gap-4">
@@ -203,12 +204,16 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, col.key); }}
         className={`
-          flex-1 rounded-2xl p-2 flex flex-col gap-4 transition-all duration-200 min-h-[500px]
+          flex-1 rounded-2xl p-2 flex flex-col gap-4 transition-all duration-200 min-h-[500px] max-h-[70vh] overflow-y-auto
           ${dragOver ? 'bg-slate-50 border-2 border-dashed' : 'bg-transparent border-2 border-transparent'}
         `}
-        style={{ borderColor: dragOver ? col.color : 'transparent' }}
+        style={{ 
+          borderColor: dragOver ? col.color : 'transparent',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(0,0,0,0.1) transparent'
+        }}
       >
-        {tareas.map(t => (
+        {tareasVisibles.map(t => (
           <KanbanCard 
             key={t.id} 
             tarea={t} 
@@ -221,6 +226,15 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
             onDragStart={onDragStart}
           />
         ))}
+
+        {tareas.length > tareasVisibles.length && (
+          <button 
+            onClick={onCargarMas}
+            className="w-full py-3 bg-white/50 border border-slate-200 border-dashed rounded-xl text-[10px] font-black text-slate-500 hover:bg-white hover:border-slate-300 transition-all uppercase tracking-widest flex items-center justify-center gap-2"
+          >
+            Ver más ({tareas.length - tareasVisibles.length}) <Plus size={12} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -230,6 +244,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
 const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea }) => {
   const [actualizando, setActualizando] = useState(null);
   const [soloHoy, setSoloHoy] = useState(true);
+  const [limites, setLimites] = useState({ PENDIENTE: 10, EN_PROGRESO: 10, HECHO: 10 });
   const dragId = useRef(null);
 
   const handleDragStart = (e, id) => {
@@ -292,6 +307,8 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
               onActualizarTarea={onActualizarTarea}
               onDragStart={handleDragStart}
               onDrop={handleDrop}
+              limite={limites[col.key]}
+              onCargarMas={() => setLimites(prev => ({ ...prev, [col.key]: prev[col.key] + 10 }))}
             />
           </div>
         ))}
