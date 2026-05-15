@@ -125,6 +125,7 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
 
 // ── Modal de Proyecto ────────────────────────────────────────────────────────
 const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
+  const { usuario: usuarioActual } = useAuth();
   const areasIniciales = getAreasProyecto(proyecto?.area);
   const [form, setForm] = useState({
     nombre: proyecto?.nombre || '',
@@ -133,7 +134,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     areas: areasIniciales,
     fechaInicio: proyecto?.fechaInicio ? proyecto.fechaInicio.slice(0, 10) : new Date().toISOString().slice(0, 10),
     fechaFin: proyecto?.fechaFin ? proyecto.fechaFin.slice(0, 10) : '',
-    miembrosIds: proyecto?.miembros?.map(m => m.id) || [],
+    miembrosIds: proyecto?.miembros?.filter(m => m.id !== usuarioActual?.id).map(m => m.id) || [],
   });
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(false);
@@ -146,8 +147,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   }, []);
 
   // Mostrar todos los usuarios, pero agrupados o resaltados por el área seleccionada
-  const usuariosEnAreas = usuarios.filter(u => form.areas.includes(u.area) || esAdminUsuario(u));
-  const admins = usuarios.filter(esAdminUsuario);
+  const usuariosSeleccionables = usuarios.filter(u => u.id !== usuarioActual?.id);
+  const usuariosEnAreas = usuariosSeleccionables.filter(u => form.areas.includes(u.area) || esAdminUsuario(u));
+  const admins = usuariosSeleccionables.filter(esAdminUsuario);
   const usuariosPorArea = [
     ...form.areas.map(area => ({
       area,
@@ -190,13 +192,13 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     };
 
     consultar();
-  }, [form.areas, form.fechaInicio, form.fechaFin, usuarios]);
+  }, [form.areas, form.fechaInicio, form.fechaFin, usuarios, usuarioActual?.id]);
 
   const toggleArea = (area) => {
     setForm(prev => {
       const exists = prev.areas.includes(area);
       const areas = exists ? prev.areas.filter(a => a !== area) : [...prev.areas, area];
-      const miembrosPermitidos = usuarios.filter(u => areas.includes(u.area) || esAdminUsuario(u)).map(u => u.id);
+      const miembrosPermitidos = usuariosSeleccionables.filter(u => areas.includes(u.area) || esAdminUsuario(u)).map(u => u.id);
       return {
         ...prev,
         areas,
@@ -209,7 +211,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     setForm(prev => {
       const exists = prev.miembrosIds.includes(id);
       if (exists) return { ...prev, miembrosIds: prev.miembrosIds.filter(x => x !== id) };
-      const usuario = usuarios.find(u => u.id === id);
+      const usuario = usuariosSeleccionables.find(u => u.id === id);
       if (!esAdminUsuario(usuario) && ocupados[id]?.length) return prev;
       return { ...prev, miembrosIds: [...prev.miembrosIds, id] };
     });
