@@ -50,7 +50,7 @@ const VerifyAccountPage = () => {
 
         {estado === 'exito' && (
           <div style={{ animation: 'fadeSlideIn 0.4s ease' }}>
-            }}>
+            <div style={{ width: '64px', height: '64px', background: '#f0fdf4', color: '#10b981', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
               <CheckCircle2 size={40} strokeWidth={2.5} />
             </div>
             <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>¡Cuenta Verificada!</h1>
@@ -66,7 +66,7 @@ const VerifyAccountPage = () => {
 
         {estado === 'error' && (
           <div style={{ animation: 'fadeSlideIn 0.4s ease' }}>
-            }}>
+            <div style={{ width: '64px', height: '64px', background: '#fef2f2', color: '#ef4444', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
               <XCircle size={40} strokeWidth={2.5} />
             </div>
             <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>Error de Verificación</h1>
