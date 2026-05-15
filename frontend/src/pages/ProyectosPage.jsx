@@ -330,6 +330,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               </div>
             </div>
 
+            {false && (
             <div className="hidden">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MIEMBROS POR AREA ({form.areas.join(', ')})</label>
@@ -353,7 +354,9 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 })}
               </div>
             </div>
+            )}
 
+            {false && (
             <div className="space-y-3">
               <label className="hidden">OTROS MIEMBROS</label>
               <div className="hidden">
@@ -371,6 +374,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 })}
               </div>
             </div>
+            )}
 
             <div className="space-y-3">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DOCUMENTOS DE APOYO</label>
