@@ -144,7 +144,7 @@ const listar = async (req, res) => {
       include: {
         ...INCLUDE_PROYECTO,
         tareas: {
-          select: { estado: true }
+          select: { estado: true, asignadoId: true }
         }
       },
     });
@@ -153,10 +153,21 @@ const listar = async (req, res) => {
       const total = p.tareas.length;
       const hechas = p.tareas.filter(t => t.estado === 'HECHO').length;
       const progreso = total > 0 ? Math.round((hechas / total) * 100) : 0;
+      const tareasMiembro = p.tareas.filter(t => t.asignadoId === req.usuario.id);
+      const hechasMiembro = tareasMiembro.filter(t => t.estado === 'HECHO').length;
+      const progresoMiembro = tareasMiembro.length > 0
+        ? Math.round((hechasMiembro / tareasMiembro.length) * 100)
+        : 0;
       
       // Eliminamos el array de tareas para no sobrecargar la respuesta JSON
       const { tareas, ...resto } = p;
-      return { ...resto, progreso };
+      return {
+        ...resto,
+        progreso,
+        progresoGeneral: progreso,
+        progresoMiembro: esAdmin ? null : progresoMiembro,
+        tareasMiembro: esAdmin ? null : tareasMiembro.length,
+      };
     });
 
     return res.json({ proyectos: proyectosConProgreso, filtradoPorUsuario: !esAdmin });

@@ -152,6 +152,7 @@ const ProyectoDetallePage = () => {
   const [modalImportar, setModalImportar] = useState(false);
   const [tareaEditando, setTareaEditando] = useState(null);
   const [vista, setVista] = useState('lista');
+  const [progresoServidor, setProgresoServidor] = useState(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -160,6 +161,7 @@ const ProyectoDetallePage = () => {
       setProyecto(t.proyecto);
       setTareas(t.tareas);
       setUsuarios(t.proyecto?.miembros || []);
+      setProgresoServidor(t.progreso || null);
     } catch (err) { showToast(err.message, 'error'); }
     finally { setCargando(false); }
   }, [id, showToast]);
@@ -178,6 +180,10 @@ const ProyectoDetallePage = () => {
     pendientes: tareas.filter(t => t.estado === 'PENDIENTE').length,
     pct: tareas.length > 0 ? Math.round((tareas.filter(t => t.estado === 'HECHO').length / tareas.length) * 100) : 0
   };
+  const progresoGeneral = progresoServidor?.general?.porcentaje ?? stats.pct;
+  const progresoMiembro = progresoServidor?.miembro?.porcentaje ?? stats.pct;
+  const totalGeneral = progresoServidor?.general?.total ?? stats.total;
+  const totalMiembro = progresoServidor?.miembro?.total ?? stats.total;
 
   const handleEliminar = async (t) => {
     if (!window.confirm(`¿Eliminar "${t.titulo}"?`)) return;
@@ -233,9 +239,10 @@ const ProyectoDetallePage = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 overflow-x-auto pb-2 lg:pb-0">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10 overflow-x-auto pb-2 lg:pb-0">
         {[
-          { l: 'Progreso', v: `${stats.pct}%`, i: <Target size={24} />, c: '#2563eb', bg: '#eff6ff' },
+          { l: 'Progreso general', v: `${progresoGeneral}%`, sub: `${totalGeneral} tareas`, i: <Target size={24} />, c: '#2563eb', bg: '#eff6ff' },
+          { l: 'Mi progreso', v: `${progresoMiembro}%`, sub: `${totalMiembro} asignadas`, i: <Target size={24} />, c: '#10b981', bg: '#f0fdf4' },
           { l: 'Por Hacer', v: stats.pendientes, i: <ListTodo size={24} />, c: '#64748b', bg: '#f8fafc' },
           { l: 'En Marcha', v: stats.progreso, i: <Zap size={24} />, c: '#8b5cf6', bg: '#f5f3ff' },
           { l: 'Hechas', v: stats.hechas, i: <CheckCircle2 size={24} />, c: '#10b981', bg: '#f0fdf4' }
@@ -244,6 +251,7 @@ const ProyectoDetallePage = () => {
             <div className="flex flex-col gap-0.5">
               <div className="text-xl lg:text-2xl font-black text-slate-900 leading-none">{s.v}</div>
               <div className="text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.l}</div>
+              {s.sub && <div className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{s.sub}</div>}
             </div>
             <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.bg, color: s.c }}>
               {s.i}

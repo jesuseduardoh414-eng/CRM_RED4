@@ -53,7 +53,8 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
   const areaLabel = getLabelAreas(proyecto.area);
   const estado = ESTADOS.find(e => e.value === proyecto.estado) || ESTADOS[0];
   const total = proyecto._count?.tareas || 0;
-  const progreso = proyecto.progreso || 0; 
+  const progresoGeneral = proyecto.progresoGeneral ?? proyecto.progreso ?? 0;
+  const progresoMiembro = proyecto.progresoMiembro;
 
   return (
     <div 
@@ -81,17 +82,31 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
         {proyecto.descripcion || 'Gestión operativa del proyecto y seguimiento de hitos.'}
       </p>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-          <span className="text-slate-400">Progreso</span>
-          <span className="text-slate-900">{progreso}%</span>
+          <span className="text-slate-400">Progreso general</span>
+          <span className="text-slate-900">{progresoGeneral}%</span>
         </div>
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
           <div 
             className="h-full bg-blue-600 rounded-full transition-all duration-1000" 
-            style={{ width: `${progreso}%` }} 
+            style={{ width: `${progresoGeneral}%` }} 
           />
         </div>
+        {progresoMiembro !== null && progresoMiembro !== undefined && (
+          <>
+            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+              <span className="text-slate-400">Mi progreso</span>
+              <span className="text-slate-900">{progresoMiembro}%</span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
+                style={{ width: `${progresoMiembro}%` }}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex justify-between items-center pt-4 border-t border-slate-50 mt-auto">

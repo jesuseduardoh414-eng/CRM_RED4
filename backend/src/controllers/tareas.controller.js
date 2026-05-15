@@ -106,9 +106,29 @@ const listar = async (req, res) => {
       return t;
     });
 
+    const todasLasTareas = await prisma.tarea.findMany({
+      where: { proyectoId },
+      select: { estado: true, asignadoId: true },
+    });
+    const tareasMiembro = todasLasTareas.filter(t => t.asignadoId === req.usuario.id);
+    const hechasGeneral = todasLasTareas.filter(t => t.estado === 'HECHO').length;
+    const hechasMiembro = tareasMiembro.filter(t => t.estado === 'HECHO').length;
+
     return res.json({
       proyecto,
       tareas: tareasAjustadas,
+      progreso: {
+        general: {
+          total: todasLasTareas.length,
+          hechas: hechasGeneral,
+          porcentaje: todasLasTareas.length > 0 ? Math.round((hechasGeneral / todasLasTareas.length) * 100) : 0,
+        },
+        miembro: {
+          total: tareasMiembro.length,
+          hechas: hechasMiembro,
+          porcentaje: tareasMiembro.length > 0 ? Math.round((hechasMiembro / tareasMiembro.length) * 100) : 0,
+        },
+      },
       filtradoPorUsuario: !esAdmin, 
     });
   } catch (error) {
