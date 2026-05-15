@@ -1,4 +1,4 @@
-// Página Mi Equipo — vista por proyecto
+﻿// PÃ¡gina Mi Equipo â€” vista por proyecto
 // ADMIN: ve el equipo de cada proyecto (todos los proyectos)
 // MIEMBRO: ve el equipo de sus proyectos asignados
 
@@ -6,11 +6,20 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { proyectosService } from '../services/api';
 import Spinner from '../components/Spinner';
+import { 
+  Code2, 
+  BarChart3, 
+  Megaphone, 
+  User, 
+  ClipboardList, 
+  Zap, 
+  CheckCircle2 
+} from 'lucide-react';
 
 const AREA_CONF = {
-  DESARROLLO:     { label: 'Desarrollo',     color: '#818cf8', bg: 'rgba(129,140,248,0.08)',  icon: '💻' },
-  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',   icon: '📊' },
-  COMUNICACION:   { label: 'Comunicación',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: '📢' },
+  DESARROLLO:     { label: 'Desarrollo',     color: '#818cf8', bg: 'rgba(129,140,248,0.08)',  icon: <Code2 size={16} /> },
+  ADMINISTRACION: { label: 'AdministraciÃ³n', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',   icon: <BarChart3 size={16} /> },
+  COMUNICACION:   { label: 'ComunicaciÃ³n',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: <Megaphone size={16} /> },
 };
 
 const ROL_CONF = {
@@ -24,9 +33,9 @@ const ESTADO_COLOR = {
   CERRADO:  '#94a3b8',
 };
 
-// ── Tarjeta de miembro ───────────────────────────────────────────────────────
+// â”€â”€ Tarjeta de miembro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const MiembroCard = ({ miembro }) => {
-  const areaConf = AREA_CONF[miembro.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', icon: '👤', label: miembro.area };
+  const areaConf = AREA_CONF[miembro.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', icon: <User size={16} />, label: miembro.area };
   const rolConf  = ROL_CONF[miembro.rol] || ROL_CONF.MIEMBRO;
   const pct      = miembro.tareas.total > 0
     ? Math.round((miembro.tareas.hechas / miembro.tareas.total) * 100)
@@ -59,7 +68,7 @@ const MiembroCard = ({ miembro }) => {
         </div>
       </div>
 
-      {/* Badges área + rol */}
+      {/* Badges Ã¡rea + rol */}
       <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
         <span style={{
           padding: '0.2rem 0.65rem', borderRadius: '999px',
@@ -88,10 +97,10 @@ const MiembroCard = ({ miembro }) => {
               transition: 'width 0.4s ease',
             }} />
           </div>
-          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.4rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-            <span>📋 {miembro.tareas.pendientes}</span>
-            <span>⚡ {miembro.tareas.enProgreso}</span>
-            <span>✅ {miembro.tareas.hechas}</span>
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.4rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><ClipboardList size={12} /> {miembro.tareas.pendientes}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><Zap size={12} /> {miembro.tareas.enProgreso}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><CheckCircle2 size={12} /> {miembro.tareas.hechas}</span>
           </div>
         </div>
       )}
@@ -99,7 +108,7 @@ const MiembroCard = ({ miembro }) => {
   );
 };
 
-// ── Sección de proyecto ──────────────────────────────────────────────────────
+// â”€â”€ SecciÃ³n de proyecto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ProyectoEquipo = ({ proyecto, equipoData }) => {
   const [open, setOpen] = useState(true);
   const estadoColor = ESTADO_COLOR[proyecto.estado] || '#94a3b8';
@@ -111,7 +120,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
       border: '1px solid var(--color-border)',
       borderRadius: '1rem', overflow: 'hidden',
     }}>
-      {/* Cabecera del proyecto — clickeable para colapsar */}
+      {/* Cabecera del proyecto â€” clickeable para colapsar */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{
@@ -136,7 +145,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
           fontSize: '0.68rem', fontWeight: '700',
           background: areaConf.bg, color: areaConf.color, flexShrink: 0,
         }}>{areaConf.label}</span>
-        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>▾</span>
+        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>â–¾</span>
       </button>
 
       {/* Equipo del proyecto */}
@@ -165,7 +174,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
   );
 };
 
-// ── Página principal ──────────────────────────────────────────────────────────
+// â”€â”€ PÃ¡gina principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const EquipoPage = () => {
   const { usuario }               = useAuth();
   const [datos, setDatos]         = useState([]); // [{ proyecto, equipo }]
@@ -218,7 +227,7 @@ const EquipoPage = () => {
           background: 'var(--color-surface-2)', border: '1px dashed var(--color-border)',
           borderRadius: '1rem', color: 'var(--color-text-muted)',
         }}>
-          No tienes proyectos asignados aún.
+          No tienes proyectos asignados aÃºn.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

@@ -43,11 +43,11 @@ const NotificationCenter = () => {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notificaciones' },
         (payload) => {
-          console.log('🔔 [Realtime] ¡Mensaje recibido!', payload);
+          console.log('[Realtime] ¡Mensaje recibido!', payload);
           if (payload.new) {
             const targetId = payload.new.usuario_id || payload.new.usuarioId;
             if (targetId == usuario.id) {
-              console.log('✅ [Realtime] Alerta para mí!');
+              console.log('[Realtime] Alerta para mí!');
               fetchNotificaciones(); // Refrescar lista completa para estar seguros
               if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
             }
@@ -55,7 +55,7 @@ const NotificationCenter = () => {
         }
       )
       .subscribe((status, err) => {
-        console.log(`📡 [Realtime] Estado: ${status}`);
+        console.log(`[Realtime] Estado: ${status}`);
         if (err && status !== 'CHANNEL_ERROR') console.error('[Realtime] Error:', err);
       });
 

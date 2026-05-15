@@ -1,4 +1,4 @@
-// Dashboard — adaptado según el rol del usuario
+﻿// Dashboard â€” adaptado segÃºn el rol del usuario
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -16,17 +16,18 @@ import {
   AlertCircle,
   Clock,
   PlayCircle,
-  CalendarDays
+  CalendarDays,
+  User
 } from 'lucide-react';
 
-// ─── Configuración Visual ────────────────────────────────────────────────────
+// â”€â”€â”€ ConfiguraciÃ³n Visual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const AREA_CONF = {
   DESARROLLO:     { label: 'Desarrollo',     color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={18} /> },
-  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  icon: <BarChart3 size={18} /> },
-  COMUNICACION:   { label: 'Comunicación',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={18} /> },
+  ADMINISTRACION: { label: 'AdministraciÃ³n', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  icon: <BarChart3 size={18} /> },
+  COMUNICACION:   { label: 'ComunicaciÃ³n',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={18} /> },
 };
 
-// Los íconos ahora vienen de lucide-react
+// Los Ã­conos ahora vienen de lucide-react
 const IconProjects = () => <Layers size={20} strokeWidth={2.5} />;
 const IconTasks    = () => <ClipboardList size={20} strokeWidth={2.5} />;
 const IconChart    = () => <BarChart3 size={20} strokeWidth={2.5} />;
@@ -35,12 +36,12 @@ const IconCheck    = () => <CheckCircle2 size={20} strokeWidth={2.5} />;
 
 const saludo = () => {
   const h = new Date().getHours();
-  if (h < 12) return 'Buenos días';
+  if (h < 12) return 'Buenos dÃ­as';
   if (h < 19) return 'Buenas tardes';
   return 'Buenas noches';
 };
 
-// ─── Tarjeta stat (Premium) ──────────────────────────────────────────────────
+// â”€â”€â”€ Tarjeta stat (Premium) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const StatCard = ({ value, sub, icon, color, bg }) => (
   <div className="bg-white p-5 lg:p-6 rounded-[24px] shadow-sm border border-slate-50 flex items-center justify-between min-w-[140px] h-[110px] lg:h-[120px]">
     <div className="flex flex-col gap-0.5">
@@ -127,7 +128,7 @@ const AdminMemberActivity = ({ miembros }) => {
                 {miembro.faltanHoy.length ? miembro.faltanHoy.map(t => <MiniTask key={t.id} tarea={t} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin pendientes de hoy</span>}
               </ActivityBucket>
               <ActivityBucket label="Faltan semana" count={miembro.totales.faltanSemana} color="#f59e0b" icon={<CalendarDays size={15} />}>
-                {miembro.faltanSemana.length ? miembro.faltanSemana.map(t => <MiniTask key={t.id} tarea={t} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin pendientes próximos</span>}
+                {miembro.faltanSemana.length ? miembro.faltanSemana.map(t => <MiniTask key={t.id} tarea={t} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin pendientes prÃ³ximos</span>}
               </ActivityBucket>
             </div>
           </div>
@@ -137,13 +138,13 @@ const AdminMemberActivity = ({ miembros }) => {
   );
 };
 
-// ─── Dashboard MIEMBRO ────────────────────────────────────────────────────────
+// â”€â”€â”€ Dashboard MIEMBRO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DashboardMiembro = ({ usuario }) => {
   const navigate = useNavigate();
   const [proyectos, setProyectos] = useState([]);
   const [todasTareas, setTodas] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const area = AREA_CONF[usuario?.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', icon: '👤', label: usuario?.area };
+  const area = AREA_CONF[usuario?.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', icon: <User size={18} />, label: usuario?.area };
 
   useEffect(() => {
     const cargar = async () => {
@@ -217,10 +218,10 @@ const DashboardMiembro = ({ usuario }) => {
           </div>
         </div>
 
-        {/* Próximas Tareas */}
+        {/* PrÃ³ximas Tareas */}
         {proximas.length > 0 && (
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>Próximas a vencer</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>PrÃ³ximas a vencer</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {proximas.map(t => (
                 <div key={t.id} style={{ background: 'var(--color-surface-2)', padding: '1rem', borderRadius: '0.85rem', border: '1px solid var(--color-border)' }}>
@@ -241,7 +242,7 @@ const DashboardMiembro = ({ usuario }) => {
   );
 };
 
-// ─── Dashboard ADMIN ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Dashboard ADMIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DashboardAdmin = () => {
   const [stats, setStats] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -251,7 +252,7 @@ const DashboardAdmin = () => {
   }, []);
 
   if (cargando) return <Spinner texto="Compilando datos globales..." />;
-  if (!stats) return <div style={{ padding: '4rem', textAlign: 'center' }}>Error de conexión</div>;
+  if (!stats) return <div style={{ padding: '4rem', textAlign: 'center' }}>Error de conexiÃ³n</div>;
 
   const { proyectos, tareas, topUsuarios, actividadReciente, proyectosProgreso, actividadMiembros } = stats;
 
@@ -260,7 +261,7 @@ const DashboardAdmin = () => {
       <div className="mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4">
         <div>
           <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">Control Central</h1>
-          <p className="text-sm lg:text-base text-slate-500 mt-1">Supervisión estratégica del equipo CRM RED 4</p>
+          <p className="text-sm lg:text-base text-slate-500 mt-1">SupervisiÃ³n estratÃ©gica del equipo CRM RED 4</p>
         </div>
         <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
           {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -318,7 +319,9 @@ const DashboardAdmin = () => {
             <div key={log.id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '1rem', border: '1px solid var(--color-border)' }}>
               <div style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-primary-light)', marginBottom: '0.25rem' }}>{log.accion}</div>
               <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>{log.descripcion}</p>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>👤 {log.usuario.nombre}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <User size={14} /> {log.usuario.nombre}
+              </div>
             </div>
           ))}
         </div>

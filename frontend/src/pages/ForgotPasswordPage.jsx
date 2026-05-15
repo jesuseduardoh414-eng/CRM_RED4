@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authService } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { Key } from 'lucide-react';
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
@@ -29,8 +30,8 @@ const ForgotPasswordPage = () => {
         
         {/* Logo / Icon */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-xl shadow-blue-500/20 mb-6 text-2xl">
-            🔑
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-xl shadow-blue-500/20 mb-6 text-white">
+            <Key size={32} strokeWidth={2.5} />
           </div>
           <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">¿Olvidaste tu clave?</h1>
           <p className="text-slate-400 font-medium mt-1 text-sm lg:text-base">

@@ -12,7 +12,8 @@ import {
   LogOut, 
   Menu,
   Bell,
-  Calendar
+  Calendar,
+  Search
 } from 'lucide-react';
 
 // ── Íconos SVG (Material Style) ──────────────────────────────────────────────
@@ -183,7 +184,9 @@ const Layout = ({ children }) => {
           
           {/* Barra de Búsqueda */}
           <div className="relative flex-1 max-w-xl group">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-50 transition-opacity">🔍</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-50 transition-opacity">
+              <Search size={18} />
+            </span>
             <input 
               type="text" 
               placeholder="Buscar..."

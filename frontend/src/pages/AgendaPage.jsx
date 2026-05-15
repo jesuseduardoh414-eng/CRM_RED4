@@ -15,7 +15,8 @@ import {
   Edit2,
   Globe,
   Activity,
-  CheckSquare
+  CheckSquare,
+  Repeat
 } from 'lucide-react';
 import { agendaService } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -24,14 +25,14 @@ import ModalEvento from '../components/ModalEvento';
 import ModalConfiguracionAgenda from '../components/ModalConfiguracionAgenda';
 import Spinner from '../components/Spinner';
 
-// ── Constantes ──────────────────────────────────────────────────────────────
+// â”€â”€ Constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const VISTAS = [
   { id: 'MES',     label: 'Mes',    icon: <LayoutGrid size={16} /> },
   { id: 'SEMANA',  label: 'Semana', icon: <Columns size={16} /> },
-  { id: 'DIA',     label: 'Día',    icon: <List size={16} /> },
+  { id: 'DIA',     label: 'DÃ­a',    icon: <List size={16} /> },
 ];
 
-const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const DIAS_SEMANA = ['Lunes', 'Martes', 'MiÃ©rcoles', 'Jueves', 'Viernes', 'SÃ¡bado', 'Domingo'];
 
 const formatFechaLarga = (date) => date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric', day: 'numeric' });
 const formatMesAnio = (date) => date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
@@ -67,7 +68,7 @@ const getHoras = (start = 0, end = 23) => {
   return horas;
 };
 
-// ── Componente Principal ─────────────────────────────────────────────────────
+// â”€â”€ Componente Principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const AgendaPage = () => {
   const { showToast } = useToast();
   const { usuario } = useAuth();
@@ -144,7 +145,7 @@ const AgendaPage = () => {
   const handleResponder = async (eventoId, respuesta) => {
     try {
       await agendaService.responderInvitacion(eventoId, respuesta);
-      showToast(`Invitación ${respuesta === 'aceptado' ? 'aceptada' : 'rechazada'}`);
+      showToast(`InvitaciÃ³n ${respuesta === 'aceptado' ? 'aceptada' : 'rechazada'}`);
       cargarDatos();
     } catch (error) {
       showToast(error.message, 'error');
@@ -152,7 +153,7 @@ const AgendaPage = () => {
   };
 
   const handleEliminar = async (id) => {
-    if (!window.confirm('¿Eliminar este evento?')) return;
+    if (!window.confirm('Â¿Eliminar este evento?')) return;
     try {
       await agendaService.eliminar(id);
       showToast('Evento eliminado');
@@ -198,7 +199,7 @@ const AgendaPage = () => {
   return (
     <div className="page-container" style={{ padding: '2rem' }}>
       
-      {/* Header con Navegación y Vistas */}
+      {/* Header con NavegaciÃ³n y Vistas */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '2rem', flexWrap: 'wrap' }}>
           <h1 style={{ fontSize: isMobile ? '1.5rem' : '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
@@ -356,7 +357,7 @@ const AgendaPage = () => {
   );
 };
 
-// ── VISTAS (MENSUAL, SEMANAL, DIARIA) ────────────────────────────────────────
+// â”€â”€ VISTAS (MENSUAL, SEMANAL, DIARIA) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate }) => {
   const year = date.getFullYear();
@@ -455,7 +456,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                   ))}
                   {diaEventos.length > 2 && (
                     <div style={{ fontSize: '0.65rem', color: 'var(--color-primary)', fontWeight: '800', paddingLeft: '4px' }}>
-                      + {diaEventos.length - 2} más
+                      + {diaEventos.length - 2} mÃ¡s
                     </div>
                   )}
                 </div>
@@ -535,14 +536,14 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
                   const start = new Date(e.fechaInicio);
                   const end = e.fechaFin ? new Date(e.fechaFin) : new Date(start.getTime() + 3600000);
                   
-                  // Calcular horas para este día específico
+                  // Calcular horas para este dÃ­a especÃ­fico
                   const isStartDay = start.getDate() === d.getDate() && start.getMonth() === d.getMonth();
                   const isEndDay = end.getDate() === d.getDate() && end.getMonth() === d.getMonth();
                   
                   const displayStart = isStartDay ? start.getHours() + start.getMinutes() / 60 : hStart;
                   const displayEnd = isEndDay ? end.getHours() + end.getMinutes() / 60 : hEnd + 1;
                   
-                  // Omitir si el evento está totalmente fuera del rango visible
+                  // Omitir si el evento estÃ¡ totalmente fuera del rango visible
                   if (displayEnd <= hStart || displayStart >= hEnd + 1) return null;
 
                   const top = (Math.max(displayStart, hStart) - hStart) * 50;
@@ -551,7 +552,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
                   return (
                     <div key={e.id} onClick={() => onSelectEvent(e)} style={{ position: 'absolute', top, height: Math.max(height, 20), left: '2px', right: '2px', background: e.color, borderRadius: '4px', padding: '4px', color: '#fff', fontSize: '0.65rem', fontWeight: '700', zIndex: 5, boxShadow: 'var(--shadow-sm)', opacity: isInvited ? 0.9 : 1, border: isInvited ? '2px dashed rgba(255,255,255,0.5)' : 'none', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '2px' }}>
                       {e.tipo === 'actividad' ? <Activity size={10} /> : e.tipo === 'tarea' ? <CheckSquare size={10} /> : (e.esGlobal ? <Globe size={10}/> : e.esCompartido ? <Users size={10}/> : null)}
-                      {e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
+                      {e.esOcurrencia ? <Repeat size={10} /> : ''} {e.titulo}
                     </div>
                   );
                 })}
@@ -596,7 +597,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
             const start = new Date(e.fechaInicio);
             const end = e.fechaFin ? new Date(e.fechaFin) : new Date(start.getTime() + 3600000);
             
-            // Calcular horas para este día específico
+            // Calcular horas para este dÃ­a especÃ­fico
             const isStartDay = start.getDate() === date.getDate() && start.getMonth() === date.getMonth();
             const isEndDay = end.getDate() === date.getDate() && end.getMonth() === date.getMonth();
             
@@ -612,9 +613,9 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
               <div key={e.id} onClick={() => onSelectEvent(e)} style={{ position: 'absolute', top, height: Math.max(height, 40), left: '10px', right: '10px', background: e.color, borderRadius: '12px', padding: '1rem', color: '#fff', boxShadow: 'var(--shadow-lg)', zIndex: 10, cursor: 'pointer', border: e.usuarioId !== currentUserId ? '2px dashed rgba(255,255,255,0.4)' : 'none' }}>
                 <div style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {e.tipo === 'actividad' ? <Activity size={14} /> : e.tipo === 'tarea' ? <CheckSquare size={14} /> : (e.esGlobal ? <Globe size={14}/> : e.esCompartido ? <Users size={14}/> : null)}
-                  {e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
+                  {e.esOcurrencia ? <Repeat size={10} /> : ''} {e.titulo}
                 </div>
-                <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>{start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>{start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} â€” {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
             );
           })}
@@ -627,10 +628,10 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
            </div>
            <div>
              <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{formatFechaLarga(date)}</div>
-             <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>{esLaboral ? 'DÍA LABORAL' : (diaEspecial?.descripcion || 'DÍA DE DESCANSO')}</div>
+             <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>{esLaboral ? 'DÃA LABORAL' : (diaEspecial?.descripcion || 'DÃA DE DESCANSO')}</div>
            </div>
          </div>
-         <h3 style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--color-text-dim)', textTransform: 'uppercase', marginBottom: '1.5rem' }}>Agenda del día</h3>
+         <h3 style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--color-text-dim)', textTransform: 'uppercase', marginBottom: '1.5rem' }}>Agenda del dÃ­a</h3>
          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
            {evs.length === 0 ? (
              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-dim)', fontSize: '0.85rem' }}>No hay eventos para hoy</div>
@@ -640,7 +641,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                     <div style={{ fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       {e.tipo === 'actividad' ? <Activity size={14} color="var(--color-primary)" /> : e.tipo === 'tarea' ? <CheckSquare size={14} color="var(--color-primary)" /> : null}
-                      {e.esOcurrencia ? '🔁 ' : ''}{e.titulo}
+                      {e.esOcurrencia ? <Repeat size={10} /> : ''} {e.titulo}
                     </div>
                     <div style={{ display: 'flex', gap: '4px' }}>
                       {!e.esLectura && (

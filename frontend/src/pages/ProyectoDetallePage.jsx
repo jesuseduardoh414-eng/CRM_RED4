@@ -24,7 +24,8 @@ import {
   List,
   LayoutGrid,
   CalendarRange,
-  ChevronLeft
+  ChevronLeft,
+  AlertTriangle
 } from 'lucide-react';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
@@ -94,8 +95,13 @@ const TareaCard = ({ tarea, onClick, onEliminar, onCambiarEstado }) => {
         </div>
 
         {/* Fecha */}
-        <div className={`text-[10px] lg:text-xs font-black shrink-0 ${vencido ? 'text-red-500' : 'text-slate-400'}`}>
-          {tarea.venceEn ? (vencido ? '⚠️ ' : '') + formatFecha(tarea.venceEn) : '—'}
+        <div className={`text-[10px] lg:text-xs font-black shrink-0 flex items-center gap-1 ${vencido ? 'text-red-500' : 'text-slate-400'}`}>
+          {tarea.venceEn ? (
+            <>
+              {vencido && <AlertTriangle size={12} />}
+              {formatFecha(tarea.venceEn)}
+            </>
+          ) : '—'}
         </div>
 
         <div className="flex gap-2 ml-4">
@@ -432,3 +438,5 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
 };
 
 export default ProyectoDetallePage;
+
+
