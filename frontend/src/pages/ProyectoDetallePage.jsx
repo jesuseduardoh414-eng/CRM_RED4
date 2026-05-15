@@ -218,6 +218,14 @@ const ProyectoDetallePage = () => {
     } catch (err) { showToast(err.message, 'error'); }
   };
 
+  const handleActualizarTarea = async (id, datos) => {
+    try {
+      const { tarea } = await tareasService.editar(id, datos);
+      setTareas(prev => prev.map(x => x.id === id ? tarea : x));
+      showToast('Tarea actualizada');
+    } catch (err) { showToast(err.message, 'error'); }
+  };
+
   if (cargando) return <Spinner texto="Cargando entorno..." />;
 
   return (
@@ -335,7 +343,7 @@ const ProyectoDetallePage = () => {
             )}
           </div>
         )}
-        {vista === 'kanban' && <KanbanView tareas={tareasFiltradas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} />}
+        {vista === 'kanban' && <KanbanView tareas={tareasFiltradas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} onActualizarTarea={handleActualizarTarea} />}
         {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradas} />}
       </div>
 
@@ -458,7 +466,27 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FECHA LÍMITE</label>
-                <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.venceEn} onChange={e => setForm({...form, venceEn: e.target.value})} />
+                <div className="flex flex-col gap-2">
+                  <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.venceEn} onChange={e => setForm({...form, venceEn: e.target.value})} />
+                  <div className="flex gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const hoy = new Date().toISOString().slice(0, 10);
+                        setForm({ ...form, venceEn: hoy });
+                      }}
+                      className="flex-1 py-2 rounded-lg bg-slate-100 text-[10px] font-black text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
+                    >Hoy</button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const mañana = new Date(); mañana.setDate(mañana.getDate() + 1);
+                        setForm({ ...form, venceEn: mañana.toISOString().slice(0, 10) });
+                      }}
+                      className="flex-1 py-2 rounded-lg bg-slate-100 text-[10px] font-black text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
+                    >Mañana</button>
+                  </div>
+                </div>
               </div>
             </div>
           </form>

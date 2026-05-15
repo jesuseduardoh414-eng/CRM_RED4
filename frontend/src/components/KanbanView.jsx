@@ -64,7 +64,7 @@ const esVencida = (fechaStr) => {
 };
 
 // ── Tarjeta Kanban (Material Style) ──────────────────────────────────────────
-const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onCambiarEstado, onDragStart }) => {
+const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onCambiarEstado, onActualizarTarea, onDragStart }) => {
   const prio = PRIORIDAD_CONFIG[tarea.prioridad] || PRIORIDAD_CONFIG.MEDIA;
   const idxActual = CICLO_ESTADOS.indexOf(tarea.estado);
   const sigEstado = CICLO_ESTADOS[(idxActual + 1) % CICLO_ESTADOS.length];
@@ -159,18 +159,36 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onCambiarEstado, o
 
       {/* Acciones Rápidas */}
       <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem' }}>
-        {tarea.estado !== 'HECHO' && (
-          <button 
-            onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
-            style={{ 
-              flex: 1, padding: '0.4rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)',
-              border: 'none', color: 'var(--color-text)', fontSize: '0.7rem', fontWeight: '600', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem'
-            }}
-          >
-            Avanzar <ArrowRight size={12} />
-          </button>
-        )}
+        <button 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            const hoy = new Date().toISOString().slice(0, 10);
+            onActualizarTarea(tarea.id, { venceEn: hoy }); 
+          }}
+          style={{ 
+            flex: 2, padding: '0.4rem', borderRadius: '0.5rem', background: 'var(--color-primary)',
+            border: 'none', color: 'white', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem',
+            boxShadow: '0 4px 12px var(--color-primary-20)', textTransform: 'uppercase', letterSpacing: '0.02em'
+          }}
+        >
+          <Calendar size={12} /> Hoy
+        </button>
+        <button 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            const mañana = new Date(); mañana.setDate(mañana.getDate() + 1);
+            onActualizarTarea(tarea.id, { venceEn: mañana.toISOString().slice(0, 10) }); 
+          }}
+          style={{ 
+            flex: 1, padding: '0.4rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)',
+            border: 'none', color: 'var(--color-text)', fontSize: '0.6rem', fontWeight: '700', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem',
+            textTransform: 'uppercase'
+          }}
+        >
+          Mañana
+        </button>
         <button 
           onClick={(e) => { e.stopPropagation(); onEditar(tarea); }}
           style={{ padding: '0.4rem 0.6rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -178,12 +196,26 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onCambiarEstado, o
           <Pencil size={12} />
         </button>
       </div>
+
+      {tarea.estado !== 'HECHO' && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
+          style={{ 
+            width: '100%', padding: '0.45rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.03)',
+            border: '1px solid var(--color-border)', color: 'var(--color-text-dim)', fontSize: '0.65rem', fontWeight: '700', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem',
+            marginTop: '0.2rem'
+          }}
+        >
+          Avanzar a {COLUMNAS.find(c => c.key === sigEstado)?.label} <ArrowRight size={10} />
+        </button>
+      )}
     </div>
   );
 };
 
 // ── Columna Kanban ───────────────────────────────────────────────────────────
-const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onDragStart, onDrop }) => {
+const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop }) => {
   const [dragOver, setDragOver] = useState(false);
 
   return (
@@ -217,6 +249,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
             onEditar={onEditar}
             onEliminar={onEliminar}
             onCambiarEstado={onCambiarEstado}
+            onActualizarTarea={onActualizarTarea}
             onDragStart={onDragStart}
           />
         ))}
@@ -226,7 +259,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
 };
 
 // ── View Principal ───────────────────────────────────────────────────────────
-const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado }) => {
+const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea }) => {
   const [actualizando, setActualizando] = useState(null);
   const [soloHoy, setSoloHoy] = useState(false);
   const dragId = useRef(null);
@@ -258,22 +291,22 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado }) 
       {/* Filtro de día */}
       <div className="flex flex-wrap gap-2 lg:gap-4 items-center">
         <button 
-          onClick={() => setSoloHoy(false)}
-          className={`
-            px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
-            ${!soloHoy ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
-          `}
-        >
-          Todas las tareas
-        </button>
-        <button 
           onClick={() => setSoloHoy(true)}
           className={`
-            px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2
-            ${soloHoy ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
+            px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2
+            ${soloHoy ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
           `}
         >
           Solo hoy <Calendar size={14} />
+        </button>
+        <button 
+          onClick={() => setSoloHoy(false)}
+          className={`
+            px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+            ${!soloHoy ? 'bg-slate-800 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'}
+          `}
+        >
+          Todas las tareas
         </button>
       </div>
 
@@ -288,6 +321,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado }) 
               onEditar={onEditar}
               onEliminar={onEliminar}
               onCambiarEstado={onCambiarEstado}
+              onActualizarTarea={onActualizarTarea}
               onDragStart={handleDragStart}
               onDrop={handleDrop}
             />
