@@ -475,7 +475,7 @@ const eliminar = async (req, res) => {
 
 // €€ GET /api/agenda/disponibilidad €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const consultarDisponibilidad = async (req, res) => {
-  const { usuarios_ids, inicio, fin, excluir_id } = req.query;
+  const { usuarios_ids, inicio, fin, excluir_id, excluir_proyecto_id } = req.query;
   if (!usuarios_ids || !inicio) return res.status(400).json({ error: 'Faltan parÃ¡metros' });
 
   try {
@@ -486,7 +486,7 @@ const consultarDisponibilidad = async (req, res) => {
     const eventos = await prisma.evento.findMany({
       where: {
         id: excluir_id ? { not: excluir_id } : undefined,
-        proyectoId: null,
+        proyectoId: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : null,
         OR: [
           { usuarioId: { in: ids } },
           { invitados: { some: { usuarioId: { in: ids }, estado: 'aceptado' } } }
@@ -505,6 +505,7 @@ const consultarDisponibilidad = async (req, res) => {
 
     const proyectos = await prisma.proyecto.findMany({
       where: {
+        id: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
         estado: { not: 'CERRADO' },
         miembros: { some: { id: { in: ids } } },
         fechaInicio: { lt: end },

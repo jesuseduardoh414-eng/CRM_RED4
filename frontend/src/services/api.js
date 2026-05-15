@@ -379,9 +379,10 @@ export const agendaService = {
     });
     return handleResponse(res);
   },
-  consultarDisponibilidad: async ({ usuarios_ids, inicio, fin }) => {
+  consultarDisponibilidad: async ({ usuarios_ids, inicio, fin, excluir_proyecto_id }) => {
     const params = new URLSearchParams({ usuarios_ids, inicio });
     if (fin) params.append('fin', fin);
+    if (excluir_proyecto_id) params.append('excluir_proyecto_id', excluir_proyecto_id);
     const res = await fetch(`${API_URL}/agenda/disponibilidad?${params}`, { headers: getHeaders() });
     return handleResponse(res);
   },

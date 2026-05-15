@@ -328,6 +328,7 @@ const editar = async (req, res) => {
     let ids = null;
     if (miembrosIds) {
       ids = normalizarIds(parseJsonArray(miembrosIds));
+      const idsProyecto = ids.includes(existente.creadorId) ? ids : [...ids, existente.creadorId];
       const areaProyecto = area || existente.area;
       const { invalidos } = await validarMiembrosPorArea(ids, areaProyecto);
       if (invalidos.length > 0) {
@@ -346,7 +347,7 @@ const editar = async (req, res) => {
         });
       }
       dataUpdate.miembros = {
-        set: ids.map(mid => ({ id: Number(mid) }))
+        set: idsProyecto.map(mid => ({ id: Number(mid) }))
       };
     }
 

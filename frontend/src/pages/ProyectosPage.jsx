@@ -176,6 +176,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
           usuarios_ids: ids.join(','),
           inicio: `${form.fechaInicio}T00:00:00`,
           fin: form.fechaFin ? `${form.fechaFin}T23:59:59` : undefined,
+          excluir_proyecto_id: proyecto?.id,
         });
         const porUsuario = {};
         data.conflictos?.forEach(conflicto => {
