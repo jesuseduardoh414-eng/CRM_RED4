@@ -87,7 +87,60 @@ const RangeDatePicker = ({ from, to, onChange }) => {
               locale={es}
               numberOfMonths={1}
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem', borderTop: '1px solid var(--color-border-light)', paddingTop: '0.75rem' }}>
+            
+            {/* Presets Rápidos */}
+            <div style={{ 
+              marginTop: '1rem', 
+              paddingTop: '1rem', 
+              borderTop: '1px solid var(--color-border-light)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.4rem'
+            }}>
+              {[
+                { label: "Hoy", val: 0 },
+                { label: "Mañana", val: 1 },
+                { label: "3 días", val: 3 },
+                { label: "1 semana", val: 7 },
+                { label: "2 semanas", val: 14 },
+              ].map((p) => (
+                <button
+                  key={p.val}
+                  type="button"
+                  onClick={() => {
+                    const from = addDays(new Date(), p.val);
+                    const to = from; // Por defecto mismo día si es preset simple
+                    onChange({ from, to });
+                  }}
+                  style={{
+                    padding: '0.4rem 0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-surface-2)',
+                    fontSize: '0.65rem',
+                    fontWeight: '800',
+                    color: 'var(--color-text-dim)',
+                    cursor: 'pointer',
+                    textTransform: 'uppercase',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={e => {
+                    e.currentTarget.style.background = 'var(--color-primary-10)';
+                    e.currentTarget.style.borderColor = 'var(--color-primary-40)';
+                    e.currentTarget.style.color = 'var(--color-primary)';
+                  }}
+                  onMouseOut={e => {
+                    e.currentTarget.style.background = 'var(--color-surface-2)';
+                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                    e.currentTarget.style.color = 'var(--color-text-dim)';
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', borderTop: '1px solid var(--color-border-light)', paddingTop: '0.75rem' }}>
               <button 
                 type="button"
                 onClick={() => setIsOpen(false)}
