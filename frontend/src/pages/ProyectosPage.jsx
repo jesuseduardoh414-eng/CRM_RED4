@@ -33,17 +33,17 @@ const AREA_CONF = {
 
 const ESTADOS = [
   { value: 'ACTIVO',   label: 'Activo',   color: '#00d166', bg: 'rgba(0,209,102,0.12)' },
-  { value: 'PENDIENTE', label: 'Pendiente', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
   { value: 'EN_PAUSA', label: 'En pausa', color: '#ff9100', bg: 'rgba(255,145,0,0.12)' },
-  { value: 'TERMINADO', label: 'Terminado', color: '#64748b', bg: 'rgba(100,116,139,0.12)' },
   { value: 'CERRADO',  label: 'Cerrado',  color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
 ];
 
 const ESTADO_ALIASES = {
+  PENDIENTE: 'EN_PAUSA',
   PAUSA: 'EN_PAUSA',
   PAUSADO: 'EN_PAUSA',
-  FINALIZADO: 'TERMINADO',
-  HECHO: 'TERMINADO',
+  TERMINADO: 'CERRADO',
+  FINALIZADO: 'CERRADO',
+  HECHO: 'CERRADO',
 };
 
 const normalizarEstadoProyecto = (estado) => ESTADO_ALIASES[String(estado || '').toUpperCase()] || String(estado || 'ACTIVO').toUpperCase();
@@ -951,7 +951,7 @@ const ProyectosPage = () => {
 
       {/* Filtros */}
       <div className="flex gap-2 mb-10 overflow-x-auto pb-2 snap-x snap-mandatory no-scrollbar">
-        {['TODOS', 'ACTIVO', 'PENDIENTE', 'EN_PAUSA', 'TERMINADO', 'CERRADO'].map(f => (
+        {['TODOS', 'ACTIVO', 'EN_PAUSA', 'CERRADO'].map(f => (
           <button
             key={f} 
             onClick={() => setFiltro(f)}
