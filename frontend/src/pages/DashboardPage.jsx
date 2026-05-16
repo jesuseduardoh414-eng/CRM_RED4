@@ -696,15 +696,22 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
         {days.map(day => {
           const isCurrentMonth = day.getMonth() === monthDate.getMonth();
           const isToday = startOfDay(day).getTime() === todayKey;
-          const occupancyOnDay = selectedMember?.ocupacionCalendario?.filter((item) =>
-            isDateBetween(day, item.fechaInicio, item.fechaFin)
-          ) || selectedMember?.todasConFecha?.filter((t) =>
-            isDateBetween(day, t.fechaInicio || t.creadoEn, t.venceEn || t.completadoEn || t.creadoEn)
-          ).map((t) => ({
-            ...t,
-            tipo: 'tarea',
-            fechaFin: t.venceEn || t.completadoEn || t.creadoEn,
-          })) || [];
+          const occupancyFromApi = selectedMember?.ocupacionCalendario || [];
+          const occupancyOnDayFromApi = occupancyFromApi.filter((item) =>
+            item.fechaInicio && item.fechaFin && isDateBetween(day, item.fechaInicio, item.fechaFin)
+          );
+          const hasTasksFromApi = occupancyOnDayFromApi.some((item) => item.tipo === 'tarea');
+          const taskFallbackOnDay = hasTasksFromApi ? [] : (selectedMember?.todasConFecha || [])
+            .filter((t) => isDateBetween(day, t.fechaInicio || t.creadoEn, t.venceEn || t.completadoEn || t.creadoEn))
+            .map((t) => ({
+              ...t,
+              id: `tarea-fallback-${t.id}`,
+              origenId: t.id,
+              tipo: 'tarea',
+              fechaInicio: t.fechaInicio || t.creadoEn,
+              fechaFin: t.venceEn || t.completadoEn || t.creadoEn,
+            }));
+          const occupancyOnDay = [...occupancyOnDayFromApi, ...taskFallbackOnDay];
 
           const projectCount = occupancyOnDay.filter((item) => item.tipo === 'proyecto').length;
           const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
