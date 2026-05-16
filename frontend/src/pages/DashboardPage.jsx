@@ -98,6 +98,16 @@ const isDateBetween = (date, start, end) => {
   return target >= startOfDay(start).getTime() && target <= endOfDay(end).getTime();
 };
 
+const uniqueCalendarItems = (items = []) => {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.tipo}-${item.origenId ?? item.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const StatCard = ({ value, sub, icon, color, bg, onClick, helper }) => (
   <button
     type="button"
@@ -251,9 +261,9 @@ const ProjectCalendarPanel = ({
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.45rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.6rem' }}>
         {weekLabels.map((label) => (
-          <div key={label} style={{ fontSize: '0.68rem', fontWeight: '900', color: '#94a3b8', textAlign: 'center', textTransform: 'uppercase' }}>
+          <div key={label} style={{ fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
             {label}
           </div>
         ))}
@@ -267,21 +277,21 @@ const ProjectCalendarPanel = ({
             <div
               key={day.toISOString()}
               style={{
-                minHeight: '94px',
-                borderRadius: '14px',
+                minHeight: '116px',
+                borderRadius: '18px',
                 border: '1px solid #e2e8f0',
                 background: isCurrentMonth ? '#fff' : '#f8fafc',
-                padding: '0.55rem',
+                padding: '0.65rem',
                 opacity: isCurrentMonth ? 1 : 0.55,
-                boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.16)' : 'none',
+                boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)' : 'none',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: '900', color: isToday ? '#2563eb' : '#0f172a' }}>{day.getDate()}</span>
                 {dayProjects.length > 0 && <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#2563eb' }}>{dayProjects.length}</span>}
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 {dayProjects.slice(0, 2).map((entry) => (
                   <button
                     key={`${entry.project.id}-${day.toISOString()}`}
@@ -290,9 +300,9 @@ const ProjectCalendarPanel = ({
                     style={{
                       width: '100%',
                       border: 'none',
-                      borderRadius: '6px',
+                      borderRadius: '7px',
                       padding: '0.25rem 0.4rem',
-                      background: selectedProjectId === entry.project.id ? '#2563eb' : 'rgba(37,99,235,0.08)',
+                      background: selectedProjectId === entry.project.id ? '#2563eb' : '#eaf1ff',
                       color: selectedProjectId === entry.project.id ? '#fff' : '#2563eb',
                       borderLeft: selectedProjectId === entry.project.id ? 'none' : '2px solid #2563eb',
                       fontSize: '0.55rem',
@@ -311,7 +321,7 @@ const ProjectCalendarPanel = ({
                   <button
                     type="button"
                     onClick={() => setExpandedDay({ date: day, projects: dayProjects })}
-                    style={{ fontSize: '0.6rem', fontWeight: '800', color: '#64748b', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                    style={{ fontSize: '0.6rem', fontWeight: '900', color: '#475569', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 0 0 0.2rem' }}
                   >
                     +{dayProjects.length - 2} mas
                   </button>
@@ -712,9 +722,13 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
               fechaInicio: t.fechaInicio || t.creadoEn,
               fechaFin: t.venceEn || t.completadoEn || t.creadoEn,
             }));
-          const occupancyOnDay = [...occupancyOnDayFromApi, ...taskFallbackOnDay];
+          const occupancyOnDay = uniqueCalendarItems([...occupancyOnDayFromApi, ...taskFallbackOnDay]);
+          const modalItems = [...occupancyOnDay].sort((a, b) => {
+            const tipoA = a.tipo === 'proyecto' ? 0 : 1;
+            const tipoB = b.tipo === 'proyecto' ? 0 : 1;
+            return tipoA - tipoB || String(a.titulo || '').localeCompare(String(b.titulo || ''));
+          });
 
-          const projectCount = occupancyOnDay.filter((item) => item.tipo === 'proyecto').length;
           const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
           const visibleProjects = occupancyOnDay.filter((item) => item.tipo === 'proyecto').slice(0, 2);
           const visibleTasks = occupancyOnDay.filter((item) => item.tipo === 'tarea').slice(0, 1);
@@ -723,26 +737,26 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
           return (
             <div
               key={day.toISOString()}
-              onClick={() => occupancyOnDay.length > 0 && setExpandedDay({ date: day, tasks: occupancyOnDay })}
+              onClick={() => modalItems.length > 0 && setExpandedDay({ date: day, tasks: modalItems })}
               style={{
-                minHeight: '110px',
+                minHeight: '116px',
                 borderRadius: '18px',
                 border: '1px solid #e2e8f0',
                 background: isCurrentMonth 
-                  ? (projectCount > 0 ? '#f0f7ff' : taskCount > 0 ? '#f0fdf4' : '#fff') 
+                  ? '#fff'
                   : '#f8fafc',
                 padding: '0.65rem',
                 opacity: isCurrentMonth ? 1 : 0.4,
-                cursor: occupancyOnDay.length > 0 ? 'pointer' : 'default',
+                cursor: modalItems.length > 0 ? 'pointer' : 'default',
                 transition: 'all 0.2s',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '0.35rem',
-                boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.1)' : 'none',
+                boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)' : 'none',
                 position: 'relative',
                 overflow: 'hidden'
               }}
-              className={occupancyOnDay.length > 0 ? 'hover:border-blue-200 hover:shadow-md' : ''}
+              className={modalItems.length > 0 ? 'hover:border-blue-200 hover:shadow-md' : ''}
             >
               <div style={{ fontSize: '0.78rem', fontWeight: '900', color: isToday ? '#2563eb' : '#0f172a', position: 'relative', zIndex: 2 }}>
                 {day.getDate()}
@@ -754,9 +768,10 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                     key={`${item.id}-${day.toISOString()}`}
                     style={{
                       padding: '0.25rem 0.4rem',
-                      borderRadius: '6px',
-                      background: '#2563eb',
-                      color: '#fff',
+                      borderRadius: '7px',
+                      background: '#eaf1ff',
+                      color: '#2563eb',
+                      borderLeft: '2px solid #2563eb',
                       fontSize: '0.55rem',
                       fontWeight: '900',
                       whiteSpace: 'nowrap',
@@ -777,9 +792,10 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                       justifyContent: 'space-between',
                       gap: '0.35rem',
                       padding: '0.25rem 0.4rem',
-                      borderRadius: '6px',
-                      background: '#16a34a',
-                      color: '#fff',
+                      borderRadius: '7px',
+                      background: '#dcfce7',
+                      color: '#15803d',
+                      borderLeft: '2px solid #16a34a',
                       fontSize: '0.55rem',
                       fontWeight: '900',
                       whiteSpace: 'nowrap',
@@ -787,12 +803,12 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                     }}
                   >
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Tareas</span>
-                    {taskCount > 1 && <span style={{ flexShrink: 0 }}>Ver m&aacute;s</span>}
+                    {taskCount > 1 && <span style={{ flexShrink: 0 }}>{taskCount}</span>}
                   </div>
                 ))}
 
                 {hiddenCount > 0 && (
-                  <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#64748b' }}>
+                  <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#475569', paddingLeft: '0.2rem' }}>
                     +{hiddenCount} mas
                   </div>
                 )}
@@ -827,7 +843,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
               {expandedDay.tasks.filter((t) => t.tipo === 'proyecto' || t.tipo === 'tarea').map(t => (
                 <div key={t.id} style={{ padding: '1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.5rem' }}>
-                    <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a' }}>{t.titulo}</div>
+                    <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.titulo}</div>
                     <span style={{
                       fontSize: '0.6rem',
                       fontWeight: '900',

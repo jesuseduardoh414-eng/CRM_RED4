@@ -561,9 +561,9 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
   for (let i = 1; i <= totalDays; i += 1) dias.push(i);
 
   return (
-    <div className="grid grid-cols-7 border-t border-slate-100">
+    <div className="grid grid-cols-7 gap-2 lg:gap-3">
       {DIAS_SEMANA.map((diaSemana) => (
-        <div key={diaSemana} className="p-3 lg:p-4 text-center text-[10px] font-black text-slate-400 border-b border-slate-100 bg-slate-50 uppercase tracking-widest">
+        <div key={diaSemana} className="pb-1 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
           {isMobile ? diaSemana.charAt(0) : diaSemana}
         </div>
       ))}
@@ -583,28 +583,29 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
         const { esLaboral } = dObj ? getEstadoLaboral(dObj, configLaboral, diasEspeciales) : { esLaboral: false };
         const circleBg = esHoy ? 'bg-blue-600' : '';
         const circleColor = esHoy ? 'text-white' : dia ? (esLaboral ? 'text-slate-600' : 'text-red-400') : 'text-slate-300';
-        const projectBg = diaProyectos.length ? 'rgba(37, 99, 235, 0.055)' : null;
 
         return (
           <div
             key={i}
             onClick={() => dia && onSelectDate({ fechaInicio: dObj })}
             className={`
-              min-h-[70px] lg:min-h-[120px] p-1.5 lg:p-2 border-r border-b border-slate-50 relative cursor-pointer transition-colors
-              ${dia ? 'hover:bg-blue-50/30' : 'bg-slate-50/30'}
+              min-h-[86px] lg:min-h-[116px] p-2 lg:p-2.5 relative transition-colors rounded-[18px] border border-slate-200
+              ${dia ? 'cursor-pointer hover:border-blue-200 hover:shadow-md' : 'bg-slate-50/70'}
             `}
             style={{
               background: dia
-                ? projectBg || (!esLaboral ? 'rgba(248, 250, 252, 0.8)' : '#fff')
-                : 'rgba(248, 250, 252, 0.3)',
-              boxShadow: diaProyectos.length ? 'inset 0 0 0 1px rgba(37, 99, 235, 0.08)' : undefined,
+                ? (!esLaboral ? 'rgba(248, 250, 252, 0.9)' : '#fff')
+                : 'rgba(248, 250, 252, 0.7)',
+              boxShadow: esHoy
+                ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)'
+                : (diaProyectos.length ? 'inset 0 0 0 1px rgba(37, 99, 235, 0.05)' : undefined),
             }}
           >
             {dia && (
               <>
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex justify-between items-start mb-2">
                   <span className={`
-                    w-6 h-6 lg:w-7 lg:h-7 flex items-center justify-center rounded-lg text-[10px] lg:text-xs font-black transition-all
+                    min-w-6 h-6 lg:min-w-7 lg:h-7 px-1 flex items-center justify-center rounded-lg text-[10px] lg:text-xs font-black transition-all
                     ${circleBg} ${circleColor}
                     ${esHoy ? 'shadow-lg shadow-blue-500/30' : ''}
                   `}>
@@ -627,14 +628,14 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                   </div>
                 )}
 
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   {(() => {
                     const todosLosItems = [
                       ...diaProyectos.map(p => ({
                         id: p.id,
                         text: (p.titulo || '').replace('Proyecto: ', ''),
                         color: '#2563eb',
-                        bg: 'rgba(37,99,235,0.08)',
+                        bg: '#eaf1ff',
                         type: 'proyecto',
                         raw: p
                       })),
@@ -642,7 +643,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                         id: 'tareas-group',
                         text: `${diaTareas.length} Tarea${diaTareas.length > 1 ? 's' : ''}`,
                         color: '#16a34a',
-                        bg: 'rgba(22,163,74,0.08)',
+                        bg: '#dcfce7',
                         type: 'tarea-group',
                         raw: null
                       }] : []),
@@ -650,7 +651,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                         id: e.id,
                         text: e.titulo,
                         color: e.color || '#8b5cf6',
-                        bg: e.color ? `${e.color}15` : 'rgba(139,92,246,0.08)',
+                        bg: e.color ? `${e.color}15` : '#f3e8ff',
                         type: e.tipo,
                         raw: e
                       }))
@@ -675,7 +676,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             }}
                             style={{ 
                               padding: '0.25rem 0.4rem', 
-                              borderRadius: '6px', 
+                              borderRadius: '7px', 
                               background: item.bg, 
                               color: item.color, 
                               fontSize: '0.55rem', 
