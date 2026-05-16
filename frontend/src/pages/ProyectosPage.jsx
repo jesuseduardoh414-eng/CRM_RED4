@@ -33,9 +33,20 @@ const AREA_CONF = {
 
 const ESTADOS = [
   { value: 'ACTIVO',   label: 'Activo',   color: '#00d166', bg: 'rgba(0,209,102,0.12)' },
+  { value: 'PENDIENTE', label: 'Pendiente', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
   { value: 'EN_PAUSA', label: 'En pausa', color: '#ff9100', bg: 'rgba(255,145,0,0.12)' },
+  { value: 'TERMINADO', label: 'Terminado', color: '#64748b', bg: 'rgba(100,116,139,0.12)' },
   { value: 'CERRADO',  label: 'Cerrado',  color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
 ];
+
+const ESTADO_ALIASES = {
+  PAUSA: 'EN_PAUSA',
+  PAUSADO: 'EN_PAUSA',
+  FINALIZADO: 'TERMINADO',
+  HECHO: 'TERMINADO',
+};
+
+const normalizarEstadoProyecto = (estado) => ESTADO_ALIASES[String(estado || '').toUpperCase()] || String(estado || 'ACTIVO').toUpperCase();
 
 const getAreasProyecto = (area) => {
   if (!area) return ['DESARROLLO'];
@@ -203,7 +214,7 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
 // ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
 const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
   const areaLabel = getLabelAreas(proyecto.area);
-  const estado = ESTADOS.find(e => e.value === proyecto.estado) || ESTADOS[0];
+  const estado = ESTADOS.find(e => e.value === normalizarEstadoProyecto(proyecto.estado)) || ESTADOS[0];
   const total = proyecto._count?.tareas || 0;
   const progresoGeneral = proyecto.progresoGeneral ?? proyecto.progreso ?? 0;
   const progresoMiembro = proyecto.progresoMiembro;
@@ -917,7 +928,7 @@ const ProyectosPage = () => {
     } catch (err) { showToast(err.message, 'error'); }
   };
 
-  const filtrados = filtro === 'TODOS' ? proyectos : proyectos.filter(p => p.estado === filtro);
+  const filtrados = filtro === 'TODOS' ? proyectos : proyectos.filter(p => normalizarEstadoProyecto(p.estado) === filtro);
 
   if (cargando) return <PageSkeleton cards={3} />;
 
@@ -940,7 +951,7 @@ const ProyectosPage = () => {
 
       {/* Filtros */}
       <div className="flex gap-2 mb-10 overflow-x-auto pb-2 snap-x snap-mandatory no-scrollbar">
-        {['TODOS', 'ACTIVO', 'EN_PAUSA', 'CERRADO'].map(f => (
+        {['TODOS', 'ACTIVO', 'PENDIENTE', 'EN_PAUSA', 'TERMINADO', 'CERRADO'].map(f => (
           <button
             key={f} 
             onClick={() => setFiltro(f)}

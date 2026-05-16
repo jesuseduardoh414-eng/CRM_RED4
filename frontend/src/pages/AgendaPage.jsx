@@ -68,6 +68,30 @@ const horaDecimal = (value, fallback = 0) => {
   return hours + (Number.isFinite(minutes) ? minutes / 60 : 0);
 };
 
+const getHoraInicioLaboral = (configLaboral) => Math.floor(horaDecimal(configLaboral?.horaEntrada, 9));
+const getHoraFinLaboralExclusiva = (configLaboral) => Math.ceil(horaDecimal(configLaboral?.horaSalida, 18));
+
+const getRangoHorasVisible = (configLaboral, eventos = [], fechas = []) => {
+  let inicio = getHoraInicioLaboral(configLaboral);
+  let finExclusivo = getHoraFinLaboralExclusiva(configLaboral);
+
+  const keys = new Set(fechas.map((fecha) => getDateKey(fecha)));
+  eventos.forEach((evento) => {
+    if (evento.todoElDia || evento.tipo === 'tarea' || esBloqueProyecto(evento)) return;
+    const start = new Date(evento.fechaInicio);
+    const end = evento.fechaFin ? new Date(evento.fechaFin) : new Date(start.getTime() + 3600000);
+    const touchesVisibleDate = keys.size === 0 || keys.has(getDateKey(start)) || keys.has(getDateKey(end));
+    if (!touchesVisibleDate) return;
+
+    inicio = Math.min(inicio, Math.floor(start.getHours() + start.getMinutes() / 60));
+    finExclusivo = Math.max(finExclusivo, Math.ceil(end.getHours() + end.getMinutes() / 60));
+  });
+
+  inicio = Math.max(0, inicio);
+  finExclusivo = Math.min(24, Math.max(inicio + 1, finExclusivo));
+  return { inicio, fin: finExclusivo - 1 };
+};
+
 const normalizarConfigLaboral = (config) => ({
   diasLaborales: config?.diasLaborales || config?.dias_laborales || LABORALES_DEFAULT,
   horaEntrada: config?.horaEntrada || config?.hora_entrada || '09:00',
@@ -312,10 +336,7 @@ const AgendaPage = () => {
     setModalOpen(true);
   };
 
-  const handleSelectFechaMes = (datosFecha) => {
-    setCurrentDate(new Date(datosFecha.fechaInicio));
-    setView('DIA');
-  };
+  const handleSelectFechaMes = handleSelectFechaEvento;
 
   if (cargando && !eventos.length) return <AgendaSkeleton />;
 
@@ -556,6 +577,7 @@ const AgendaSkeleton = () => (
 );
 
 const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate, ocultarBloquesProyecto = false }) => {
+  const [expandedDay, setExpandedDay] = useState(null);
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
@@ -590,10 +612,50 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
         const circleBg = esHoy ? 'bg-blue-600' : '';
         const circleColor = esHoy ? 'text-white' : dia ? (esLaboral ? 'text-slate-600' : 'text-red-400') : 'text-slate-300';
 
+        const todosLosItems = dia ? [
+          ...diaProyectos.map(p => ({
+            id: p.id,
+            text: (p.titulo || '').replace('Proyecto: ', ''),
+            color: '#2563eb',
+            bg: '#eaf1ff',
+            type: 'proyecto',
+            raw: p
+          })),
+          ...(diaTareas.length > 0 ? [{
+            id: 'tareas-group',
+            text: `${diaTareas.length} Tarea${diaTareas.length > 1 ? 's' : ''}`,
+            color: '#16a34a',
+            bg: '#dcfce7',
+            type: 'tarea-group',
+            raw: null
+          }] : []),
+          ...diaEventosVisibles.map(e => ({
+            id: e.id,
+            text: e.titulo,
+            color: e.color || '#8b5cf6',
+            bg: e.color ? `${e.color}15` : '#f3e8ff',
+            type: e.tipo,
+            raw: e
+          }))
+        ] : [];
+
+        const itemsParaModal = dia ? [
+          ...diaProyectos.map((p) => ({ ...p, tipoVista: 'proyecto', tituloVista: (p.titulo || '').replace('Proyecto: ', '') })),
+          ...diaTareas.map((t) => ({ ...t, tipoVista: 'tarea', tituloVista: t.titulo.replace(/^TAREA:\s*/i, '') })),
+          ...diaEventosVisibles.map((e) => ({ ...e, tipoVista: e.tipo || 'evento', tituloVista: e.titulo })),
+        ] : [];
+
         return (
           <div
             key={i}
-            onClick={() => dia && onSelectDate({ fechaInicio: dObj })}
+            onClick={() => {
+              if (!dia) return;
+              if (itemsParaModal.length > 0) {
+                setExpandedDay({ date: dObj, items: itemsParaModal });
+              } else {
+                onSelectDate({ fechaInicio: dObj });
+              }
+            }}
             className={`
               min-h-[86px] lg:min-h-[116px] p-2 lg:p-2.5 relative transition-colors rounded-[18px] border border-slate-200
               ${dia ? 'cursor-pointer hover:border-blue-200 hover:shadow-md' : 'bg-slate-50/70'}
@@ -636,33 +698,6 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
 
                 <div className="flex flex-col gap-1.5">
                   {(() => {
-                    const todosLosItems = [
-                      ...diaProyectos.map(p => ({
-                        id: p.id,
-                        text: (p.titulo || '').replace('Proyecto: ', ''),
-                        color: '#2563eb',
-                        bg: '#eaf1ff',
-                        type: 'proyecto',
-                        raw: p
-                      })),
-                      ...(diaTareas.length > 0 ? [{
-                        id: 'tareas-group',
-                        text: `${diaTareas.length} Tarea${diaTareas.length > 1 ? 's' : ''}`,
-                        color: '#16a34a',
-                        bg: '#dcfce7',
-                        type: 'tarea-group',
-                        raw: null
-                      }] : []),
-                      ...diaEventosVisibles.map(e => ({
-                        id: e.id,
-                        text: e.titulo,
-                        color: e.color || '#8b5cf6',
-                        bg: e.color ? `${e.color}15` : '#f3e8ff',
-                        type: e.tipo,
-                        raw: e
-                      }))
-                    ];
-
                     const MAX_ITEMS = 3;
                     const itemsMostrados = todosLosItems.slice(0, MAX_ITEMS);
                     const ocultos = todosLosItems.length - itemsMostrados.length;
@@ -675,7 +710,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             onClick={(ev) => {
                               ev.stopPropagation();
                               if (item.type === 'tarea-group') {
-                                onSelectDate({ fechaInicio: dObj });
+                                setExpandedDay({ date: dObj, items: itemsParaModal });
                               } else {
                                 onSelectEvent(item.raw);
                               }
@@ -704,7 +739,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             type="button"
                             onClick={(ev) => {
                               ev.stopPropagation();
-                              onSelectDate({ fechaInicio: dObj });
+                              setExpandedDay({ date: dObj, items: itemsParaModal });
                             }}
                             style={{
                               border: 'none',
@@ -729,6 +764,49 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
           </div>
         );
       })}
+      {expandedDay && (
+        <div
+          onClick={(ev) => ev.target === ev.currentTarget && setExpandedDay(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
+        >
+          <div style={{ width: '100%', maxWidth: '540px', maxHeight: '80vh', overflow: 'hidden', background: '#fff', borderRadius: '28px', boxShadow: '0 24px 70px rgba(15,23,42,0.22)' }}>
+            <div style={{ padding: '1.35rem 1.6rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', background: '#f8fafc' }}>
+              <div>
+                <h4 style={{ fontSize: '1.08rem', fontWeight: '900', color: '#0f172a' }}>
+                  {expandedDay.date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </h4>
+                <p style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: '800' }}>{expandedDay.items.length} elementos programados</p>
+              </div>
+              <button type="button" onClick={() => setExpandedDay(null)} className="btn-icon-sm"><X size={16} /></button>
+            </div>
+            <div style={{ padding: '1.2rem 1.6rem 1.6rem', maxHeight: 'calc(80vh - 92px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {expandedDay.items.map((item) => {
+                const color = item.tipoVista === 'proyecto' ? '#2563eb' : item.tipoVista === 'tarea' ? '#16a34a' : (item.color || '#7c3aed');
+                return (
+                  <button
+                    key={`${item.tipoVista}-${item.id}`}
+                    type="button"
+                    onClick={() => {
+                      setExpandedDay(null);
+                      if (item.tipoVista !== 'tarea' && item.tipoVista !== 'proyecto') onSelectEvent(item);
+                    }}
+                    style={{ width: '100%', textAlign: 'left', padding: '0.95rem 1rem', borderRadius: '16px', border: '1px solid #e2e8f0', background: '#fff', cursor: item.tipoVista === 'tarea' || item.tipoVista === 'proyecto' ? 'default' : 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', alignItems: 'flex-start' }}>
+                      <span style={{ fontWeight: '900', color: '#0f172a', lineHeight: 1.35, overflowWrap: 'anywhere' }}>{item.tituloVista}</span>
+                      <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: '900', textTransform: 'uppercase', color, background: `${color}14`, padding: '0.2rem 0.5rem', borderRadius: '999px' }}>{item.tipoVista}</span>
+                    </div>
+                    <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '999px', background: color }} />
+                      {item.proyecto?.nombre || (item.todoElDia ? 'Todo el dia' : `${formatHora(item.fechaInicio)} - ${formatHora(item.fechaFin || item.fechaInicio)}`)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -746,8 +824,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
     return d;
   });
 
-  const hStart = getHoraInicial(configLaboral);
-  const hEnd = getHoraFinal(configLaboral);
+  const { inicio: hStart, fin: hEnd } = getRangoHorasVisible(configLaboral, eventos, semana);
   const horas = getHoras(hStart, hEnd);
   const eventosTodoElDiaPorDia = semana.map((d) => eventos.filter((e) => itemAgendaOcurreEnFecha(e, d, configLaboral, diasEspeciales) && e.todoElDia && e.tipo !== 'tarea' && !esBloqueProyecto(e)));
   const tareasPorDia = semana.map((d) => eventos.filter((e) => e.tipo === 'tarea' && itemAgendaOcurreEnFecha(e, d, configLaboral, diasEspeciales)));
@@ -757,6 +834,13 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
       : eventos.filter((e) => itemAgendaOcurreEnFecha(e, d, configLaboral, diasEspeciales) && esBloqueProyecto(e))
   ));
   const altoGrid = horas.length * 50;
+  const inicioLaboral = Math.max(hStart, horaDecimal(configLaboral?.horaEntrada, hStart));
+  const finLaboral = Math.min(hEnd + 1, horaDecimal(configLaboral?.horaSalida, hEnd + 1));
+  const topLaboral = Math.max(0, (inicioLaboral - hStart) * 50);
+  const bottomLaboral = Math.min(altoGrid, (finLaboral - hStart) * 50);
+  const rangoTareas = bottomLaboral > topLaboral
+    ? [{ start: topLaboral, end: bottomLaboral }]
+    : [{ start: 0, end: altoGrid }];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -840,7 +924,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
               })
               .filter(Boolean);
             const huecosTareas = restarIntervalos(
-              [{ start: 0, end: altoGrid }],
+              rangoTareas,
               eventosConHora.map(({ top, height }) => ({ start: Math.max(0, top - 4), end: Math.min(altoGrid, top + height + 4) }))
             );
             const posicionesTareas = distribuirEnHuecos(tareasPorDia[dayIdx], huecosTareas, altoGrid);
@@ -930,8 +1014,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
 };
 
 const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, isMobile, onSelectEvent, onSelectDate, onEliminar, ocultarBloquesProyecto = false }) => {
-  const hStart = getHoraInicial(configLaboral);
-  const hEnd = getHoraFinal(configLaboral);
+  const { inicio: hStart, fin: hEnd } = getRangoHorasVisible(configLaboral, eventos, [date]);
   const horas = getHoras(hStart, hEnd);
   const { esLaboral, diaEspecial } = getEstadoLaboral(date, configLaboral, diasEspeciales);
   const proyectosDelDia = ocultarBloquesProyecto

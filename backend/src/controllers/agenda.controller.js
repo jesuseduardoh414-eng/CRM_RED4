@@ -139,8 +139,8 @@ const listar = async (req, res) => {
       ]
     };
 
-    // Traer eventos normales en el rango + todos los recurrentes vigentes + tareas
-    const [eventosNormales, eventosRecurrentes, tareas] = await Promise.all([
+    // Traer eventos normales en el rango + todos los recurrentes vigentes + tareas/proyectos
+    const [eventosNormales, eventosRecurrentes, tareas, proyectos] = await Promise.all([
       // Eventos normales dentro del rango
       prisma.evento.findMany({
         where: {
@@ -171,17 +171,56 @@ const listar = async (req, res) => {
           proyecto:  { select: { id: true, nombre: true } }
         },
       }),
-      // Tareas asignadas al usuario que cruzan con el rango consultado
+      // Tareas relacionadas al usuario que cruzan con el rango consultado
       prisma.tarea.findMany({
-        where: { 
-          asignadoId: usuarioId,
-          fechaInicio: { lte: hasta },
-          OR: [
-            { venceEn: { gte: desde } },
-            { venceEn: null, fechaInicio: { gte: desde } }
+        where: {
+          AND: [
+            {
+              OR: [
+                { asignadoId: usuarioId },
+                { creadorId: usuarioId },
+              ],
+            },
+            { fechaInicio: { lte: hasta } },
+            {
+              OR: [
+                { venceEn: { gte: desde } },
+                { venceEn: null, fechaInicio: { gte: desde } }
+              ]
+            }
           ]
         },
         include: { proyecto: { select: { nombre: true } } }
+      }),
+      prisma.proyecto.findMany({
+        where: {
+          AND: [
+            { estado: { not: 'CERRADO' } },
+            { fechaInicio: { lte: hasta } },
+            {
+              OR: [
+                { fechaFin: { gte: desde } },
+                { fechaFin: null, fechaInicio: { gte: desde } },
+              ],
+            },
+            {
+              OR: [
+                { miembros: { some: { id: usuarioId } } },
+                { creadorId: usuarioId },
+                { tareas: { some: { asignadoId: usuarioId } } },
+                { tareas: { some: { creadorId: usuarioId } } },
+              ],
+            },
+          ],
+        },
+        select: {
+          id: true,
+          nombre: true,
+          estado: true,
+          fechaInicio: true,
+          fechaFin: true,
+          creadoEn: true,
+        },
       })
     ]);
 
@@ -213,10 +252,28 @@ const listar = async (req, res) => {
       };
     });
 
+    const eventosProyectos = proyectos.map((proyecto) => {
+      const fechaInicio = ajustarFechaTodoElDia(proyecto.fechaInicio || proyecto.creadoEn);
+      const fechaFin = ajustarFechaTodoElDia(proyecto.fechaFin || proyecto.fechaInicio || proyecto.creadoEn, true);
+
+      return {
+        id: `proyecto-${proyecto.id}`,
+        titulo: `Proyecto: ${proyecto.nombre}`,
+        tipo: 'proyecto',
+        estado: proyecto.estado,
+        fechaInicio,
+        fechaFin,
+        todoElDia: true,
+        color: getColorCategoria('evento'),
+        proyecto: { id: proyecto.id, nombre: proyecto.nombre },
+        esLectura: true
+      };
+    });
+
     // Expandir recurrentes en el rango
     const expandidos = soloRecurrentes.flatMap(e => expandirRecurrente(e, desde, hasta));
 
-    const resultado = [...normales, ...eventosTareas, ...expandidos].sort(
+    const resultado = [...normales, ...eventosProyectos, ...eventosTareas, ...expandidos].sort(
       (a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio)
     );
 
