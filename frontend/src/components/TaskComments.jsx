@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { comentariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { MessageSquare, Trash2, Send } from 'lucide-react';
+import { PanelSkeleton } from './Skeleton';
 
 const TaskComments = ({ tareaId, type = 'tareas' }) => {
   const { usuario } = useAuth();
@@ -59,7 +60,7 @@ const TaskComments = ({ tareaId, type = 'tareas' }) => {
     }
   };
 
-  if (cargando) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>Cargando conversación...</div>;
+  if (cargando) return <PanelSkeleton rows={4} titleWidth="190px" />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>

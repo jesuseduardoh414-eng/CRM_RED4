@@ -3,7 +3,7 @@
 
 const express = require('express');
 const { listar, crear, editar, eliminar, actualizarEstado } = require('../controllers/tareas.controller');
-const { importar, plantillaJSON, plantillaExcel } = require('../controllers/importar.controller');
+const { importar, plantillaJSON, plantillaExcel, exportarJSON, exportarExcel } = require('../controllers/importar.controller');
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin }      = require('../middlewares/roles.middleware');
 const { listar: listarComentarios, crear: crearComentario, eliminar: eliminarComentario } = require('../controllers/comentarios.controller');
@@ -22,6 +22,8 @@ routerTarea.get('/plantilla/json',  plantillaJSON);
 routerTarea.get('/plantilla/excel', plantillaExcel);
 
 // Listar y crear tareas (cualquier usuario autenticado)
+routerProyecto.get('/exportar/json', exportarJSON);
+routerProyecto.get('/exportar/excel', exportarExcel);
 routerProyecto.get('/',  listar);
 routerProyecto.post('/', upload.array('archivos', 5), crear);
 

@@ -1,5 +1,7 @@
 const prisma = require('../lib/prisma');
 const bcrypt = require('bcryptjs');
+const { sortTareas } = require('../utils/sort.utils');
+const { esAdmin, esAdminDeArea, puedeGestionarArea } = require('../utils/permissions.utils');
 
 const finDelDia = (fecha) => {
   const d = new Date(fecha);
@@ -18,7 +20,12 @@ const tareaResumenSelect = {
   titulo: true,
   estado: true,
   prioridad: true,
+  creadoEn: true,
+  completadoEn: true,
   venceEn: true,
+  fechaInicio: true,
+  asignadoId: true,
+  creadorId: true,
   proyecto: {
     select: { id: true, nombre: true }
   }
@@ -29,7 +36,10 @@ const resumenTarea = (tarea) => ({
   titulo: tarea.titulo,
   estado: tarea.estado,
   prioridad: tarea.prioridad,
+  creadoEn: tarea.creadoEn,
+  completadoEn: tarea.completadoEn,
   venceEn: tarea.venceEn,
+  fechaInicio: tarea.fechaInicio,
   proyecto: tarea.proyecto
 });
 
@@ -67,17 +77,14 @@ const obtenerActividadUsuario = async (usuarioId) => {
   const [hechas, enProgreso, faltanHoy, faltanSemana] = await Promise.all([
     prisma.tarea.findMany({
       where: { ...tareasDelUsuario, estado: 'HECHO' },
-      orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
       where: { ...tareasDelUsuario, estado: 'EN_PROGRESO' },
-      orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }],
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
       where: { ...tareasDelUsuario, estado: 'PENDIENTE' },
-      orderBy: [{ prioridad: 'desc' }, { venceEn: 'asc' }],
       select: tareaResumenSelect
     }),
     prisma.tarea.findMany({
@@ -86,15 +93,14 @@ const obtenerActividadUsuario = async (usuarioId) => {
         estado: { not: 'HECHO' },
         venceEn: { gt: hoyFin, lte: semanaFin }
       },
-      orderBy: [{ venceEn: 'asc' }, { prioridad: 'desc' }],
       select: tareaResumenSelect
     })
   ]);
 
-  const hechasResumen = hechas.map(resumenTarea);
-  const enProgresoResumen = enProgreso.map(resumenTarea);
-  const faltanResumen = faltanHoy.map(resumenTarea);
-  const faltanSemanaResumen = faltanSemana.map(resumenTarea);
+  const hechasResumen = sortTareas(hechas).map(resumenTarea);
+  const enProgresoResumen = sortTareas(enProgreso).map(resumenTarea);
+  const faltanResumen = sortTareas(faltanHoy).map(resumenTarea);
+  const faltanSemanaResumen = sortTareas(faltanSemana).map(resumenTarea);
 
   return {
     hechasHoy: hechasResumen,
@@ -116,17 +122,28 @@ let cacheUsuarios = null;
 let ultimaActualizacion = 0;
 const CACHE_TTL = 30000; // 30 segundos
 
+const obtenerFiltroUsuariosGestion = (usuario) => (
+  esAdminDeArea(usuario) ? { area: usuario.area } : {}
+);
+
 // Devuelve todos los usuarios con su actividad pre-calculada de forma eficiente
 const listar = async (req, res) => {
   try {
     const ahoraMs = Date.now();
+    const filtroGestion = obtenerFiltroUsuariosGestion(req.usuario);
     
     // Si hay datos en caché y no han expirado, devolverlos de inmediato
-    if (cacheUsuarios && (ahoraMs - ultimaActualizacion < CACHE_TTL) && req.usuario?.rol === 'ADMIN') {
+    if (
+      cacheUsuarios
+      && (ahoraMs - ultimaActualizacion < CACHE_TTL)
+      && req.usuario?.rol === 'ADMIN'
+      && !esAdminDeArea(req.usuario)
+    ) {
       return res.json({ usuarios: cacheUsuarios, cached: true });
     }
 
     const usuarios = await prisma.usuario.findMany({
+      where: req.usuario?.rol === 'ADMIN' ? filtroGestion : undefined,
       orderBy: { nombre: 'asc' },
       select: {
         id:     true,
@@ -168,7 +185,6 @@ const listar = async (req, res) => {
         ]
       },
       select: tareaResumenSelect,
-      orderBy: [{ venceEn: 'asc' }, { creadoEn: 'desc' }]
     });
 
     // Procesar en memoria para cada usuario
@@ -185,9 +201,9 @@ const listar = async (req, res) => {
         t.venceEn && t.venceEn > hoyFin && t.venceEn <= semanaFin
       );
 
-      const hR = hechasHoy.map(resumenTarea);
-      const eR = enProgreso.map(resumenTarea);
-      const fR = faltanHoy.map(resumenTarea);
+      const hR = sortTareas(hechasHoy).map(resumenTarea);
+      const eR = sortTareas(enProgreso).map(resumenTarea);
+      const fR = sortTareas(faltanHoy).map(resumenTarea);
 
       return {
         ...usuario,
@@ -195,7 +211,7 @@ const listar = async (req, res) => {
           hechasHoy: hR,
           enProgreso: eR,
           faltanHoy: fR,
-          faltanSemana: faltanSemana.map(resumenTarea),
+          faltanSemana: sortTareas(faltanSemana).map(resumenTarea),
           porProyecto: resumenPorProyecto(hR, eR, fR),
           totales: {
             hechasHoy: hechasHoy.length,
@@ -218,6 +234,28 @@ const listar = async (req, res) => {
   }
 };
 
+const listarParaProyectos = async (_req, res) => {
+  try {
+    const usuarios = await prisma.usuario.findMany({
+      where: { estado: 'activo' },
+      orderBy: { nombre: 'asc' },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        area: true,
+        rol: true,
+        estado: true
+      }
+    });
+
+    return res.json({ usuarios });
+  } catch (error) {
+    console.error('[usuarios.listarParaProyectos]', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
 // Crear nuevo usuario (solo ADMIN)
 const crear = async (req, res) => {
   const { nombre, email, password, area, rol } = req.body;
@@ -227,6 +265,10 @@ const crear = async (req, res) => {
   }
 
   try {
+    if (esAdminDeArea(req.usuario) && !puedeGestionarArea(req.usuario, area || 'DESARROLLO')) {
+      return res.status(403).json({ error: 'Solo puedes crear usuarios de tu propia área' });
+    }
+
     const existe = await prisma.usuario.findUnique({ where: { email } });
     if (existe) return res.status(400).json({ error: 'El correo ya está registrado' });
 
@@ -280,6 +322,23 @@ const editar = async (req, res) => {
   const { nombre, email, password, area, rol } = req.body;
 
   try {
+    const objetivo = await prisma.usuario.findUnique({
+      where: { id },
+      select: { id: true, area: true }
+    });
+
+    if (!objetivo) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    if (esAdminDeArea(req.usuario) && !puedeGestionarArea(req.usuario, objetivo.area)) {
+      return res.status(403).json({ error: 'Solo puedes editar usuarios de tu propia área' });
+    }
+
+    if (esAdminDeArea(req.usuario) && area && !puedeGestionarArea(req.usuario, area)) {
+      return res.status(403).json({ error: 'No puedes mover usuarios a otra área' });
+    }
+
     const data = {
       nombre: nombre?.trim(),
       email:  email?.toLowerCase().trim(),
@@ -321,6 +380,10 @@ const eliminar = async (req, res) => {
     const usuarioABorrar = await prisma.usuario.findUnique({ where: { id } });
     if (!usuarioABorrar) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    if (esAdminDeArea(req.usuario) && !puedeGestionarArea(req.usuario, usuarioABorrar.area)) {
+      return res.status(403).json({ error: 'Solo puedes eliminar usuarios de tu propia área' });
     }
 
     // 3. Manejo de dependencias (Integridad Referencial)
@@ -381,6 +444,19 @@ const toggleEstado = async (req, res) => {
   }
 
   try {
+    const objetivo = await prisma.usuario.findUnique({
+      where: { id },
+      select: { id: true, area: true }
+    });
+
+    if (!objetivo) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    if (esAdminDeArea(req.usuario) && !puedeGestionarArea(req.usuario, objetivo.area)) {
+      return res.status(403).json({ error: 'Solo puedes cambiar el estado de usuarios de tu propia área' });
+    }
+
     if (id === req.usuario.id) {
       return res.status(400).json({ error: 'No puedes desactivar tu propia cuenta' });
     }
@@ -407,11 +483,15 @@ const actividad = async (req, res) => {
   try {
     const usuario = await prisma.usuario.findUnique({
       where: { id },
-      select: { id: true }
+      select: { id: true, area: true }
     });
 
     if (!usuario) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    if (esAdminDeArea(req.usuario) && !puedeGestionarArea(req.usuario, usuario.area)) {
+      return res.status(403).json({ error: 'Solo puedes consultar actividad de usuarios de tu propia área' });
     }
 
     res.set('Cache-Control', 'no-store');
@@ -422,4 +502,4 @@ const actividad = async (req, res) => {
   }
 };
 
-module.exports = { listar, crear, editar, eliminar, toggleEstado, actividad };
+module.exports = { listar, listarParaProyectos, crear, editar, eliminar, toggleEstado, actividad };

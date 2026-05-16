@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { agendaService, proyectosService, usuariosService } from '../services/api';
-import Spinner from '../components/Spinner';
+import { PageSkeleton } from '../components/Skeleton';
+import { sortProyectos } from '../utils/sorters';
 import { 
   Code2, 
   BarChart3, 
@@ -292,7 +293,8 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
 // ── Modal de Proyecto ────────────────────────────────────────────────────────
 const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   const { usuario: usuarioActual } = useAuth();
-  const areasIniciales = getAreasProyecto(proyecto?.area);
+  const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
+  const areasIniciales = proyecto?.area ? getAreasProyecto(proyecto.area) : [usuarioActual?.area || 'DESARROLLO'];
   const [form, setForm] = useState({
     nombre: proyecto?.nombre || '',
     descripcion: proyecto?.descripcion || '',
@@ -301,8 +303,10 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     fechaInicio: proyecto?.fechaInicio ? proyecto.fechaInicio.slice(0, 10) : new Date().toISOString().slice(0, 10),
     fechaFin: proyecto?.fechaFin ? proyecto.fechaFin.slice(0, 10) : '',
     miembrosIds: proyecto?.miembros?.filter(m => m.id !== usuarioActual?.id).map(m => m.id) || [],
+    plantillaId: '',
   });
   const [usuarios, setUsuarios] = useState([]);
+  const [plantillas, setPlantillas] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [archivos, setArchivos] = useState([]);
   const [ocupados, setOcupados] = useState({});
@@ -314,15 +318,24 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   );
 
   useEffect(() => {
-    usuariosService.listar().then(d => setUsuarios(d.usuarios)).catch(console.error);
+    usuariosService.listarParaProyectos().then(d => setUsuarios(d.usuarios)).catch(console.error);
+    if (!proyecto) {
+      proyectosService.listarPlantillas().then(d => setPlantillas(d.plantillas || [])).catch(console.error);
+    }
   }, []);
+
+  const plantillaSeleccionada = !proyecto && form.plantillaId
+    ? plantillas.find(p => String(p.id) === String(form.plantillaId))
+    : null;
 
   // Mostrar todos los usuarios, pero agrupados o resaltados por el área seleccionada
   const usuariosSeleccionables = usuarios.filter(u => u.id !== usuarioActual?.id);
-  const usuariosEnAreas = usuariosSeleccionables.filter(u => form.areas.includes(u.area) || esAdminUsuario(u));
+  const usuariosEnAreas = esAdminArea
+    ? usuariosSeleccionables
+    : usuariosSeleccionables.filter(u => form.areas.includes(u.area) || esAdminUsuario(u));
   const admins = usuariosSeleccionables.filter(esAdminUsuario);
   const usuariosPorArea = [
-    ...form.areas.map(area => ({
+    ...(esAdminArea ? Object.keys(AREA_CONF) : form.areas).map(area => ({
       area,
       usuarios: usuariosEnAreas.filter(u => u.area === area && !esAdminUsuario(u)),
     })),
@@ -379,6 +392,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   }, [form.areas, form.fechaInicio, form.fechaFin, usuarios, usuarioActual?.id]);
 
   const toggleArea = (area) => {
+    if (esAdminArea) return;
     setForm(prev => {
       const exists = prev.areas.includes(area);
       const areas = exists ? prev.areas.filter(a => a !== area) : [...prev.areas, area];
@@ -430,6 +444,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       formData.append('fechaInicio', form.fechaInicio);
       formData.append('fechaFin', form.fechaFin);
       formData.append('miembrosIds', JSON.stringify(form.miembrosIds));
+      if (form.plantillaId) formData.append('plantillaId', form.plantillaId);
       
       archivos.forEach(file => {
         formData.append('archivos', file);
@@ -458,6 +473,50 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
         <div className="flex-1 overflow-y-auto px-8 py-6">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {!proyecto && (
+              <div className="hidden space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
+                  value={form.plantillaId}
+                  onChange={e => {
+                    const plantillaId = e.target.value;
+                    const plantilla = plantillas.find(p => String(p.id) === plantillaId);
+                    setForm(prev => ({
+                      ...prev,
+                      plantillaId,
+                      descripcion: prev.descripcion || plantilla?.descripcion || '',
+                      areas: prev.areas?.length ? prev.areas : getAreasProyecto(plantilla?.area),
+                    }));
+                  }}
+                >
+                  <option value="">Selecciona una plantilla (opcional)</option>
+                  {plantillas.map(plantilla => (
+                    <option key={plantilla.id} value={plantilla.id}>
+                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                    </option>
+                  ))}
+                </select>
+                {!plantillaSeleccionada && (
+                  <p className="text-[11px] font-bold text-slate-400">
+                    Si no eliges una plantilla, el proyecto se crea vacío para que armes las tareas manualmente.
+                  </p>
+                )}
+                {!plantillaSeleccionada && plantillas.length === 0 && (
+                  <p className="text-[11px] font-bold text-amber-600">
+                    Aún no hay plantillas guardadas. Primero entra a un proyecto existente y usa "Guardar Plantilla".
+                  </p>
+                )}
+                {plantillaSeleccionada && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                    <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
+                    <p className="text-[11px] font-bold text-slate-500 mt-1">
+                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">NOMBRE DEL PROYECTO</label>
               <input className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required placeholder="Ej: Rediseño de Marca" />
@@ -467,6 +526,51 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DESCRIPCIÓN</label>
               <textarea className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all resize-none" rows="3" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Objetivos y alcance..." />
             </div>
+
+            {!proyecto && (
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
+                  value={form.plantillaId}
+                  onChange={e => {
+                    const plantillaId = e.target.value;
+                    const plantilla = plantillas.find(p => String(p.id) === plantillaId);
+                    setForm(prev => ({
+                      ...prev,
+                      plantillaId,
+                      descripcion: prev.descripcion || plantilla?.descripcion || '',
+                      areas: prev.areas?.length ? prev.areas : getAreasProyecto(plantilla?.area),
+                    }));
+                  }}
+                >
+                  <option value="">Selecciona una plantilla (opcional)</option>
+                  {plantillas.map(plantilla => (
+                    <option key={plantilla.id} value={plantilla.id}>
+                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                    </option>
+                  ))}
+                </select>
+                {!plantillaSeleccionada && (
+                  <p className="text-[11px] font-bold text-slate-400">
+                    Si no eliges una plantilla, el proyecto se crea vacío para que armes las tareas manualmente.
+                  </p>
+                )}
+                {!plantillaSeleccionada && plantillas.length === 0 && (
+                  <p className="text-[11px] font-bold text-amber-600">
+                    Aún no hay plantillas guardadas. Primero entra a un proyecto existente y usa "Guardar Plantilla".
+                  </p>
+                )}
+                {plantillaSeleccionada && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                    <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
+                    <p className="text-[11px] font-bold text-slate-500 mt-1">
+                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -485,10 +589,11 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                         key={k}
                         type="button"
                         onClick={() => toggleArea(k)}
-                        className={`flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all ${selected ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/15' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-white'}`}
+                        disabled={esAdminArea && k !== usuarioActual?.area}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all ${selected ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/15' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-white'} ${esAdminArea && k !== usuarioActual?.area ? 'opacity-40 cursor-not-allowed hover:bg-slate-50' : ''}`}
                       >
                         <span>{AREA_CONF[k].label}</span>
-                        <span>{selected ? 'Seleccionada' : 'Agregar'}</span>
+                        <span>{selected ? 'Seleccionada' : esAdminArea && k !== usuarioActual?.area ? 'Sin acceso' : 'Agregar'}</span>
                       </button>
                     );
                   })}
@@ -533,6 +638,96 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               </div>
             </div>
 
+            {!proyecto && (
+              <div className="hidden space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
+                  value={form.plantillaId}
+                  onChange={e => {
+                    const plantillaId = e.target.value;
+                    const plantilla = plantillas.find(p => String(p.id) === plantillaId);
+                    setForm(prev => ({
+                      ...prev,
+                      plantillaId,
+                      descripcion: prev.descripcion || plantilla?.descripcion || '',
+                      areas: prev.areas?.length ? prev.areas : getAreasProyecto(plantilla?.area),
+                    }));
+                  }}
+                >
+                  <option value="">Selecciona una plantilla (opcional)</option>
+                  {plantillas.map(plantilla => (
+                    <option key={plantilla.id} value={plantilla.id}>
+                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                    </option>
+                  ))}
+                </select>
+                {!plantillaSeleccionada && (
+                  <p className="text-[11px] font-bold text-slate-400">
+                    Si no eliges una plantilla, el proyecto se crea vacío para que armes las tareas manualmente.
+                  </p>
+                )}
+                {!plantillaSeleccionada && plantillas.length === 0 && (
+                  <p className="text-[11px] font-bold text-amber-600">
+                    Aún no hay plantillas guardadas. Primero entra a un proyecto existente y usa "Guardar Plantilla".
+                  </p>
+                )}
+                {plantillaSeleccionada && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                    <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
+                    <p className="text-[11px] font-bold text-slate-500 mt-1">
+                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!proyecto && (
+              <div className="hidden space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
+                  value={form.plantillaId}
+                  onChange={e => {
+                    const plantillaId = e.target.value;
+                    const plantilla = plantillas.find(p => String(p.id) === plantillaId);
+                    setForm(prev => ({
+                      ...prev,
+                      plantillaId,
+                      descripcion: prev.descripcion || plantilla?.descripcion || '',
+                      areas: prev.areas?.length ? prev.areas : getAreasProyecto(plantilla?.area),
+                    }));
+                  }}
+                >
+                  <option value="">Selecciona una plantilla (opcional)</option>
+                  {plantillas.map(plantilla => (
+                    <option key={plantilla.id} value={plantilla.id}>
+                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                    </option>
+                  ))}
+                </select>
+                {!plantillaSeleccionada && (
+                  <p className="text-[11px] font-bold text-slate-400">
+                    Si no eliges una plantilla, el proyecto se crea vacío para que armes las tareas manualmente.
+                  </p>
+                )}
+                {!plantillaSeleccionada && plantillas.length === 0 && (
+                  <p className="text-[11px] font-bold text-amber-600">
+                    Aún no hay plantillas guardadas. Primero entra a un proyecto existente y usa "Guardar Plantilla".
+                  </p>
+                )}
+                {plantillaSeleccionada && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                    <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
+                    <p className="text-[11px] font-bold text-slate-500 mt-1">
+                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <ProjectDatePicker
                 label="FECHA INICIO"
@@ -562,7 +757,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                 ) : conflictosEnAreas.length === 0 ? (
                   <p className="text-xs font-bold text-emerald-600">Sin tareas activas ni eventos en el rango seleccionado.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
                     {conflictosEnAreas.map(conflicto => (
                       <div key={`${conflicto.id}-${conflicto.usuario.id}`} className="flex items-start justify-between gap-3 rounded-xl bg-white border border-slate-100 p-3">
                         <div className="min-w-0">
@@ -701,7 +896,7 @@ const ProyectosPage = () => {
     setCargando(true);
     try {
       const data = await proyectosService.listar();
-      setProyectos(data.proyectos);
+      setProyectos(sortProyectos(data.proyectos));
     } catch (err) { showToast(err.message, 'error'); }
     finally { setCargando(false); }
   }, [showToast]);
@@ -724,7 +919,7 @@ const ProyectosPage = () => {
 
   const filtrados = filtro === 'TODOS' ? proyectos : proyectos.filter(p => p.estado === filtro);
 
-  if (cargando) return <Spinner texto="Sincronizando proyectos..." />;
+  if (cargando) return <PageSkeleton cards={3} />;
 
   return (
     <div className="max-w-7xl mx-auto">

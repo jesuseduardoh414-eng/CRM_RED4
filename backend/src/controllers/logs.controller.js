@@ -1,11 +1,22 @@
 const prisma = require('../lib/prisma');
+const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
 
 const listarPorProyecto = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
   if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
   try {
-    const esAdmin = req.usuario.rol === 'ADMIN';
+    const proyecto = await prisma.proyecto.findUnique({
+      where: { id: proyectoId },
+      select: { id: true, area: true }
+    });
+
+    if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+
+    const usuarioEsAdmin = esAdmin(req.usuario);
+    if (usuarioEsAdmin && !puedeAdministrarProyecto(req.usuario, proyecto)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver el historial de este proyecto' });
+    }
     const accionesSoloDeTarea = [
       'CREAR_TAREA',
       'EDITAR_TAREA',
@@ -16,7 +27,7 @@ const listarPorProyecto = async (req, res) => {
     const logs = await prisma.logActividad.findMany({
       where: {
         proyectoId,
-        ...(esAdmin ? {} : {
+        ...(usuarioEsAdmin ? {} : {
           OR: [
             {
               tareaId: null,

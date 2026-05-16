@@ -7,14 +7,50 @@
  */
 
 const path = require('path');
+const XLSX = require('xlsx');
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
+const { serializeTasksForExport } = require('../utils/plantillas.utils');
+const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
 const {
   procesarJSON,
   procesarExcel,
   generarPlantillaJSON,
   generarPlantillaExcel,
 } = require('../utils/importador.utils');
+
+const toFileSlug = (value) => String(value || 'proyecto')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '')
+  .toLowerCase() || 'proyecto';
+
+const verificarAccesoProyecto = async (proyectoId, usuario) => {
+  const proyecto = await prisma.proyecto.findUnique({
+    where: { id: proyectoId },
+    include: {
+      creador: { select: { id: true } },
+      miembros: { select: { id: true } },
+    },
+  });
+
+  if (!proyecto) return { error: 'Proyecto no encontrado', status: 404 };
+  if (esAdmin(usuario)) {
+    if (!puedeAdministrarProyecto(usuario, proyecto)) {
+      return { error: 'No tienes permiso para acceder a este proyecto', status: 403 };
+    }
+    return { proyecto };
+  }
+
+  const esMiembro = proyecto.miembros.some(m => m.id === usuario.id);
+  const esCreador = proyecto.creador?.id === usuario.id;
+  if (!esMiembro && !esCreador) {
+    return { error: 'No tienes permiso para acceder a este proyecto', status: 403 };
+  }
+
+  return { proyecto };
+};
 
 //  POST /api/proyectos/:proyectoId/tareas/importar 
 const importar = async (req, res) => {
@@ -44,7 +80,11 @@ const importar = async (req, res) => {
     }
 
     // 2. Verificar permisos: ADMIN puede siempre, MIEMBRO debe estar en el proyecto
-    if (req.usuario.rol !== 'ADMIN') {
+    if (esAdmin(req.usuario)) {
+      if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
+      }
+    } else {
       const esMiembro = proyecto.miembros.some(m => m.id === req.usuario.id);
       if (!esMiembro) {
         return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
@@ -119,4 +159,95 @@ const plantillaExcel = (_req, res) => {
   res.send(buffer);
 };
 
-module.exports = { importar, plantillaJSON, plantillaExcel };
+const exportarJSON = async (req, res) => {
+  const proyectoId = parseInt(req.params.id);
+  if (isNaN(proyectoId)) {
+    return res.status(400).json({ error: 'ID de proyecto inválido' });
+  }
+
+  try {
+    const acceso = await verificarAccesoProyecto(proyectoId, req.usuario);
+    if (acceso.error) return res.status(acceso.status).json({ error: acceso.error });
+
+    const proyecto = await prisma.proyecto.findUnique({
+      where: { id: proyectoId },
+      select: {
+        id: true,
+        nombre: true,
+        descripcion: true,
+        estado: true,
+        area: true,
+        fechaInicio: true,
+        fechaFin: true,
+        tareas: {
+          include: {
+            asignado: { select: { id: true, nombre: true, email: true, area: true } },
+          },
+        },
+      },
+    });
+
+    const tareas = serializeTasksForExport({ proyecto, tareas: proyecto.tareas });
+    const payload = {
+      proyecto: {
+        id: proyecto.id,
+        nombre: proyecto.nombre,
+        descripcion: proyecto.descripcion,
+        estado: proyecto.estado,
+        area: proyecto.area,
+        fechaInicio: proyecto.fechaInicio,
+        fechaFin: proyecto.fechaFin,
+      },
+      tareas,
+    };
+
+    const fileSlug = toFileSlug(proyecto.nombre);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileSlug}_tareas.json"`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.send(JSON.stringify(payload, null, 2));
+  } catch (error) {
+    console.error('[tareas.exportarJSON]', error);
+    return res.status(500).json({ error: 'Error al exportar tareas' });
+  }
+};
+
+const exportarExcel = async (req, res) => {
+  const proyectoId = parseInt(req.params.id);
+  if (isNaN(proyectoId)) {
+    return res.status(400).json({ error: 'ID de proyecto inválido' });
+  }
+
+  try {
+    const acceso = await verificarAccesoProyecto(proyectoId, req.usuario);
+    if (acceso.error) return res.status(acceso.status).json({ error: acceso.error });
+
+    const proyecto = await prisma.proyecto.findUnique({
+      where: { id: proyectoId },
+      select: {
+        id: true,
+        nombre: true,
+        tareas: {
+          include: {
+            asignado: { select: { id: true, nombre: true, email: true, area: true } },
+          },
+        },
+      },
+    });
+
+    const tareas = serializeTasksForExport({ proyecto, tareas: proyecto.tareas });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(tareas);
+    XLSX.utils.book_append_sheet(wb, ws, 'Tareas');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const fileSlug = toFileSlug(proyecto.nombre);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileSlug}_tareas.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return res.send(buffer);
+  } catch (error) {
+    console.error('[tareas.exportarExcel]', error);
+    return res.status(500).json({ error: 'Error al exportar tareas' });
+  }
+};
+
+module.exports = { importar, plantillaJSON, plantillaExcel, exportarJSON, exportarExcel };

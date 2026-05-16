@@ -93,6 +93,17 @@ const Layout = ({ children }) => {
     localStorage.setItem('crm_sidebar_collapsed', String(collapsed));
   }, [collapsed]);
 
+  const toggleSidebar = () => {
+    if (document.startViewTransition) {
+      document.startViewTransition(() => {
+        setCollapsed((prev) => !prev);
+      });
+      return;
+    }
+
+    setCollapsed((prev) => !prev);
+  };
+
   const handleLogout = () => {
     logout();
     showToast('Sesión cerrada', 'info');
@@ -110,21 +121,12 @@ const Layout = ({ children }) => {
           ${open ? 'left-0' : '-left-[280px] lg:left-0'}
         `}
       >
-        <div className={`relative flex flex-col items-center gap-4 ${collapsed ? 'px-3 py-8' : 'p-8 lg:p-12 pb-8'}`}>
-          <button
-            type="button"
-            onClick={() => setCollapsed((prev) => !prev)}
-            className="hidden lg:flex absolute top-5 right-4 w-8 h-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition-all"
-            title={collapsed ? 'Expandir menú' : 'Ocultar menú'}
-            aria-label={collapsed ? 'Expandir menú lateral' : 'Ocultar menú lateral'}
-          >
-            {collapsed ? <ChevronRight size={18} strokeWidth={2.5} /> : <ChevronLeft size={18} strokeWidth={2.5} />}
-          </button>
-
+        <div className={`relative flex w-full flex-col items-center ${collapsed ? 'gap-5 px-3 pt-6 pb-6' : 'gap-4 px-4 pt-12 pb-6'}`}>
           <img
             src={collapsed ? '/logo - sideber.png' : '/logo.png'}
             alt="Red 4 Design"
             className={`h-auto object-contain transition-all duration-300 ${collapsed ? 'w-12 max-w-[48px]' : 'w-full max-w-[180px] lg:max-w-[200px]'}`}
+            style={{ viewTransitionName: 'sidebar-logo' }}
           />
 
           {!collapsed && (
@@ -132,6 +134,23 @@ const Layout = ({ children }) => {
               Panel Interno
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className={`
+              hidden lg:flex items-center ${collapsed ? 'justify-center w-full px-5' : 'gap-4 w-full px-5'}
+              py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap
+              text-white/50 hover:text-white hover:bg-white/5
+            `}
+            title={collapsed ? 'Expandir menú' : undefined}
+            aria-label={collapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral'}
+          >
+            <span className="shrink-0 flex items-center justify-center">
+              {collapsed ? <ChevronRight size={20} strokeWidth={2.5} /> : <ChevronLeft size={20} strokeWidth={2.5} />}
+            </span>
+            {!collapsed && <span className="flex-1 min-w-0 truncate text-left">Colapsar</span>}
+          </button>
         </div>
 
         <nav className={`flex-1 flex flex-col gap-1 overflow-y-auto ${collapsed ? 'px-3' : 'px-4'}`}>

@@ -12,6 +12,7 @@ import {
   File,
   FileCheck
 } from 'lucide-react';
+import { PanelSkeleton } from './Skeleton';
 
 const TaskAttachments = ({ tareaId, type = 'tareas' }) => {
   const { usuario } = useAuth();
@@ -80,7 +81,7 @@ const TaskAttachments = ({ tareaId, type = 'tareas' }) => {
     return <File size={24} />;
   };
 
-  if (cargando) return <div style={{ padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Cargando archivos...</div>;
+  if (cargando) return <PanelSkeleton rows={3} titleWidth="170px" />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

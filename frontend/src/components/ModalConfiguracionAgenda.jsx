@@ -10,15 +10,18 @@ import {
   Plane,
   FileText,
   Sun,
+  Gift,
 } from 'lucide-react';
 import { agendaService } from '../services/api';
+import RangeDatePicker from './RangeDatePicker';
 
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const TIPOS_DIA = [
   { id: 'festivo', label: 'Festivo', color: '#ef4444', icon: <Sun size={14} /> },
-  { id: 'vacacion', label: 'Vacaci\u00f3n', color: '#10b981', icon: <Plane size={14} /> },
+  { id: 'vacacion', label: 'Vacación', color: '#10b981', icon: <Plane size={14} /> },
   { id: 'permiso', label: 'Permiso', color: '#f59e0b', icon: <FileText size={14} /> },
   { id: 'homeoffice', label: 'Home Office', color: '#3b82f6', icon: <Home size={14} /> },
+  { id: 'cumpleanos', label: 'Cumpleaños', color: '#ec4899', icon: <Gift size={14} /> },
 ];
 
 const CONFIG_DEFAULT = {
@@ -44,7 +47,8 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
   const [config, setConfig] = useState(CONFIG_DEFAULT);
   const [diasEspeciales, setDiasEspeciales] = useState([]);
   const [nuevoDia, setNuevoDia] = useState({
-    fecha: new Date().toISOString().split('T')[0],
+    fecha_inicio: new Date().toISOString().split('T')[0],
+    fecha_fin: new Date().toISOString().split('T')[0],
     tipo: 'festivo',
     descripcion: '',
   });
@@ -60,7 +64,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
       setConfig(normalizarConfig(resConfig.config));
       setDiasEspeciales(resDias.dias || []);
     } catch (err) {
-      showToast(err.message || 'Error al cargar la configuraci\u00f3n', 'error');
+      showToast(err.message || 'Error al cargar la configuración', 'error');
     } finally {
       setCargandoInicial(false);
     }
@@ -74,7 +78,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
     setCargando(true);
     try {
       await agendaService.updateConfigLaboral(config);
-      showToast('Configuraci\u00f3n guardada correctamente');
+      showToast('Configuración guardada correctamente');
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -85,7 +89,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
   const handleAddDia = async () => {
     try {
       await agendaService.crearDiaEspecial(nuevoDia);
-      showToast('D\u00eda especial marcado');
+      showToast('Día especial marcado');
       await cargarDatos();
     } catch (err) {
       showToast(err.message, 'error');
@@ -95,7 +99,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
   const handleDelDia = async (id) => {
     try {
       await agendaService.eliminarDiaEspecial(id);
-      showToast('D\u00eda eliminado');
+      showToast('Día eliminado');
       await cargarDatos();
     } catch (err) {
       showToast(err.message, 'error');
@@ -110,19 +114,19 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
       <div className="card" style={{ width: '100%', maxWidth: '600px', background: 'var(--color-surface)', padding: '0', borderRadius: '2rem', overflow: 'hidden', boxShadow: 'var(--shadow-xl)' }}>
         <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)' }}>
           <button onClick={() => setTab('HORARIO')} style={{ flex: 1, padding: '1.5rem', border: 'none', background: tab === 'HORARIO' ? 'var(--color-surface)' : 'var(--color-surface-2)', fontSize: '0.9rem', fontWeight: '800', color: tab === 'HORARIO' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'HORARIO' ? '3px solid var(--color-primary)' : 'none' }}>HORARIO LABORAL</button>
-          <button onClick={() => setTab('DIAS')} style={{ flex: 1, padding: '1.5rem', border: 'none', background: tab === 'DIAS' ? 'var(--color-surface)' : 'var(--color-surface-2)', fontSize: '0.9rem', fontWeight: '800', color: tab === 'DIAS' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'DIAS' ? '3px solid var(--color-primary)' : 'none' }}>D\u00cdAS ESPECIALES</button>
+          <button onClick={() => setTab('DIAS')} style={{ flex: 1, padding: '1.5rem', border: 'none', background: tab === 'DIAS' ? 'var(--color-surface)' : 'var(--color-surface-2)', fontSize: '0.9rem', fontWeight: '800', color: tab === 'DIAS' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'DIAS' ? '3px solid var(--color-primary)' : 'none' }}>DIAS ESPECIALES</button>
           <button onClick={onClose} style={{ padding: '1rem', border: 'none', background: 'var(--color-surface-2)', cursor: 'pointer' }}><X size={20} /></button>
         </div>
 
         <div style={{ padding: '2.5rem' }}>
           {cargandoInicial ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-dim)', fontWeight: '700' }}>
-              Cargando configuraci\u00f3n...
+              Cargando configuración...
             </div>
           ) : tab === 'HORARIO' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               <div className="form-group">
-                <label className="form-label">D\u00cdAS LABORALES</label>
+                <label className="form-label">DIAS LABORALES</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   {DIAS.map((dia, i) => {
                     const diaId = i + 1;
@@ -176,16 +180,24 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
               </div>
 
               <button onClick={handleSaveConfig} disabled={cargando} className="btn-primary" style={{ marginTop: '1rem', height: '54px' }}>
-                <Save size={20} /> {cargando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACI\u00d3N'}
+                <Save size={20} /> {cargando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACION'}
               </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ background: 'var(--color-surface-2)', padding: '1.5rem', borderRadius: '1.5rem', border: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                   <div className="form-group">
-                    <label className="form-label">FECHA</label>
-                    <input type="date" className="form-input" value={nuevoDia.fecha} onChange={(e) => setNuevoDia({ ...nuevoDia, fecha: e.target.value })} />
+                    <label className="form-label">RANGO DE FECHAS</label>
+                    <RangeDatePicker
+                      from={nuevoDia.fecha_inicio ? new Date(`${nuevoDia.fecha_inicio}T12:00:00`) : undefined}
+                      to={nuevoDia.fecha_fin ? new Date(`${nuevoDia.fecha_fin}T12:00:00`) : undefined}
+                      onChange={(range) => setNuevoDia((prev) => ({
+                        ...prev,
+                        fecha_inicio: range?.from ? range.from.toISOString().split('T')[0] : prev.fecha_inicio,
+                        fecha_fin: range?.to ? range.to.toISOString().split('T')[0] : (range?.from ? range.from.toISOString().split('T')[0] : prev.fecha_fin),
+                      }))}
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">TIPO</label>
@@ -195,21 +207,35 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
                   </div>
                 </div>
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label className="form-label">MOTIVO / DESCRIPCI\u00d3N</label>
+                  <label className="form-label">MOTIVO / DESCRIPCION</label>
                   <input className="form-input" placeholder="Ej. Navidad, Vacaciones..." value={nuevoDia.descripcion} onChange={(e) => setNuevoDia({ ...nuevoDia, descripcion: e.target.value })} />
                 </div>
-                <button onClick={handleAddDia} className="btn-primary" style={{ width: '100%', height: '48px', background: 'var(--color-secondary)' }}>
-                  <Plus size={18} /> MARCAR D\u00cdA ESPECIAL
+                <button
+                  onClick={handleAddDia}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    height: '48px',
+                    background: 'var(--color-primary)',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    fontWeight: '900',
+                  }}
+                >
+                  <Plus size={18} /> MARCAR DIA ESPECIAL
                 </button>
               </div>
 
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h4 style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', margin: 0 }}>D\u00edas marcados este mes</h4>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', margin: 0 }}>DIAS MARCADOS ESTE MES</h4>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {diasEspeciales.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '1rem', fontSize: '0.85rem', color: 'var(--color-text-dim)' }}>No hay d\u00edas especiales registrados</div>
+                    <div style={{ textAlign: 'center', padding: '1rem', fontSize: '0.85rem', color: 'var(--color-text-dim)' }}>No hay días especiales registrados</div>
                   ) : (
                     diasEspeciales.map((dia) => {
                       const tipo = TIPOS_DIA.find((x) => x.id === dia.tipo);

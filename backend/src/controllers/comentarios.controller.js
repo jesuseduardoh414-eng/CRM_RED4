@@ -1,11 +1,29 @@
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
+const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
 
 const listar = async (req, res) => {
   const { id: parentId } = req.params;
   const isTarea = req.baseUrl.includes('tareas');
   
   try {
+    if (isTarea) {
+      const tarea = await prisma.tarea.findUnique({
+        where: { id: Number(parentId) },
+        include: { proyecto: { select: { area: true } } }
+      });
+      if (!tarea) return res.status(404).json({ error: 'Tarea no encontrada' });
+      if (esAdmin(req.usuario) && !puedeAdministrarProyecto(req.usuario, tarea.proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para ver comentarios de esta tarea' });
+      }
+    } else {
+      const proyecto = await prisma.proyecto.findUnique({ where: { id: Number(parentId) } });
+      if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+      if (esAdmin(req.usuario) && !puedeAdministrarProyecto(req.usuario, proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para ver comentarios de este proyecto' });
+      }
+    }
+
     const comentarios = await prisma.comentario.findMany({
       where: isTarea ? { tareaId: Number(parentId) } : { proyectoId: Number(parentId) },
       orderBy: { creadoEn: 'asc' },
@@ -41,7 +59,12 @@ const crear = async (req, res) => {
       tituloRef = `la tarea "${tarea.titulo}"`;
 
       // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
-      if (req.usuario.rol !== 'ADMIN') {
+      if (esAdmin(req.usuario)) {
+        const proyecto = await prisma.proyecto.findUnique({ where: { id: proyectoId } });
+        if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
+          return res.status(403).json({ error: 'No tienes permiso para comentar en este proyecto' });
+        }
+      } else {
         const miembro = await prisma.proyecto.findFirst({
           where: { id: proyectoId, miembros: { some: { id: req.usuario.id } } }
         });
@@ -66,7 +89,11 @@ const crear = async (req, res) => {
       tituloRef = `el proyecto "${proyecto.nombre}"`;
 
       // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
-      if (req.usuario.rol !== 'ADMIN') {
+      if (esAdmin(req.usuario)) {
+        if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
+          return res.status(403).json({ error: 'No tienes permiso para comentar en este proyecto' });
+        }
+      } else {
         const miembro = await prisma.proyecto.findFirst({
           where: { id: proyectoId, miembros: { some: { id: req.usuario.id } } }
         });
@@ -110,8 +137,24 @@ const eliminar = async (req, res) => {
     
     if (!comentario) return res.status(404).json({ error: 'Comentario no encontrado' });
 
-    // Solo el autor o un ADMIN pueden borrar un comentario
-    if (comentario.autorId !== req.usuario.id && req.usuario.rol !== 'ADMIN') {
+    let proyectoScope = null;
+    if (comentario.tareaId) {
+      const tarea = await prisma.tarea.findUnique({
+        where: { id: comentario.tareaId },
+        include: { proyecto: { select: { area: true } } }
+      });
+      proyectoScope = tarea?.proyecto || null;
+    } else if (comentario.proyectoId) {
+      proyectoScope = await prisma.proyecto.findUnique({
+        where: { id: comentario.proyectoId },
+        select: { area: true }
+      });
+    }
+
+    const adminPuedeBorrar = esAdmin(req.usuario) && proyectoScope && puedeAdministrarProyecto(req.usuario, proyectoScope);
+
+    // Solo el autor o un ADMIN con alcance pueden borrarlo
+    if (comentario.autorId !== req.usuario.id && !adminPuedeBorrar) {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este comentario' });
     }
 

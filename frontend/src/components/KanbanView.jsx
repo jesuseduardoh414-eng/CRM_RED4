@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useLayoutEffect, useMemo } from 'react';
 import { 
   Plus, 
   ListTodo, 
@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowRight,
   Pencil,
+  Trash2,
   Calendar
 } from 'lucide-react';
 
@@ -63,14 +64,30 @@ const esVencida = (fechaStr) => {
   return f < hoy;
 };
 
+const getScrollSnapshot = (el, count) => {
+  if (!el) return null;
+
+  const cards = Array.from(el.querySelectorAll('[data-task-id]'));
+  const anchor = cards.find((card) => card.offsetTop + card.offsetHeight > el.scrollTop) || cards[0] || null;
+
+  return {
+    count,
+    scrollTop: el.scrollTop,
+    scrollHeight: el.scrollHeight,
+    anchorTaskId: anchor?.dataset?.taskId || null,
+    anchorOffsetTop: anchor?.offsetTop ?? null,
+  };
+};
+
 // ── Tarjeta Kanban (Material Style) ──────────────────────────────────────────
-const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onCambiarEstado, onActualizarTarea, onDragStart }) => {
+const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart }) => {
   const prio = PRIORIDAD_CONFIG[tarea.prioridad] || PRIORIDAD_CONFIG.MEDIA;
   const idxActual = CICLO_ESTADOS.indexOf(tarea.estado);
   const sigEstado = CICLO_ESTADOS[(idxActual + 1) % CICLO_ESTADOS.length];
 
   return (
     <div
+      data-task-id={tarea.id}
       draggable
       onDragStart={(e) => onDragStart(e, tarea.id)}
       onClick={() => onClick(tarea)}
@@ -177,18 +194,24 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onCambiarEstado, o
         >
           <Pencil size={12} />
         </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onEliminar(tarea); }}
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-error)' }}
+        >
+          <Trash2 size={12} />
+        </button>
       </div>
     </div>
   );
 };
 
 // ── Columna Kanban ───────────────────────────────────────────────────────────
-const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, limite, onCargarMas }) => {
+const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, limite, onCargarMas, scrollRef }) => {
   const [dragOver, setDragOver] = useState(false);
   const tareasVisibles = tareas.slice(0, (tareas.length > 20 && limite === 10) ? 10 : limite);
 
   return (
-    <div className="flex-1 min-w-[300px] w-[85vw] md:w-auto md:max-w-[400px] flex flex-col gap-4">
+    <div className="w-[85vw] min-w-[85vw] max-w-[85vw] md:w-auto md:min-w-0 md:max-w-none flex-shrink-0 flex flex-col gap-4">
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-2">
           <span className="text-lg">{col.icon}</span>
@@ -200,11 +223,12 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
       </div>
 
       <div
+        ref={scrollRef}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, col.key); }}
         className={`
-          flex-1 rounded-2xl p-2 flex flex-col gap-4 transition-all duration-200 min-h-[500px] max-h-[70vh] overflow-y-auto
+          rounded-2xl p-2 flex flex-col gap-4 transition-all duration-200 h-[70vh] min-h-[70vh] max-h-[70vh] overflow-y-auto
           ${dragOver ? 'bg-slate-50 border-2 border-dashed' : 'bg-transparent border-2 border-transparent'}
         `}
         style={{ 
@@ -227,6 +251,14 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
           />
         ))}
 
+        {tareas.length === 0 && (
+          <div className="flex-1 min-h-[420px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 flex items-center justify-center px-6 text-center">
+            <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">
+              Sin tareas
+            </span>
+          </div>
+        )}
+
         {tareas.length > tareasVisibles.length && (
           <button 
             onClick={onCargarMas}
@@ -246,10 +278,39 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
   const [soloHoy, setSoloHoy] = useState(true);
   const [limites, setLimites] = useState({ PENDIENTE: 10, EN_PROGRESO: 10, HECHO: 10 });
   const dragId = useRef(null);
+  const columnasRef = useRef({});
+  const scrollRestoreRef = useRef(null);
+  const scrollFocusRef = useRef(null);
 
   const handleDragStart = (e, id) => {
     dragId.current = id;
     e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const registrarSnapshotScroll = (origen, destino) => {
+    const snapshot = {};
+
+    [origen, destino].filter(Boolean).forEach((columna) => {
+      const el = columnasRef.current[columna];
+      if (!el) return;
+      snapshot[columna] = getScrollSnapshot(
+        el,
+        tareas.filter(t => t.estado === columna).length
+      );
+    });
+
+    scrollRestoreRef.current = Object.keys(snapshot).length > 0 ? snapshot : null;
+  };
+
+  const handleCambiarEstadoKanban = async (id, nuevoEstado) => {
+    const tareaActual = tareas.find(x => x.id === Number(id));
+    if (!tareaActual || tareaActual.estado === nuevoEstado) return;
+
+    registrarSnapshotScroll(tareaActual.estado, nuevoEstado);
+    scrollFocusRef.current = nuevoEstado === 'HECHO'
+      ? { column: 'HECHO', behavior: 'top' }
+      : null;
+    await onCambiarEstado(Number(id), nuevoEstado);
   };
 
   const handleDrop = async (e, colKey) => {
@@ -259,7 +320,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
     if (t && t.estado !== colKey) {
       setActualizando(id);
       try {
-        await onCambiarEstado(Number(id), colKey);
+        await handleCambiarEstadoKanban(Number(id), colKey);
       } finally {
         setActualizando(null);
       }
@@ -269,22 +330,68 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
 
   const hoy = new Date().toISOString().slice(0, 10);
   const tareasFiltradas = soloHoy 
-    ? tareas.filter(t => (t.fechaInicio && t.fechaInicio.slice(0, 10) === hoy) || (t.venceEn && t.venceEn.slice(0, 10) === hoy))
+    ? tareas.filter(t => {
+        if (t.estado === 'HECHO') {
+          return t.completadoEn && t.completadoEn.slice(0, 10) === hoy;
+        }
+        return (t.fechaInicio && t.fechaInicio.slice(0, 10) === hoy) || (t.venceEn && t.venceEn.slice(0, 10) === hoy);
+      })
     : tareas;
+
+  const tareasPorColumna = useMemo(() => ({
+    PENDIENTE: tareasFiltradas.filter(t => t.estado === 'PENDIENTE'),
+    EN_PROGRESO: tareasFiltradas.filter(t => t.estado === 'EN_PROGRESO'),
+    HECHO: tareasFiltradas.filter(t => t.estado === 'HECHO'),
+  }), [tareasFiltradas]);
+
+  useLayoutEffect(() => {
+    const snapshot = scrollRestoreRef.current;
+    const scrollFocus = scrollFocusRef.current;
+
+    if (scrollFocus?.behavior === 'top') {
+      const destino = columnasRef.current[scrollFocus.column];
+      if (destino) {
+        destino.scrollTop = 0;
+      }
+      scrollFocusRef.current = null;
+      scrollRestoreRef.current = null;
+      return;
+    }
+
+    if (!snapshot) return;
+
+    const cambioRealDetectado = Object.entries(snapshot).some(([columna, previo]) => {
+      const totalActual = tareasPorColumna[columna]?.length ?? 0;
+      return totalActual !== previo.count;
+    });
+
+    if (!cambioRealDetectado) return;
+
+    Object.entries(snapshot).forEach(([columna, previo]) => {
+      const el = columnasRef.current[columna];
+      if (!el || !previo) return;
+
+      if (previo.anchorTaskId) {
+        const anchorActual = el.querySelector(`[data-task-id="${previo.anchorTaskId}"]`);
+        if (anchorActual) {
+          const deltaAnchor = anchorActual.offsetTop - previo.anchorOffsetTop;
+          el.scrollTop = Math.max(0, previo.scrollTop + deltaAnchor);
+          return;
+        }
+      }
+
+      const delta = el.scrollHeight - previo.scrollHeight;
+      el.scrollTop = Math.max(0, previo.scrollTop + delta);
+    });
+
+    scrollRestoreRef.current = null;
+    scrollFocusRef.current = null;
+  }, [tareasPorColumna]);
 
   return (
     <div className="flex flex-col gap-6">
       {/* Filtro de día */}
       <div className="flex flex-wrap gap-2 lg:gap-4 items-center">
-        <button 
-          onClick={() => setSoloHoy(false)}
-          className={`
-            px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all
-            ${!soloHoy ? 'bg-slate-800 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'}
-          `}
-        >
-          Todas las tareas
-        </button>
         <button 
           onClick={() => setSoloHoy(true)}
           className={`
@@ -294,24 +401,36 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
         >
           Solo hoy <Calendar size={14} />
         </button>
+        <button 
+          onClick={() => setSoloHoy(false)}
+          className={`
+            px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all border
+            ${!soloHoy
+              ? 'bg-slate-800 text-white border-slate-800 shadow-lg'
+              : 'bg-white text-slate-700 border-slate-300 shadow-sm hover:bg-slate-50 hover:border-slate-400'}
+          `}
+        >
+          Todas las tareas
+        </button>
       </div>
 
-      <div className="flex gap-4 lg:gap-8 overflow-x-auto pb-8 snap-x snap-mandatory lg:snap-none">
+      <div className="flex md:grid md:grid-cols-3 items-start gap-4 lg:gap-8 overflow-x-auto md:overflow-visible pb-8 snap-x snap-mandatory lg:snap-none">
         {COLUMNAS.map(col => (
-          <div key={col.key} className="snap-center">
+          <div key={col.key} className="snap-center md:min-w-0">
             <KanbanColumna 
               col={col}
-              tareas={tareasFiltradas.filter(t => t.estado === col.key)}
+              tareas={tareasPorColumna[col.key]}
               actualizando={actualizando}
               onClick={onClick}
               onEditar={onEditar}
               onEliminar={onEliminar}
-              onCambiarEstado={onCambiarEstado}
+              onCambiarEstado={handleCambiarEstadoKanban}
               onActualizarTarea={onActualizarTarea}
               onDragStart={handleDragStart}
               onDrop={handleDrop}
               limite={limites[col.key]}
               onCargarMas={() => setLimites(prev => ({ ...prev, [col.key]: prev[col.key] + 10 }))}
+              scrollRef={(el) => { columnasRef.current[col.key] = el; }}
             />
           </div>
         ))}

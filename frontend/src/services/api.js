@@ -124,6 +124,18 @@ export const proyectosService = {
     });
     return handleResponse(res);
   },
+
+  listarPlantillas: async () => {
+    const res = await fetch(`${API_URL}/proyectos/plantillas`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  guardarComoPlantilla: async (proyectoId, datos) => {
+    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/plantilla`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
+    });
+    return handleResponse(res);
+  },
 };
 
 // ── Tareas ────────────────────────────────────────────────────────────────
@@ -194,6 +206,17 @@ export const tareasService = {
     a.click();
     document.body.removeChild(a);
   },
+
+  exportarProyecto: (proyectoId, tipo = 'json') => {
+    const token = localStorage.getItem('crm_token');
+    const url = `${API_URL}/proyectos/${proyectoId}/tareas/exportar/${tipo}`;
+    const a = document.createElement('a');
+    a.href = url + (token ? `?token=${token}` : '');
+    a.download = `proyecto_${proyectoId}_tareas.${tipo === 'excel' ? 'xlsx' : 'json'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
 };
 
 // ── Usuarios ──────────────────────────────────────────────────────────────
@@ -201,6 +224,10 @@ export const tareasService = {
 export const usuariosService = {
   listar: async () => {
     const res = await fetch(`${API_URL}/usuarios`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  listarParaProyectos: async () => {
+    const res = await fetch(`${API_URL}/usuarios/catalogo/proyectos`, { headers: getHeaders() });
     return handleResponse(res);
   },
   actividad: async (id) => {
@@ -250,6 +277,12 @@ export const usuariosService = {
   },
   listarInvitaciones: async () => {
     const res = await fetch(`${API_URL}/auth/invitaciones`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  eliminarInvitacion: async (id) => {
+    const res = await fetch(`${API_URL}/auth/invitaciones/${id}`, {
+      method: 'DELETE', headers: getHeaders(),
+    });
     return handleResponse(res);
   },
 };
@@ -387,9 +420,10 @@ export const agendaService = {
     });
     return handleResponse(res);
   },
-  consultarDisponibilidad: async ({ usuarios_ids, inicio, fin, excluir_proyecto_id }) => {
+  consultarDisponibilidad: async ({ usuarios_ids, inicio, fin, excluir_id, excluir_proyecto_id }) => {
     const params = new URLSearchParams({ usuarios_ids, inicio });
     if (fin) params.append('fin', fin);
+    if (excluir_id) params.append('excluir_id', excluir_id);
     if (excluir_proyecto_id) params.append('excluir_proyecto_id', excluir_proyecto_id);
     const res = await fetch(`${API_URL}/agenda/disponibilidad?${params}`, { headers: getHeaders() });
     return handleResponse(res);

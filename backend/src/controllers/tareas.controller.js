@@ -1,14 +1,16 @@
 // Controlador de Tareas
-// GET    /api/proyectos/:id/tareas  †’ listar tareas de un proyecto
-// POST   /api/proyectos/:id/tareas  †’ crear tarea
-// PUT    /api/tareas/:id            †’ editar tarea
-// DELETE /api/tareas/:id            †’ eliminar tarea
-// PATCH  /api/tareas/:id/estado     †’ actualizar solo el estado
+// GET    /api/proyectos/:id/tareas  → listar tareas de un proyecto
+// POST   /api/proyectos/:id/tareas  → crear tarea
+// PUT    /api/tareas/:id            → editar tarea
+// DELETE /api/tareas/:id            → eliminar tarea
+// PATCH  /api/tareas/:id/estado     → actualizar solo el estado
 
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
+const { sortTareas } = require('../utils/sort.utils');
+const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
 
-// Selector comÃºn para incluir datos del asignado sin exponer password
+// Selector común para incluir datos del asignado sin exponer password
 const INCLUDE_ASIGNADO = {
   asignado: {
     select: { id: true, nombre: true, area: true },
@@ -56,13 +58,32 @@ const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
 };
 
 // €€ GET /api/proyectos/:id/tareas €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-// ADMIN †’ ve todas las tareas del proyecto
-// MIEMBRO †’ ve todas las tareas de los proyectos donde es miembro
+// ADMIN → ve todas las tareas del proyecto
+// MIEMBRO → ve todas las tareas de los proyectos donde es miembro
 const listar = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
-  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto invÃ¡lido' });
+  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
   try {
+    // 0. Reprogramación automática (Rollover) de tareas vencidas del usuario
+    if (req.usuario.rol !== 'ADMIN') {
+      const hoyUTC = new Date(Date.now() - 6 * 60 * 60 * 1000); 
+      hoyUTC.setUTCHours(0, 0, 0, 0); // Inicio del día actual para el usuario
+
+      await prisma.tarea.updateMany({
+        where: {
+          proyectoId,
+          asignadoId: req.usuario.id,
+          estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
+          venceEn: { lt: hoyUTC },
+          NOT: { venceEn: null }
+        },
+        data: {
+          venceEn: new Date() // Se mueve a hoy (el ajuste a mediodía se hace luego)
+        }
+      });
+    }
+
     // Verificar que el proyecto existe
     const proyecto = await prisma.proyecto.findUnique({
       where: { id: proyectoId },
@@ -74,8 +95,11 @@ const listar = async (req, res) => {
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
 
     // Verificar permisos: ADMIN puede todo; MIEMBRO puede entrar si participa en el proyecto
-    const esAdmin = req.usuario.rol === 'ADMIN';
-    if (!esAdmin) {
+    const usuarioEsAdmin = esAdmin(req.usuario);
+    if (usuarioEsAdmin && !puedeAdministrarProyecto(req.usuario, proyecto)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver las tareas de este proyecto' });
+    }
+    if (!usuarioEsAdmin) {
       const esMiembro = proyecto.miembros.some(m => m.id === req.usuario.id);
       const participaPorTarea = await prisma.tarea.findFirst({
         where: {
@@ -96,7 +120,7 @@ const listar = async (req, res) => {
     const tareas = await prisma.tarea.findMany({
       where: {
         proyectoId,
-        ...(esAdmin ? {} : visibilidadTareasPara(req.usuario.id)),
+        ...(usuarioEsAdmin ? {} : visibilidadTareasPara(req.usuario.id)),
       },
       orderBy: { creadoEn: 'asc' },
       include: INCLUDE_ASIGNADO,
@@ -114,6 +138,9 @@ const listar = async (req, res) => {
         if (d.getUTCHours() === 0) d.setUTCHours(12);
         t.fechaInicio = d;
       }
+      if (t.completadoEn) {
+        t.completadoEn = new Date(t.completadoEn);
+      }
       return t;
     });
 
@@ -121,26 +148,41 @@ const listar = async (req, res) => {
       where: { proyectoId },
       select: { estado: true, asignadoId: true },
     });
+    
     const tareasMiembro = todasLasTareas.filter(t => t.asignadoId === req.usuario.id);
+    
+    // Stats Generales (Todo el proyecto)
+    const totalGeneral = todasLasTareas.length;
     const hechasGeneral = todasLasTareas.filter(t => t.estado === 'HECHO').length;
+    const pendientesGeneral = todasLasTareas.filter(t => t.estado === 'PENDIENTE').length;
+    const enProgresoGeneral = todasLasTareas.filter(t => t.estado === 'EN_PROGRESO').length;
+
+    // Stats Miembro
+    const totalMiembro = tareasMiembro.length;
     const hechasMiembro = tareasMiembro.filter(t => t.estado === 'HECHO').length;
+    const pendientesMiembro = tareasMiembro.filter(t => t.estado === 'PENDIENTE').length;
+    const enProgresoMiembro = tareasMiembro.filter(t => t.estado === 'EN_PROGRESO').length;
 
     return res.json({
       proyecto,
-      tareas: tareasAjustadas,
+      tareas: sortTareas(tareasAjustadas),
       progreso: {
         general: {
-          total: todasLasTareas.length,
+          total: totalGeneral,
           hechas: hechasGeneral,
-          porcentaje: todasLasTareas.length > 0 ? Math.round((hechasGeneral / todasLasTareas.length) * 100) : 0,
+          pendientes: pendientesGeneral,
+          enProgreso: enProgresoGeneral,
+          porcentaje: totalGeneral > 0 ? Math.round((hechasGeneral / totalGeneral) * 100) : 0,
         },
         miembro: {
-          total: tareasMiembro.length,
+          total: totalMiembro,
           hechas: hechasMiembro,
-          porcentaje: tareasMiembro.length > 0 ? Math.round((hechasMiembro / tareasMiembro.length) * 100) : 0,
+          pendientes: pendientesMiembro,
+          enProgreso: enProgresoMiembro,
+          porcentaje: totalMiembro > 0 ? Math.round((hechasMiembro / totalMiembro) * 100) : 0,
         },
       },
-      filtradoPorUsuario: !esAdmin, 
+      filtradoPorUsuario: !usuarioEsAdmin, 
     });
   } catch (error) {
     console.error('[tareas.listar]', error);
@@ -151,13 +193,13 @@ const listar = async (req, res) => {
 // €€ POST /api/proyectos/:id/tareas €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const crear = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
-  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto invÃ¡lido' });
+  if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
   const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId, primerComentario } = req.body;
   const archivos = req.files;
 
   if (!titulo || titulo.trim() === '') {
-    return res.status(400).json({ error: 'El tÃ­tulo de la tarea es requerido' });
+    return res.status(400).json({ error: 'El título de la tarea es requerido' });
   }
 
   try {
@@ -170,7 +212,11 @@ const crear = async (req, res) => {
     const asignadoIdNormalizado = normalizarAsignadoId(asignadoId);
 
     // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
-    if (req.usuario.rol !== 'ADMIN') {
+    if (esAdmin(req.usuario)) {
+      if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para crear tareas en este proyecto' });
+      }
+    } else {
       const miembro = await prisma.proyecto.findFirst({
         where: {
           id: proyectoId,
@@ -193,12 +239,15 @@ const crear = async (req, res) => {
     let dVence = venceEn ? new Date(venceEn) : null;
     if (dVence && dVence.getUTCHours() === 0) dVence.setUTCHours(12);
 
+    const estadoFinal = estado || 'PENDIENTE';
+
     const tarea = await prisma.tarea.create({
       data: {
         titulo:      titulo.trim(),
         descripcion: descripcion?.trim() || null,
         prioridad:   prioridad  || 'MEDIA',
-        estado:      estado     || 'PENDIENTE',
+        estado:      estadoFinal,
+        completadoEn: estadoFinal === 'HECHO' ? new Date() : null,
         fechaInicio: dInicio,
         venceEn:     dVence,
         proyectoId,
@@ -265,7 +314,7 @@ const crear = async (req, res) => {
 // €€ PUT /api/tareas/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const editar = async (req, res) => {
   const id = parseInt(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: 'ID invÃ¡lido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
 
   const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId } = req.body;
 
@@ -278,7 +327,11 @@ const editar = async (req, res) => {
     const asignadoIdNormalizado = asignadoId !== undefined ? normalizarAsignadoId(asignadoId) : undefined;
 
     // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
-    if (req.usuario.rol !== 'ADMIN') {
+    if (esAdmin(req.usuario)) {
+      if (!puedeAdministrarProyecto(req.usuario, existente.proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para editar esta tarea' });
+      }
+    } else {
       const esMiembro = existente.proyecto.miembros.some(m => m.id === req.usuario.id);
       if (!esMiembro || !puedeAccederTarea(existente, req.usuario.id)) {
         return res.status(403).json({ error: 'No tienes permiso para editar esta tarea' });
@@ -295,6 +348,8 @@ const editar = async (req, res) => {
     let dVence = venceEn !== undefined ? (venceEn ? new Date(venceEn) : null) : undefined;
     if (dVence && dVence.getUTCHours() === 0) dVence.setUTCHours(12);
 
+    const estadoFinal = estado !== undefined ? estado : existente.estado;
+
     const tarea = await prisma.tarea.update({
       where: { id },
       data: {
@@ -302,6 +357,11 @@ const editar = async (req, res) => {
         ...(descripcion  !== undefined && { descripcion: descripcion?.trim() || null }),
         ...(prioridad    !== undefined && { prioridad }),
         ...(estado       !== undefined && { estado }),
+        ...(estado !== undefined && {
+          completadoEn: estadoFinal === 'HECHO'
+            ? (existente.estado === 'HECHO' ? existente.completadoEn || new Date() : new Date())
+            : null
+        }),
         ...(asignadoId   !== undefined && { asignadoId: asignadoIdNormalizado }),
         ...(dInicio      !== undefined && { fechaInicio: dInicio }),
         ...(dVence       !== undefined && { venceEn: dVence }),
@@ -309,6 +369,19 @@ const editar = async (req, res) => {
       },
       include: INCLUDE_ASIGNADO,
     });
+
+    // Ajuste proactivo de fecha si se completó antes de tiempo
+    if (tarea.estado === 'HECHO' && tarea.venceEn) {
+      const hoy = new Date(Date.now() - 6 * 60 * 60 * 1000); 
+      hoy.setUTCHours(12, 0, 0, 0);
+      if (tarea.venceEn > hoy) {
+        await prisma.tarea.update({
+          where: { id: tarea.id },
+          data: { venceEn: hoy }
+        });
+        tarea.venceEn = hoy;
+      }
+    }
 
     // Notificar cambios al asignado si no es quien edita
     if (tarea.asignadoId && tarea.asignadoId !== req.usuario.id) {
@@ -353,7 +426,11 @@ const eliminar = async (req, res) => {
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 
     // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
-    if (req.usuario.rol !== 'ADMIN') {
+    if (esAdmin(req.usuario)) {
+      if (!puedeAdministrarProyecto(req.usuario, existente.proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para eliminar esta tarea' });
+      }
+    } else {
       const esMiembro = existente.proyecto.miembros.some(m => m.id === req.usuario.id);
       if (!esMiembro || !puedeAccederTarea(existente, req.usuario.id)) {
         return res.status(403).json({ error: 'No tienes permiso para eliminar esta tarea' });
@@ -395,7 +472,11 @@ const actualizarEstado = async (req, res) => {
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 
     // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
-    if (req.usuario.rol !== 'ADMIN') {
+    if (esAdmin(req.usuario)) {
+      if (!puedeAdministrarProyecto(req.usuario, existente.proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para actualizar esta tarea' });
+      }
+    } else {
       const esMiembro = existente.proyecto.miembros.some(m => m.id === req.usuario.id);
       if (!esMiembro || !puedeAccederTarea(existente, req.usuario.id)) {
         return res.status(403).json({ error: 'No tienes permiso para actualizar esta tarea' });
@@ -404,9 +485,25 @@ const actualizarEstado = async (req, res) => {
 
     const tarea = await prisma.tarea.update({
       where: { id },
-      data:  { estado },
+      data:  {
+        estado,
+        completadoEn: estado === 'HECHO' ? new Date() : null,
+      },
       include: INCLUDE_ASIGNADO,
     });
+
+    // Ajuste proactivo de fecha si se completó antes de tiempo
+    if (tarea.estado === 'HECHO' && tarea.venceEn) {
+      const hoy = new Date(Date.now() - 6 * 60 * 60 * 1000); 
+      hoy.setUTCHours(12, 0, 0, 0);
+      if (tarea.venceEn > hoy) {
+        await prisma.tarea.update({
+          where: { id: tarea.id },
+          data: { venceEn: hoy }
+        });
+        tarea.venceEn = hoy;
+      }
+    }
     // Notificar cambio de estado al asignado
     if (tarea.asignadoId && tarea.asignadoId !== req.usuario.id) {
       await crearNotificacion(

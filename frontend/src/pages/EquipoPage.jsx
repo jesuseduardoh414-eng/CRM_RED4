@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { proyectosService } from '../services/api';
-import Spinner from '../components/Spinner';
+import { PageSkeleton } from '../components/Skeleton';
 import { 
   Code2, 
   BarChart3, 
@@ -242,6 +242,10 @@ const EquipoPage = () => {
 
   const totalMiembros = new Set(datos.flatMap(d => d.equipo.map(m => m.id))).size;
 
+  if (cargando) {
+    return <PageSkeleton cards={3} showSidebar={false} />;
+  }
+
   return (
     <div style={{ padding: '1.5rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '2rem' }}>
@@ -254,9 +258,7 @@ const EquipoPage = () => {
         </p>
       </div>
 
-      {cargando ? (
-        <Spinner texto="Cargando equipo..." />
-      ) : error ? (
+      {error ? (
         <div className="alert-error">{error}</div>
       ) : datos.length === 0 ? (
         <div style={{

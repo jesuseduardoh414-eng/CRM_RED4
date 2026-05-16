@@ -15,7 +15,8 @@ const {
   verificarInvitacion,
   aceptarInvitacion,
   reenviarInvitacion,
-  listarInvitaciones
+  listarInvitaciones,
+  eliminarInvitacion
 } = require('../controllers/auth.controller');
 const { verificarToken }      = require('../middlewares/auth.middleware');
 const { soloAdmin }           = require('../middlewares/roles.middleware');
@@ -41,5 +42,6 @@ router.get('/me', verificarToken, me);
 router.post('/invitar', verificarToken, soloAdmin, invitar);
 router.post('/invitar/reenviar', verificarToken, soloAdmin, reenviarInvitacion);
 router.get('/invitaciones', verificarToken, soloAdmin, listarInvitaciones);
+router.delete('/invitaciones/:id', verificarToken, soloAdmin, eliminarInvitacion);
 
 module.exports = router;

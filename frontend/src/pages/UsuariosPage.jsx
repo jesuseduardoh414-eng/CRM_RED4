@@ -1,9 +1,11 @@
 // Página de Gestión de Usuarios (Solo Admin)
 import { Fragment, useState, useEffect, useCallback } from 'react';
 import useSWR from 'swr';
+import { useSearchParams } from 'react-router-dom';
 import { proyectosService, tareasService, usuariosService, statsService } from '../services/api';
 import { useToast } from '../context/ToastContext';
-import Spinner from '../components/Spinner';
+import { useAuth } from '../context/AuthContext';
+import { PageSkeleton } from '../components/Skeleton';
 import { 
   Pencil, 
   Trash2, 
@@ -19,7 +21,8 @@ import {
   Activity,
   CalendarDays,
   PlayCircle,
-  ChevronDown
+  ChevronDown,
+  Ban
 } from 'lucide-react';
 
 const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION', 'MARKETING'];
@@ -174,6 +177,8 @@ const UserActivityPanel = ({ actividad }) => {
 };
 
 const UsuariosPage = () => {
+  const { usuario: usuarioActual } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState('activos');
   const [usuarios, setUsuarios] = useState([]);
   const [invitaciones, setInvitaciones] = useState([]);
@@ -181,6 +186,7 @@ const UsuariosPage = () => {
   const [modalEditar, setModalEditar] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const { showToast } = useToast();
+  const actividadParam = searchParams.get('actividad');
 
   const { 
     data: listado, 
@@ -242,6 +248,21 @@ const UsuariosPage = () => {
     } catch (error) { showToast(error.message, 'error'); }
   };
 
+  const handleEliminarInvitacion = async (invitacion) => {
+    if (invitacion.estado === 'aceptada') {
+      showToast('Las invitaciones aceptadas se conservan como historial', 'error');
+      return;
+    }
+
+    if (!confirm(`¿Eliminar la invitación de ${invitacion.nombre}?`)) return;
+
+    try {
+      await usuariosService.eliminarInvitacion(invitacion.id);
+      showToast('Invitación eliminada', 'success');
+      mutate();
+    } catch (error) { showToast(error.message, 'error'); }
+  };
+
   const handleCargarActividad = async (id) => {
     try {
       const data = await usuariosService.actividad(id);
@@ -251,7 +272,7 @@ const UsuariosPage = () => {
     }
   };
 
-  if (isLoading && (usuarios.length === 0 && invitaciones.length === 0)) return <Spinner texto="Cargando..." />;
+  if (isLoading && (usuarios.length === 0 && invitaciones.length === 0)) return <PageSkeleton cards={4} />;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -295,11 +316,14 @@ const UsuariosPage = () => {
             onDelete={handleEliminar}
             onToggleStatus={handleToggleEstado}
             onLoadActivity={handleCargarActividad}
+            actividadInicialId={actividadParam ? Number(actividadParam) : null}
+            onActividadInicialConsumida={() => setSearchParams({}, { replace: true })}
           />
         ) : (
           <TablaInvitaciones 
             invitaciones={invitaciones} 
             onResend={handleReenviarInvitacion}
+            onDelete={handleEliminarInvitacion}
           />
         )}
       </div>
@@ -307,6 +331,7 @@ const UsuariosPage = () => {
       {/* Modales */}
       {modalInvitar && (
         <ModalInvitar 
+          usuarioActual={usuarioActual}
           onClose={() => setModalInvitar(false)} 
           onSuccess={() => { setModalInvitar(false); setTab('invitaciones'); mutate(); }}
         />
@@ -314,6 +339,7 @@ const UsuariosPage = () => {
 
       {modalEditar && (
         <ModalEditar 
+          usuarioActual={usuarioActual}
           usuario={usuarioEditando}
           onClose={() => { setModalEditar(false); setUsuarioEditando(null); }} 
           onSuccess={() => { setModalEditar(false); setUsuarioEditando(null); mutate(); }}
@@ -323,8 +349,22 @@ const UsuariosPage = () => {
   );
 };
 
-const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivity }) => {
+const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivity, actividadInicialId, onActividadInicialConsumida }) => {
   const [actividadAbierta, setActividadAbierta] = useState(null);
+
+  useEffect(() => {
+    if (!actividadInicialId || actividadAbierta === actividadInicialId) return;
+    const usuarioExiste = usuarios.some((usuario) => usuario.id === actividadInicialId);
+    if (!usuarioExiste) return;
+
+    const abrir = async () => {
+      await onLoadActivity(actividadInicialId);
+      setActividadAbierta(actividadInicialId);
+      onActividadInicialConsumida?.();
+    };
+
+    abrir();
+  }, [actividadInicialId, actividadAbierta, usuarios, onLoadActivity, onActividadInicialConsumida]);
 
   if (usuarios.length === 0) return <div className="p-12 text-center text-slate-400">No hay miembros activos.</div>;
 
@@ -505,7 +545,7 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
   );
 };
 
-const TablaInvitaciones = ({ invitaciones, onResend }) => {
+const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
   if (invitaciones.length === 0) return <div className="p-12 text-center text-slate-400">No hay invitaciones enviadas.</div>;
 
   return (
@@ -564,12 +604,20 @@ const TablaInvitaciones = ({ invitaciones, onResend }) => {
               </td>
               <td className="px-6 py-4 text-right">
                 {inv.estado !== 'aceptada' && (
-                  <button 
-                    onClick={() => onResend(inv.email)}
-                    className="flex items-center gap-1.5 ml-auto text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <RefreshCcw size={12} /> Reenviar
-                  </button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button 
+                      onClick={() => onResend(inv.email)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <RefreshCcw size={12} /> Reenviar
+                    </button>
+                    <button
+                      onClick={() => onDelete(inv)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Ban size={12} /> Cancelar
+                    </button>
+                  </div>
                 )}
               </td>
             </tr>
@@ -608,12 +656,20 @@ const TablaInvitaciones = ({ invitaciones, onResend }) => {
             </div>
 
             {inv.estado !== 'aceptada' && (
-              <button 
-                onClick={() => onResend(inv.email)}
-                className="w-full flex items-center justify-center gap-2 text-xs font-black text-blue-600 bg-blue-50 hover:bg-blue-100 py-3 rounded-xl transition-all border border-blue-100"
-              >
-                <RefreshCcw size={14} /> Reenviar invitación
-              </button>
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => onResend(inv.email)}
+                  className="w-full flex items-center justify-center gap-2 text-xs font-black text-blue-600 bg-blue-50 hover:bg-blue-100 py-3 rounded-xl transition-all border border-blue-100"
+                >
+                  <RefreshCcw size={14} /> Reenviar invitación
+                </button>
+                <button
+                  onClick={() => onDelete(inv)}
+                  className="w-full flex items-center justify-center gap-2 text-xs font-black text-red-600 bg-red-50 hover:bg-red-100 py-3 rounded-xl transition-all border border-red-100"
+                >
+                  <Ban size={14} /> Cancelar invitación
+                </button>
+              </div>
             )}
           </div>
         ))}
@@ -622,8 +678,10 @@ const TablaInvitaciones = ({ invitaciones, onResend }) => {
   );
 };
 
-const ModalInvitar = ({ onClose, onSuccess }) => {
-  const [form, setForm] = useState({ nombre: '', email: '', area: 'DESARROLLO', rol: 'MIEMBRO' });
+const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
+  const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
+  const areasDisponibles = esAdminArea ? [usuarioActual.area] : AREAS;
+  const [form, setForm] = useState({ nombre: '', email: '', area: areasDisponibles[0] || 'DESARROLLO', rol: 'MIEMBRO' });
   const [cargando, setCargando] = useState(false);
   const { showToast } = useToast();
 
@@ -681,11 +739,12 @@ const ModalInvitar = ({ onClose, onSuccess }) => {
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
               <select 
+                disabled={areasDisponibles.length === 1}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 value={form.area}
                 onChange={e => setForm({...form, area: e.target.value})}
               >
-                {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                {areasDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
             <div className="space-y-1">
@@ -721,11 +780,13 @@ const ModalInvitar = ({ onClose, onSuccess }) => {
   );
 };
 
-const ModalEditar = ({ usuario, onClose, onSuccess }) => {
+const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
+  const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
+  const areasDisponibles = esAdminArea ? [usuarioActual.area] : AREAS;
   const [form, setForm] = useState({
     nombre: usuario?.nombre || '',
     email: usuario?.email || '',
-    area: usuario?.area || 'DESARROLLO',
+    area: usuario?.area || areasDisponibles[0] || 'DESARROLLO',
     rol: usuario?.rol || 'MIEMBRO'
   });
   const [cargando, setCargando] = useState(false);
@@ -780,11 +841,12 @@ const ModalEditar = ({ usuario, onClose, onSuccess }) => {
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
               <select 
+                disabled={areasDisponibles.length === 1}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 value={form.area}
                 onChange={e => setForm({...form, area: e.target.value})}
               >
-                {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                {areasDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
             <div className="space-y-1">

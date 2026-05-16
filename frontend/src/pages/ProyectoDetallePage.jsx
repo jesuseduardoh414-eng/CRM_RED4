@@ -4,14 +4,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { tareasService } from '../services/api';
+import { proyectosService, tareasService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
-import Spinner    from '../components/Spinner';
+import { PageSkeleton } from '../components/Skeleton';
 import ModalImportar from '../components/ModalImportar';
 import RangeDatePicker from '../components/RangeDatePicker';
+import { sortTareas, sortTareasLista } from '../utils/sorters';
 import { 
   Target, 
   ListTodo, 
@@ -22,6 +23,9 @@ import {
   Trash2, 
   Download, 
   Plus,
+  Save,
+  FileJson,
+  FileSpreadsheet,
   List,
   LayoutGrid,
   CalendarRange,
@@ -153,14 +157,16 @@ const ProyectoDetallePage = () => {
   const { showToast } = useToast();
 
   const [proyecto, setProyecto] = useState(null);
+  const [progreso, setProgreso] = useState(null);
   const [tareas, setTareas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [modal, setModal] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
+  const [modalExportar, setModalExportar] = useState(false);
+  const [modalPlantilla, setModalPlantilla] = useState(false);
   const [tareaEditando, setTareaEditando] = useState(null);
   const [vista, setVista] = useState('lista');
-  const [progresoServidor, setProgresoServidor] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [limite, setLimite] = useState(10);
 
@@ -169,9 +175,9 @@ const ProyectoDetallePage = () => {
     try {
       const t = await tareasService.listar(id);
       setProyecto(t.proyecto);
-      setTareas(t.tareas);
+      setTareas(sortTareas(t.tareas));
+      setProgreso(t.progreso);
       setUsuarios(t.proyecto?.miembros || []);
-      setProgresoServidor(t.progreso || null);
     } catch (err) { showToast(err.message, 'error'); }
     finally { setCargando(false); }
   }, [id, showToast]);
@@ -183,17 +189,48 @@ const ProyectoDetallePage = () => {
     fetch();
   }, [cargar]);
 
-  const stats = {
-    total: tareas.length,
-    hechas: tareas.filter(t => t.estado === 'HECHO').length,
-    progreso: tareas.filter(t => t.estado === 'EN_PROGRESO').length,
-    pendientes: tareas.filter(t => t.estado === 'PENDIENTE').length,
-    pct: tareas.length > 0 ? Math.round((tareas.filter(t => t.estado === 'HECHO').length / tareas.length) * 100) : 0
-  };
-  const progresoGeneral = progresoServidor?.general?.porcentaje ?? stats.pct;
-  const progresoMiembro = progresoServidor?.miembro?.porcentaje ?? stats.pct;
-  const totalGeneral = progresoServidor?.general?.total ?? stats.total;
-  const totalMiembro = progresoServidor?.miembro?.total ?? stats.total;
+  const stats = useMemo(() => {
+    // Si la API nos dio progreso real, lo usamos
+    if (progreso) {
+      return {
+        total: progreso.general.total,
+        hechas: progreso.general.hechas,
+        progreso: progreso.general.enProgreso,
+        pendientes: progreso.general.pendientes,
+        pct: progreso.general.porcentaje,
+        totalMiembro: progreso.miembro.total,
+        hechasMiembro: progreso.miembro.hechas,
+        pctMiembro: progreso.miembro.porcentaje,
+      };
+    }
+
+    // Fallback (mientras carga o si falla)
+    const hechas = tareas.filter(t => t.estado === 'HECHO').length;
+    const prog = tareas.filter(t => t.estado === 'EN_PROGRESO').length;
+    const pendientes = tareas.filter(t => t.estado === 'PENDIENTE').length;
+    const total = tareas.length;
+    const pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
+
+    const tareasMiembro = tareas.filter(t => t.asignado?.id === usuario?.id);
+    const hechasMiembro = tareasMiembro.filter(t => t.estado === 'HECHO').length;
+    const pctMiembro = tareasMiembro.length > 0 ? Math.round((hechasMiembro / tareasMiembro.length) * 100) : 0;
+
+    return {
+      total,
+      hechas,
+      progreso: prog,
+      pendientes,
+      pct,
+      totalMiembro: tareasMiembro.length,
+      hechasMiembro,
+      pctMiembro,
+    };
+  }, [tareas, usuario?.id, progreso]);
+
+  const progresoGeneral = stats.pct;
+  const progresoMiembro = stats.pctMiembro;
+  const totalGeneral = stats.total;
+  const totalMiembro = stats.totalMiembro;
 
   const tareasFiltradas = useMemo(() => {
     if (!busqueda) return tareas;
@@ -203,6 +240,8 @@ const ProyectoDetallePage = () => {
       t.descripcion?.toLowerCase().includes(b)
     );
   }, [tareas, busqueda]);
+
+  const tareasListaFiltradas = useMemo(() => sortTareasLista(tareasFiltradas), [tareasFiltradas]);
 
   const handleEliminar = async (t) => {
     if (!window.confirm(`¿Eliminar "${t.titulo}"?`)) return;
@@ -217,12 +256,17 @@ const ProyectoDetallePage = () => {
     const tareaAnterior = tareas.find(x => x.id === id);
     if (!tareaAnterior || tareaAnterior.estado === est) return;
 
+    const completadoEnOptimista = est === 'HECHO'
+      ? new Date().toISOString()
+      : null;
+
     const tareaOptimista = {
       ...tareaAnterior,
       estado: est,
+      completadoEn: completadoEnOptimista,
     };
 
-    setTareas(prev => prev.map(x => x.id === id ? tareaOptimista : x));
+    setTareas(prev => sortTareas(prev.map(x => x.id === id ? tareaOptimista : x)));
 
     if (tareaEditando?.id === id) {
       setTareaEditando(prev => prev ? { ...prev, estado: est } : prev);
@@ -230,12 +274,13 @@ const ProyectoDetallePage = () => {
 
     try {
       const { tarea } = await tareasService.actualizarEstado(id, est);
-      setTareas(prev => prev.map(x => x.id === id ? tarea : x));
+      setTareas(prev => sortTareas(prev.map(x => x.id === id ? tarea : x)));
+      await cargar();
       if (tareaEditando?.id === id) {
         setTareaEditando(tarea);
       }
     } catch (err) {
-      setTareas(prev => prev.map(x => x.id === id ? tareaAnterior : x));
+      setTareas(prev => sortTareas(prev.map(x => x.id === id ? tareaAnterior : x)));
       if (tareaEditando?.id === id) {
         setTareaEditando(tareaAnterior);
       }
@@ -246,12 +291,32 @@ const ProyectoDetallePage = () => {
   const handleActualizarTarea = async (id, datos) => {
     try {
       const { tarea } = await tareasService.editar(id, datos);
-      setTareas(prev => prev.map(x => x.id === id ? tarea : x));
+      setTareas(prev => sortTareas(prev.map(x => x.id === id ? tarea : x)));
       showToast('Tarea actualizada');
     } catch (err) { showToast(err.message, 'error'); }
   };
 
-  if (cargando) return <Spinner texto="Cargando entorno..." />;
+  const handleExportar = (tipo) => {
+    try {
+      tareasService.exportarProyecto(id, tipo);
+      showToast(`Exportación ${tipo.toUpperCase()} iniciada`);
+      setModalExportar(false);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleGuardarPlantilla = async ({ nombre, descripcion }) => {
+    try {
+      await proyectosService.guardarComoPlantilla(id, { nombre, descripcion });
+      showToast('Plantilla guardada correctamente');
+      setModalPlantilla(false);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  if (cargando) return <PageSkeleton cards={4} />;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -273,6 +338,20 @@ const ProyectoDetallePage = () => {
         </div>
 
         <div className="flex gap-2 w-full lg:w-auto">
+          <button 
+            onClick={() => setModalExportar(true)} 
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-white border border-slate-200 rounded-xl text-xs lg:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <Download size={18} /> Exportar
+          </button>
+          {usuario?.rol === 'ADMIN' && (
+            <button 
+              onClick={() => setModalPlantilla(true)} 
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-white border border-slate-200 rounded-xl text-xs lg:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+            >
+              <Save size={18} /> Guardar Plantilla
+            </button>
+          )}
           <button 
             onClick={() => setModalImportar(true)} 
             className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-white border border-slate-200 rounded-xl text-xs lg:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
@@ -360,13 +439,13 @@ const ProyectoDetallePage = () => {
               scrollbarWidth: 'thin',
               scrollbarColor: 'var(--color-border) transparent'
             }}>
-              {tareasFiltradas.length === 0 ? (
+              {tareasListaFiltradas.length === 0 ? (
                 <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
                   <Search size={40} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
                   <p style={{ fontWeight: '700' }}>No se encontraron tareas que coincidan con tu búsqueda</p>
                 </div>
               ) : (
-                tareasFiltradas.slice(0, limite).map(t => (
+                tareasListaFiltradas.slice(0, limite).map(t => (
                   <TareaCard 
                     key={t.id} 
                     tarea={t} 
@@ -378,7 +457,7 @@ const ProyectoDetallePage = () => {
               )}
             </div>
             
-            {tareasFiltradas.length > limite && (
+            {tareasListaFiltradas.length > limite && (
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
                 <button 
                   onClick={() => setLimite(prev => prev + 10)}
@@ -390,7 +469,7 @@ const ProyectoDetallePage = () => {
             )}
           </div>
         )}
-        {vista === 'kanban' && <KanbanView tareas={tareasFiltradas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} onActualizarTarea={handleActualizarTarea} />}
+        {vista === 'kanban' && <KanbanView tareas={tareasFiltradas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onEliminar={handleEliminar} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} onActualizarTarea={handleActualizarTarea} />}
         {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradas} />}
       </div>
 
@@ -402,6 +481,7 @@ const ProyectoDetallePage = () => {
           usuarios={usuarios} 
           onClose={() => setModal(false)} 
           onGuardar={() => { setModal(false); cargar(); }} 
+          onEliminar={handleEliminar}
         />
       )}
       {modalImportar && (
@@ -413,12 +493,26 @@ const ProyectoDetallePage = () => {
           onImportado={() => { setModalImportar(false); cargar(); }} 
         />
       )}
+      {modalExportar && (
+        <ModalExportarProyecto
+          proyecto={proyecto}
+          onClose={() => setModalExportar(false)}
+          onExportar={handleExportar}
+        />
+      )}
+      {modalPlantilla && (
+        <ModalGuardarPlantilla
+          proyecto={proyecto}
+          onClose={() => setModalPlantilla(false)}
+          onGuardar={handleGuardarPlantilla}
+        />
+      )}
     </div>
   );
 };
 
 // ── Modal de Tarea (Simplified & Professional) ──────────────────────────────
-const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
+const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onEliminar }) => {
   const [form, setForm] = useState({
     titulo: tarea?.titulo || '',
     descripcion: tarea?.descripcion || '',
@@ -534,10 +628,114 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar }) => {
           >
             Cancelar
           </button>
+          {tarea && (
+            <button 
+              type="button" 
+              onClick={() => { onEliminar(tarea); onClose(); }}
+              className="flex-1 px-6 py-4 bg-red-50 text-red-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all"
+            >
+              Eliminar
+            </button>
+          )}
           <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
             {cargando ? 'Guardando...' : 'Guardar Tarea'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => (
+  <div
+    onClick={(e) => e.target === e.currentTarget && onClose()}
+    className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
+  >
+    <div className="bg-white w-full max-w-md rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
+      <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+        <h2 className="text-xl font-black text-slate-900">Exportar tareas</h2>
+        <p className="text-sm text-slate-500 font-medium mt-1">{proyecto?.nombre}</p>
+      </div>
+      <div className="px-8 py-6 space-y-3">
+        <button
+          onClick={() => onExportar('excel')}
+          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-all"
+        >
+          <span className="flex items-center gap-3 text-sm font-black text-slate-800"><FileSpreadsheet size={18} /> Excel</span>
+          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">.xlsx</span>
+        </button>
+        <button
+          onClick={() => onExportar('json')}
+          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-all"
+        >
+          <span className="flex items-center gap-3 text-sm font-black text-slate-800"><FileJson size={18} /> JSON</span>
+          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">.json</span>
+        </button>
+      </div>
+      <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50">
+        <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-all">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
+  const [form, setForm] = useState({
+    nombre: `${proyecto?.nombre || 'Proyecto'} Template`,
+    descripcion: proyecto?.descripcion || '',
+  });
+  const [guardando, setGuardando] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setGuardando(true);
+    try {
+      await onGuardar(form);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
+    >
+      <div className="bg-white w-full max-w-lg rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
+        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="text-xl font-black text-slate-900">Guardar como plantilla</h2>
+          <p className="text-sm text-slate-500 font-medium mt-1">Esto guarda una base reutilizable del proyecto actual: tareas, prioridades, orden, dependencias y fechas relativas. No guarda el avance real ni el historial.</p>
+        </div>
+        <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre de la plantilla</label>
+            <input
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
+              value={form.nombre}
+              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción</label>
+            <input
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none resize-none"
+              rows="3"
+              value={form.descripcion}
+              onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+            />
+          </div>
+          <div className="flex flex-col-reverse lg:flex-row gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all uppercase tracking-widest">
+              Cancelar
+            </button>
+            <button type="submit" disabled={guardando} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20">
+              {guardando ? 'Guardando...' : 'Guardar plantilla'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

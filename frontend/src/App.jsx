@@ -17,11 +17,12 @@ import ForgotPasswordPage    from './pages/ForgotPasswordPage';
 import ResetPasswordPage     from './pages/ResetPasswordPage';
 import VerifyAccountPage     from './pages/VerifyAccountPage';
 import AgendaPage            from './pages/AgendaPage';
+import { AuthSkeleton } from './components/Skeleton';
 
 // Redirige al dashboard si ya hay sesión activa (evita volver al login)
 const RutaPublica = ({ children }) => {
   const { usuario, cargando } = useAuth();
-  if (cargando) return null;
+  if (cargando) return <AuthSkeleton compact />;
   return usuario ? <Navigate to="/dashboard" replace /> : children;
 };
 

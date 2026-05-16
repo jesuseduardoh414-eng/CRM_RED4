@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { AuthSkeleton } from '../components/Skeleton';
 
 const InvitationPage = () => {
   const { token } = useParams();
@@ -21,9 +22,9 @@ const InvitationPage = () => {
       try {
         const data = await authService.verificarInvitacion(token);
         setInvitacion(data);
-        setLoading(false);
       } catch (err) {
         setError(err.message);
+      } finally {
         setLoading(false);
       }
     };
@@ -65,12 +66,7 @@ const InvitationPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-        <p className="text-gray-600 font-medium">Verificando invitación...</p>
-      </div>
-    );
+    return <AuthSkeleton />;
   }
 
   if (error) {
@@ -85,7 +81,7 @@ const InvitationPage = () => {
             Este enlace de invitación ha expirado o no es válido.
             Contacta a tu administrador para recibir una nueva invitación.
           </p>
-          <button 
+          <button
             onClick={() => navigate('/login')}
             className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors"
           >
@@ -102,11 +98,10 @@ const InvitationPage = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
       <div className="max-w-lg w-full">
-        {/* Header with Logo */}
         <div className="text-center mb-8">
-           <img src="/logo_login.jpeg" alt="Logo" className="h-16 mx-auto mb-4 object-contain" />
-           <h1 className="text-3xl font-bold text-slate-900">Activa tu cuenta</h1>
-           <p className="text-slate-500 mt-2">Completa tu perfil para unirte al equipo</p>
+          <img src="/logo_login.jpeg" alt="Logo" className="h-16 mx-auto mb-4 object-contain" />
+          <h1 className="text-3xl font-bold text-slate-900">Activa tu cuenta</h1>
+          <p className="text-slate-500 mt-2">Completa tu perfil para unirte al equipo</p>
         </div>
 
         <div className="bg-white rounded-3xl shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
@@ -157,12 +152,11 @@ const InvitationPage = () => {
                 >
                   {verPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
-                
-                {/* Strength Meter */}
+
                 <div className="flex gap-1 mt-2">
                   {[1, 2, 3, 4].map((i) => (
-                    <div 
-                      key={i} 
+                    <div
+                      key={i}
                       className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i <= strength ? strengthColors[strength] : 'bg-slate-100'}`}
                     />
                   ))}
@@ -194,9 +188,9 @@ const InvitationPage = () => {
               type="submit"
               disabled={submitting || strength < 2}
               className={`w-full py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] ${
-                submitting || strength < 2 
-                ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
+                submitting || strength < 2
+                  ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
               }`}
             >
               {submitting ? (

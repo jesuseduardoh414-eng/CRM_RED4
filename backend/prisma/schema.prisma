@@ -34,6 +34,7 @@ model Usuario {
   diasEspeciales           DiaEspecial[]
   notificaciones           Notificacion[] @relation("DestinatarioNotificacion")
   proyectosCreados         Proyecto[]     @relation("CreadorProyecto")
+  plantillasCreadas        PlantillaProyecto[] @relation("CreadorPlantillaProyecto")
   tareasCreadas            Tarea[]        @relation("CreadorTarea")
   tareasAsignadas          Tarea[]        @relation("AsignadoTarea")
   proyectosMiembro         Proyecto[]     @relation("ProyectoMiembro")
@@ -75,8 +76,41 @@ model Proyecto {
   tareas      Tarea[]
   miembros    Usuario[]      @relation("ProyectoMiembro")
   eventos     Evento[]
+  plantillasBase PlantillaProyecto[] @relation("ProyectoFuentePlantillas")
 
   @@map("proyectos")
+}
+
+model PlantillaProyecto {
+  id              Int              @id @default(autoincrement())
+  nombre          String
+  descripcion     String?
+  area            String           @default("DESARROLLO")
+  creadoEn        DateTime         @default(now())
+  creadorId       Int
+  proyectoBaseId  Int?
+  creador         Usuario          @relation("CreadorPlantillaProyecto", fields: [creadorId], references: [id])
+  proyectoBase    Proyecto?        @relation("ProyectoFuentePlantillas", fields: [proyectoBaseId], references: [id], onDelete: SetNull)
+  tareas          PlantillaTarea[]
+
+  @@map("plantillas_proyecto")
+}
+
+model PlantillaTarea {
+  id               Int               @id @default(autoincrement())
+  plantillaId      Int
+  clave            String
+  titulo           String
+  descripcion      String?
+  prioridad        String            @default("MEDIA")
+  orden            Int               @default(0)
+  offsetInicioDias Int               @default(0)
+  offsetVenceDias  Int?
+  dependeDeClave   String?
+  plantilla        PlantillaProyecto @relation(fields: [plantillaId], references: [id], onDelete: Cascade)
+
+  @@unique([plantillaId, clave])
+  @@map("plantillas_tarea")
 }
 
 model Tarea {
@@ -86,6 +120,7 @@ model Tarea {
   estado      String       @default("PENDIENTE")
   prioridad   String       @default("MEDIA")
   creadoEn    DateTime     @default(now())
+  completadoEn DateTime?
   venceEn     DateTime?
   proyectoId  Int
   asignadoId  Int?
@@ -174,6 +209,10 @@ model Evento {
   titulo         String
   descripcion    String?
   tipo           String   // 'evento', 'recordatorio', 'dia_completo'
+  modalidad      String   @default("presencial")
+  ubicacion      String?
+  urlReunion     String?  @map("url_reunion")
+  instruccionesAcceso String? @map("instrucciones_acceso")
   fechaInicio    DateTime @map("fecha_inicio")
   fechaFin       DateTime? @map("fecha_fin")
   todoElDia      Boolean  @default(false) @map("todo_el_dia")

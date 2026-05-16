@@ -4,6 +4,13 @@ const prisma = require('../lib/prisma');
 const DIAS_LABORALES_DEFAULT = [1, 2, 3, 4, 5];
 const TIPOS_NO_LABORALES = ['festivo', 'vacacion', 'permiso'];
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const COLOR_CATEGORIA = {
+  tarea: '#16a34a',
+  reunion: '#7c3aed',
+  evento: '#2563eb',
+};
+
+const getColorCategoria = (tipo) => COLOR_CATEGORIA[tipo] || COLOR_CATEGORIA.evento;
 
 const getDateKeyUTC = (date) => date.toISOString().split('T')[0];
 const getFinTareaParaDisponibilidad = (tarea) => (
@@ -136,7 +143,18 @@ const listar = async (req, res) => {
     const [eventosNormales, eventosRecurrentes, tareas] = await Promise.all([
       // Eventos normales dentro del rango
       prisma.evento.findMany({
-        where: { AND: [ where, { fechaInicio: { gte: desde, lte: hasta } } ] },
+        where: {
+          AND: [
+            where,
+            { fechaInicio: { lte: hasta } },
+            {
+              OR: [
+                { fechaFin: { gte: desde } },
+                { fechaFin: null, fechaInicio: { gte: desde } }
+              ]
+            }
+          ]
+        },
         include: {
           creador:   { select: { id: true, nombre: true, email: true } },
           invitados: { include: { usuario: { select: { id: true, nombre: true, email: true } } } },
@@ -189,7 +207,7 @@ const listar = async (req, res) => {
         fechaInicio,
         fechaFin,
         todoElDia: true,
-        color: '#f59e0b',
+        color: getColorCategoria('tarea'),
         proyecto: t.proyecto,
         esLectura: true 
       };
@@ -216,15 +234,9 @@ const editar = async (req, res) => {
   const { 
     titulo, descripcion, tipo, fecha_inicio, fecha_fin, todo_el_dia, color,
     alerta_minutos, es_compartido, es_global, proyecto_id,
-    es_recurrente, patron_recurrencia, fecha_fin_recurrencia
+    es_recurrente, patron_recurrencia, fecha_fin_recurrencia,
+    modalidad, ubicacion, url_reunion, instrucciones_acceso
   } = req.body;
-  
-  if (fecha_inicio) {
-    const validacionLaboral = await validarFechaLaboral(usuarioId, fecha_inicio);
-    if (!validacionLaboral.valido) {
-      return res.status(400).json({ error: validacionLaboral.error });
-    }
-  }
 
   try {
     const existente = await prisma.evento.findUnique({ where: { id } });
@@ -233,14 +245,29 @@ const editar = async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para editar este evento' });
     }
 
+    const fechaInicioFinal = fecha_inicio ? new Date(fecha_inicio) : existente.fechaInicio;
+    const fechaFinFinal = fecha_fin ? new Date(fecha_fin) : existente.fechaFin;
+    if (
+      fechaFinFinal &&
+      !Number.isNaN(fechaInicioFinal.getTime()) &&
+      !Number.isNaN(fechaFinFinal.getTime()) &&
+      fechaFinFinal <= fechaInicioFinal
+    ) {
+      return res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio' });
+    }
+
     const updateData = {
       titulo:           titulo       !== undefined ? titulo       : existente.titulo,
       descripcion:      descripcion  !== undefined ? descripcion  : existente.descripcion,
       tipo:             tipo         || existente.tipo,
-      fechaInicio:      fecha_inicio ? new Date(fecha_inicio)    : existente.fechaInicio,
-      fechaFin:         fecha_fin    ? new Date(fecha_fin)        : existente.fechaFin,
+      modalidad:        modalidad    !== undefined ? modalidad : existente.modalidad,
+      ubicacion:        ubicacion    !== undefined ? (ubicacion || null) : existente.ubicacion,
+      urlReunion:       url_reunion  !== undefined ? (url_reunion || null) : existente.urlReunion,
+      instruccionesAcceso: instrucciones_acceso !== undefined ? (instrucciones_acceso || null) : existente.instruccionesAcceso,
+      fechaInicio:      fechaInicioFinal,
+      fechaFin:         fechaFinFinal,
       todoElDia:        todo_el_dia  !== undefined ? todo_el_dia  : existente.todoElDia,
-      color:            color        !== undefined ? color        : existente.color,
+      color:            getColorCategoria(tipo || existente.tipo),
       alertaMinutos:    alerta_minutos !== undefined ? (alerta_minutos !== null ? parseInt(alerta_minutos) : null) : existente.alertaMinutos,
       esCompartido:     es_compartido !== undefined ? !!es_compartido : existente.esCompartido,
       esGlobal:         es_global    !== undefined ? !!es_global   : existente.esGlobal,
@@ -319,7 +346,8 @@ const crear = async (req, res) => {
   const { 
     titulo, descripcion, tipo, fecha_inicio, fecha_fin, todo_el_dia, color, 
     alerta_minutos, es_compartido, es_global, proyecto_id, invitados_ids,
-    es_recurrente, patron_recurrencia, fecha_fin_recurrencia
+    es_recurrente, patron_recurrencia, fecha_fin_recurrencia,
+    modalidad, ubicacion, url_reunion, instrucciones_acceso
   } = req.body;
   const usuarioId = req.usuario.id;
 
@@ -327,10 +355,6 @@ const crear = async (req, res) => {
     return res.status(400).json({ error: 'Titulo, tipo y fecha de inicio son obligatorios' });
   }
 
-  const validacionLaboral = await validarFechaLaboral(usuarioId, fecha_inicio);
-  if (!validacionLaboral.valido) {
-    return res.status(400).json({ error: validacionLaboral.error });
-  }
 
   // Validar recurrencia: si es recurrente, el patrón es obligatorio
   if (es_recurrente && !patron_recurrencia) {
@@ -338,6 +362,17 @@ const crear = async (req, res) => {
   }
 
   try {
+    const fechaInicioDate = new Date(fecha_inicio);
+    const fechaFinDate = fecha_fin ? new Date(fecha_fin) : null;
+    if (
+      fechaFinDate &&
+      !Number.isNaN(fechaInicioDate.getTime()) &&
+      !Number.isNaN(fechaFinDate.getTime()) &&
+      fechaFinDate <= fechaInicioDate
+    ) {
+      return res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio' });
+    }
+
     let isTodoElDia = todo_el_dia === true;
     if (tipo === 'dia_completo') isTodoElDia = true;
 
@@ -365,10 +400,14 @@ const crear = async (req, res) => {
       titulo,
       descripcion,
       tipo,
-      fechaInicio:       new Date(fecha_inicio),
-      fechaFin:          fecha_fin ? new Date(fecha_fin) : null,
+      modalidad:         modalidad || 'presencial',
+      ubicacion:         ubicacion || null,
+      urlReunion:        url_reunion || null,
+      instruccionesAcceso: instrucciones_acceso || null,
+      fechaInicio:       fechaInicioDate,
+      fechaFin:          fechaFinDate,
       todoElDia:         isTodoElDia,
-      color:             color || '#4a90d9',
+      color:             getColorCategoria(tipo),
       alertaMinutos:     alerta_minutos ? parseInt(alerta_minutos) : null,
       esCompartido:      !!es_compartido,
       esGlobal:          !!es_global,
@@ -662,7 +701,7 @@ const updateConfigLaboral = async (req, res) => {
   }
 };
 
-// €€ DÃ AS ESPECIALES €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
+// €€ DÍAS ESPECIALES €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 
 const listarDiasEspeciales = async (req, res) => {
   const usuarioId = req.usuario.id;
@@ -716,18 +755,47 @@ const listarDiasEspeciales = async (req, res) => {
 
 const crearDiaEspecial = async (req, res) => {
   const usuarioId = req.usuario.id;
-  const { fecha, tipo, descripcion } = req.body;
+  const { fecha, fecha_inicio, fecha_fin, tipo, descripcion } = req.body;
 
   try {
-    const dia = await prisma.diaEspecial.create({
-      data: {
+    const inicioBase = fecha_inicio || fecha;
+    const finBase = fecha_fin || fecha_inicio || fecha;
+
+    if (!inicioBase || !finBase || !tipo) {
+      return res.status(400).json({ error: 'fecha, tipo y rango son requeridos' });
+    }
+
+    const inicio = new Date(inicioBase);
+    const fin = new Date(finBase);
+
+    if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+      return res.status(400).json({ error: 'Rango de fechas invalido' });
+    }
+
+    if (fin < inicio) {
+      return res.status(400).json({ error: 'La fecha fin debe ser posterior o igual a la fecha inicio' });
+    }
+
+    const fechas = [];
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate(), 12, 0, 0, 0);
+    const ultimo = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate(), 12, 0, 0, 0);
+
+    while (cursor <= ultimo) {
+      fechas.push({
         usuarioId,
-        fecha: new Date(fecha),
+        fecha: new Date(cursor),
         tipo,
-        descripcion
-      }
+        descripcion: descripcion || null
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    await prisma.diaEspecial.createMany({
+      data: fechas,
+      skipDuplicates: true
     });
-    return res.status(201).json({ dia });
+
+    return res.status(201).json({ creados: fechas.length });
   } catch (error) {
     console.error('[agenda.crearDia]', error);
     return res.status(500).json({ error: 'Error al crear día especial' });

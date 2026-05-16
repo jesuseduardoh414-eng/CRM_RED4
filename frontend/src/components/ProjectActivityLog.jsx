@@ -10,6 +10,7 @@ import {
   RotateCw,
   Inbox
 } from 'lucide-react';
+import { PanelSkeleton } from './Skeleton';
 
 const ProjectActivityLog = ({ proyectoId }) => {
   const [logs, setLogs] = useState([]);
@@ -48,7 +49,7 @@ const ProjectActivityLog = ({ proyectoId }) => {
     return '#94a3b8';
   };
 
-  if (cargando) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>Cargando historial...</div>;
+  if (cargando) return <PanelSkeleton rows={5} titleWidth="210px" />;
 
   return (
     <div style={{ background: 'var(--color-surface-2)', borderRadius: '1.25rem', border: '1px solid var(--color-border)', overflow: 'hidden' }}>

@@ -5,6 +5,7 @@ const crypto  = require('crypto');
 const { validarPassword } = require('../utils/security.utils');
 const { sendResetEmail, sendVerificationEmail } = require('../services/email.service');
 const { enviarInvitacion } = require('../services/correo');
+const { buildScopeProyectoParaAdmin, puedeGestionarArea, esAdminDeArea } = require('../utils/permissions.utils');
 
 // POST /api/auth/register - DESHABILITADO (Solo por invitación)
 const register = async (req, res) => {
@@ -198,20 +199,54 @@ const invitar = async (req, res) => {
       return res.status(409).json({ error: 'El email ya está registrado' });
     }
 
+    if (esAdminDeArea(req.usuario) && !puedeGestionarArea(req.usuario, area)) {
+      return res.status(403).json({ error: 'Solo puedes invitar usuarios de tu propia área' });
+    }
+
+    const emailNormalizado = email.toLowerCase().trim();
+    const invitacionesExistentes = await prisma.invitacion.findMany({
+      where: { email: emailNormalizado, estado: { not: 'aceptada' } },
+      orderBy: { creadoEn: 'desc' }
+    });
+
     const token = crypto.randomBytes(32).toString('hex');
     const expiraEn = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 horas
 
-    await prisma.invitacion.create({
-      data: {
-        nombre: nombre.trim(),
-        email: email.toLowerCase().trim(),
-        area,
-        rol: rol.toLowerCase(),
-        token,
-        expiraEn,
-        creadoPor: req.usuario.id
+    if (invitacionesExistentes.length > 0) {
+      const [invitacionActual, ...duplicadas] = invitacionesExistentes;
+
+      await prisma.invitacion.update({
+        where: { id: invitacionActual.id },
+        data: {
+          nombre: nombre.trim(),
+          email: emailNormalizado,
+          area,
+          rol: rol.toLowerCase(),
+          token,
+          expiraEn,
+          estado: 'pendiente',
+          creadoPor: req.usuario.id
+        }
+      });
+
+      if (duplicadas.length > 0) {
+        await prisma.invitacion.deleteMany({
+          where: { id: { in: duplicadas.map((inv) => inv.id) } }
+        });
       }
-    });
+    } else {
+      await prisma.invitacion.create({
+        data: {
+          nombre: nombre.trim(),
+          email: emailNormalizado,
+          area,
+          rol: rol.toLowerCase(),
+          token,
+          expiraEn,
+          creadoPor: req.usuario.id
+        }
+      });
+    }
 
     await enviarInvitacion({ nombre, email, token });
 
@@ -317,7 +352,11 @@ const reenviarInvitacion = async (req, res) => {
 
   try {
     const invitacion = await prisma.invitacion.findFirst({
-      where: { email: email.toLowerCase().trim(), estado: { not: 'aceptada' } }
+      where: {
+        email: email.toLowerCase().trim(),
+        estado: { not: 'aceptada' },
+        ...(esAdminDeArea(req.usuario) ? { area: req.usuario.area } : {})
+      }
     });
 
     if (!invitacion) {
@@ -347,12 +386,39 @@ const reenviarInvitacion = async (req, res) => {
 const listarInvitaciones = async (req, res) => {
   try {
     const invitaciones = await prisma.invitacion.findMany({
+      where: esAdminDeArea(req.usuario) ? { area: req.usuario.area } : undefined,
       orderBy: { creadoEn: 'desc' },
       include: { creador: { select: { nombre: true } } }
     });
     return res.json(invitaciones);
   } catch (error) {
     return res.status(500).json({ error: 'Error al listar invitaciones' });
+  }
+};
+
+const eliminarInvitacion = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const invitacion = await prisma.invitacion.findUnique({ where: { id } });
+
+    if (!invitacion) {
+      return res.status(404).json({ error: 'Invitación no encontrada' });
+    }
+
+    if (esAdminDeArea(req.usuario) && !puedeGestionarArea(req.usuario, invitacion.area)) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar esta invitación' });
+    }
+
+    if (invitacion.estado === 'aceptada') {
+      return res.status(409).json({ error: 'No se puede eliminar una invitación aceptada' });
+    }
+
+    await prisma.invitacion.delete({ where: { id } });
+
+    return res.json({ mensaje: 'Invitación eliminada correctamente' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Error al eliminar invitación' });
   }
 };
 
@@ -367,6 +433,7 @@ module.exports = {
   verificarInvitacion,
   aceptarInvitacion,
   reenviarInvitacion,
-  listarInvitaciones
+  listarInvitaciones,
+  eliminarInvitacion
 };
 

@@ -3,104 +3,87 @@ import {
   X,
   Save,
   Calendar,
-  Bell,
   Users,
   Check,
   AlertTriangle,
-  Hash,
   Trash2,
   Globe,
   Clock,
+  MapPin,
+  Video,
+  Link2,
 } from 'lucide-react';
 import { agendaService, usuariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
-const COLORES = [
-  { hex: '#4a90d9', label: 'Azul' },
-  { hex: '#27ae60', label: 'Verde' },
-  { hex: '#e67e22', label: 'Naranja' },
-  { hex: '#e74c3c', label: 'Rojo' },
-  { hex: '#9b59b6', label: 'Morado' },
-  { hex: '#95a5a6', label: 'Gris' },
-];
+const COLOR_CATEGORIA = {
+  tarea: '#16a34a',
+  reunion: '#7c3aed',
+  evento: '#2563eb',
+};
+
+const getColorCategoria = (tipo) => COLOR_CATEGORIA[tipo] || COLOR_CATEGORIA.evento;
 
 const TIPOS = [
   { id: 'evento', label: 'Evento', icon: <Calendar size={16} /> },
-  { id: 'recordatorio', label: 'Recordatorio', icon: <Bell size={16} /> },
-  { id: 'dia_completo', label: 'Día completo', icon: <Hash size={16} /> },
+  { id: 'reunion', label: 'Reunion', icon: <Users size={16} /> },
 ];
 
-const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
-  const [form, setForm] = useState(() => {
-    if (evento) {
-      const start = new Date(evento.fechaInicio);
-      const end = evento.fechaFin ? new Date(evento.fechaFin) : null;
-      let patronParsed = null;
-      try {
-        patronParsed = evento.patronRecurrencia ? JSON.parse(evento.patronRecurrencia) : null;
-      } catch {
-        patronParsed = null;
-      }
-
-      return {
-        titulo: evento.titulo,
-        descripcion: evento.descripcion || '',
-        tipo: evento.tipo,
-        fecha_inicio: start.toISOString().split('T')[0],
-        hora_inicio: start.toTimeString().slice(0, 5),
-        fecha_fin: end ? end.toISOString().split('T')[0] : start.toISOString().split('T')[0],
-        hora_fin: end ? end.toTimeString().slice(0, 5) : '10:00',
-        todo_el_dia: evento.todoElDia,
-        color: evento.color,
-        alerta_minutos: evento.alertaMinutos || 15,
-        es_compartido: evento.esCompartido || false,
-        es_global: evento.esGlobal || false,
-        proyecto_id: evento.proyectoId || '',
-        invitados_ids: evento.invitados?.map((i) => i.usuarioId) || [],
-        es_recurrente: evento.esRecurrente || false,
-        recur_dias: patronParsed?.dias || [],
-        recur_hora_inicio: patronParsed?.horaInicio || '00:00',
-        recur_hora_fin: patronParsed?.horaFin || '23:59',
-        fecha_fin_recurrencia: evento.fechaFinRecurr ? new Date(evento.fechaFinRecurr).toISOString().split('T')[0] : '',
-      };
+const buildInitialForm = ({ evento, prefill }) => {
+  if (evento) {
+    const start = new Date(evento.fechaInicio);
+    const end = evento.fechaFin ? new Date(evento.fechaFin) : null;
+    let patronParsed = null;
+    try {
+      patronParsed = evento.patronRecurrencia ? JSON.parse(evento.patronRecurrencia) : null;
+    } catch {
+      patronParsed = null;
     }
 
-    if (prefill) {
-      const start = prefill.fechaInicio || new Date();
-      return {
-        titulo: '',
-        descripcion: '',
-        tipo: 'evento',
-        fecha_inicio: start.toISOString().split('T')[0],
-        hora_inicio: start.toTimeString().slice(0, 5),
-        fecha_fin: start.toISOString().split('T')[0],
-        hora_fin: '10:00',
-        todo_el_dia: false,
-        color: '#4a90d9',
-        alerta_minutos: 15,
-        es_compartido: false,
-        es_global: false,
-        proyecto_id: '',
-        invitados_ids: [],
-        es_recurrente: false,
-        recur_dias: [],
-        recur_hora_inicio: '00:00',
-        recur_hora_fin: '23:59',
-        fecha_fin_recurrencia: '',
-      };
-    }
+    return {
+      titulo: evento.titulo,
+      descripcion: evento.descripcion || '',
+      tipo: evento.tipo,
+      modalidad: evento.modalidad || 'presencial',
+      ubicacion: evento.ubicacion || '',
+      url_reunion: evento.urlReunion || '',
+      instrucciones_acceso: evento.instruccionesAcceso || '',
+      fecha_inicio: start.toISOString().split('T')[0],
+      hora_inicio: start.toTimeString().slice(0, 5),
+      fecha_fin: end ? end.toISOString().split('T')[0] : start.toISOString().split('T')[0],
+      hora_fin: end ? end.toTimeString().slice(0, 5) : '10:00',
+      todo_el_dia: evento.todoElDia,
+      color: getColorCategoria(evento.tipo),
+      alerta_minutos: evento.alertaMinutos || 15,
+      es_compartido: evento.esCompartido || false,
+      es_global: evento.esGlobal || false,
+      proyecto_id: evento.proyectoId || '',
+      invitados_ids: evento.invitados?.map((i) => i.usuarioId) || [],
+      es_recurrente: evento.esRecurrente || false,
+      recur_dias: patronParsed?.dias || [],
+      recur_hora_inicio: patronParsed?.horaInicio || '00:00',
+      recur_hora_fin: patronParsed?.horaFin || '23:59',
+      fecha_fin_recurrencia: evento.fechaFinRecurr ? new Date(evento.fechaFinRecurr).toISOString().split('T')[0] : '',
+    };
+  }
 
+  if (prefill) {
+    const start = prefill.fechaInicio || new Date();
     return {
       titulo: '',
       descripcion: '',
       tipo: 'evento',
-      fecha_inicio: '',
-      hora_inicio: '09:00',
-      fecha_fin: '',
+      modalidad: 'presencial',
+      ubicacion: '',
+      url_reunion: '',
+      instrucciones_acceso: '',
+      fecha_inicio: start.toISOString().split('T')[0],
+      hora_inicio: start.toTimeString().slice(0, 5),
+      fecha_fin: start.toISOString().split('T')[0],
       hora_fin: '10:00',
       todo_el_dia: false,
-      color: '#4a90d9',
+      color: getColorCategoria('evento'),
       alerta_minutos: 15,
       es_compartido: false,
       es_global: false,
@@ -112,8 +95,37 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
       recur_hora_fin: '23:59',
       fecha_fin_recurrencia: '',
     };
-  });
+  }
 
+  return {
+    titulo: '',
+    descripcion: '',
+    tipo: 'evento',
+    modalidad: 'presencial',
+    ubicacion: '',
+    url_reunion: '',
+    instrucciones_acceso: '',
+    fecha_inicio: '',
+    hora_inicio: '09:00',
+    fecha_fin: '',
+    hora_fin: '10:00',
+    todo_el_dia: false,
+    color: getColorCategoria('evento'),
+    alerta_minutos: 15,
+    es_compartido: false,
+    es_global: false,
+    proyecto_id: '',
+    invitados_ids: [],
+    es_recurrente: false,
+    recur_dias: [],
+    recur_hora_inicio: '00:00',
+    recur_hora_fin: '23:59',
+    fecha_fin_recurrencia: '',
+  };
+};
+
+const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
+  const [form, setForm] = useState(() => buildInitialForm({ evento, prefill }));
   const { usuario } = useAuth();
   const { showToast } = useToast();
   const [cargando, setCargando] = useState(false);
@@ -121,6 +133,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
   const [disponibilidad, setDisponibilidad] = useState([]);
 
   const esDuenio = !evento || evento.usuarioId === usuario?.id || evento.creadoPorId === usuario?.id;
+  const esVirtual = form.modalidad === 'virtual';
 
   useEffect(() => {
     const cargar = async () => {
@@ -165,13 +178,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
     e.preventDefault();
 
     if (form.es_recurrente && form.recur_dias.length === 0) {
-      showToast('Selecciona al menos un día de la semana para el evento recurrente.', 'error');
-      return;
-    }
-
-    const startDay = new Date(form.fecha_inicio).getDay();
-    if (startDay === 0 || startDay === 6) {
-      showToast('No se permiten eventos en fin de semana (sábados o domingos)', 'error');
+      showToast('Selecciona al menos un dia de la semana para el evento recurrente.', 'error');
       return;
     }
 
@@ -179,11 +186,31 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
     try {
       const fInicio = new Date(`${form.fecha_inicio}T${form.hora_inicio || '00:00'}`);
       let fFin = null;
-      if (form.tipo === 'evento') fFin = new Date(`${form.fecha_fin}T${form.hora_fin || '23:59'}`);
+      if (form.tipo !== 'dia_completo') fFin = new Date(`${form.fecha_fin}T${form.hora_fin || '23:59'}`);
       else if (form.tipo === 'dia_completo') fFin = new Date(`${form.fecha_fin}T23:59:59`);
+
+      if (Number.isNaN(fInicio.getTime()) || (fFin && Number.isNaN(fFin.getTime()))) {
+        showToast('Revisa la fecha y hora del evento.', 'error');
+        return;
+      }
+
+      if (fFin && fFin <= fInicio) {
+        showToast('La fecha y hora de fin deben ser posteriores al inicio.', 'error');
+        return;
+      }
+
+      if (form.url_reunion) {
+        try {
+          new URL(form.url_reunion);
+        } catch {
+          showToast('El enlace de reunion no es valido.', 'error');
+          return;
+        }
+      }
 
       const payload = {
         ...form,
+        color: getColorCategoria(form.tipo),
         fecha_inicio: fInicio.toISOString(),
         fecha_fin: fFin ? fFin.toISOString() : null,
         todo_el_dia: form.tipo === 'dia_completo' ? true : form.todo_el_dia,
@@ -225,7 +252,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
       onClick={(e) => e.target === e.currentTarget && onClose()}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
     >
-      <div className="card" style={{ width: '95%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: '2rem', borderRadius: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+      <div className="card" style={{ width: '100%', maxWidth: '760px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: '2rem', borderRadius: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.75rem', fontWeight: '900', letterSpacing: '-0.02em' }}>
             {!evento ? 'Nuevo Evento' : esDuenio ? 'Editar Evento' : 'Detalles del Evento'}
@@ -236,19 +263,42 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>TÍTULO DEL EVENTO</label>
+              <label className="form-label" style={{ letterSpacing: '0.05em' }}>TITULO DEL EVENTO</label>
               {esDuenio ? (
-                <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required placeholder="¿De qué trata la reunión?" />
+                <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required placeholder="De que trata el evento?" />
               ) : (
                 <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--color-text)', padding: '0.5rem 0' }}>{form.titulo}</div>
               )}
             </div>
             {esDuenio && (
               <div className="form-group">
-                <label className="form-label" style={{ letterSpacing: '0.05em' }}>CATEGORÍA</label>
-                <select className="form-input form-select" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })} disabled={!esDuenio}>
+                <label className="form-label" style={{ letterSpacing: '0.05em' }}>CATEGORIA</label>
+                <select
+                  className="form-input form-select"
+                  style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }}
+                  value={form.tipo}
+                  onChange={(e) => setForm({ ...form, tipo: e.target.value, color: getColorCategoria(e.target.value) })}
+                  disabled={!esDuenio}
+                >
                   {TIPOS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" style={{ letterSpacing: '0.05em' }}>DESCRIPCION</label>
+            {esDuenio ? (
+              <textarea
+                className="form-input"
+                style={{ minHeight: '96px', resize: 'vertical', padding: '1rem 1.25rem' }}
+                value={form.descripcion}
+                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                placeholder="Agenda, contexto o puntos a tratar"
+              />
+            ) : (
+              <div style={{ fontSize: '0.95rem', color: 'var(--color-text-dim)', lineHeight: 1.5 }}>
+                {form.descripcion || 'Sin descripcion'}
               </div>
             )}
           </div>
@@ -258,14 +308,14 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               <label className="form-label" style={{ letterSpacing: '0.05em' }}>COMIENZA</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DÍA</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DIA</span>
                   {esDuenio ? (
                     <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_inicio} onChange={(e) => setForm({ ...form, fecha_inicio: e.target.value })} required />
                   ) : (
                     <div style={{ fontWeight: '700' }}>{new Date(form.fecha_inicio).toLocaleDateString()}</div>
                   )}
                 </div>
-                {form.tipo === 'evento' && (
+                {form.tipo !== 'dia_completo' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
                     {esDuenio ? (
@@ -285,14 +335,14 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               <label className="form-label" style={{ letterSpacing: '0.05em' }}>TERMINA</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DÍA</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DIA</span>
                   {esDuenio ? (
                     <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_fin} onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })} />
                   ) : (
                     <div style={{ fontWeight: '700' }}>{new Date(form.fecha_fin).toLocaleDateString()}</div>
                   )}
                 </div>
-                {form.tipo === 'evento' && (
+                {form.tipo !== 'dia_completo' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
                     {esDuenio ? (
@@ -309,32 +359,115 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
             </div>
           </div>
 
-          {esDuenio && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>IDENTIFICADOR VISUAL</label>
-              <div style={{ display: 'flex', gap: '1rem', padding: '0.5rem 0', flexWrap: 'wrap' }}>
-                {COLORES.map((c) => (
+              <label className="form-label" style={{ letterSpacing: '0.05em' }}>MODALIDAD</label>
+              {esDuenio ? (
+                <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--color-bg-base)', padding: '0.4rem', borderRadius: '14px', border: '1px solid var(--color-border)' }}>
                   <button
-                    key={c.hex}
                     type="button"
-                    onClick={() => setForm({ ...form, color: c.hex })}
+                    onClick={() => setForm({ ...form, modalidad: 'presencial' })}
                     style={{
-                      width: '32px',
-                      height: '32px',
+                      flex: 1,
+                      padding: '0.85rem',
                       borderRadius: '10px',
-                      background: c.hex,
-                      border: form.color === c.hex ? '3px solid #fff' : 'none',
-                      boxShadow: form.color === c.hex ? `0 0 0 2px ${c.hex}, 0 4px 12px ${c.hex}66` : 'none',
+                      border: 'none',
+                      fontSize: '0.85rem',
+                      fontWeight: '900',
                       cursor: 'pointer',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      transform: form.color === c.hex ? 'scale(1.1)' : 'scale(1)',
+                      background: !esVirtual ? 'var(--color-primary)' : 'transparent',
+                      color: !esVirtual ? '#fff' : 'var(--color-text-dim)',
                     }}
-                    aria-label={c.label}
-                  />
-                ))}
-              </div>
+                  >
+                    PRESENCIAL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, modalidad: 'virtual' })}
+                    style={{
+                      flex: 1,
+                      padding: '0.85rem',
+                      borderRadius: '10px',
+                      border: 'none',
+                      fontSize: '0.85rem',
+                      fontWeight: '900',
+                      cursor: 'pointer',
+                      background: esVirtual ? 'var(--color-primary)' : 'transparent',
+                      color: esVirtual ? '#fff' : 'var(--color-text-dim)',
+                    }}
+                  >
+                    VIRTUAL
+                  </button>
+                </div>
+              ) : (
+                <div style={{ fontWeight: '700' }}>{esVirtual ? 'Virtual' : 'Presencial'}</div>
+              )}
             </div>
-          )}
+
+            <div className="form-group">
+              <label className="form-label" style={{ letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                {esVirtual ? <Link2 size={14} /> : <MapPin size={14} />}
+                {esVirtual ? 'ENLACE DE REUNION' : 'UBICACION'}
+              </label>
+              {esDuenio ? (
+                esVirtual ? (
+                  <input
+                    className="form-input"
+                    value={form.url_reunion}
+                    onChange={(e) => setForm({ ...form, url_reunion: e.target.value })}
+                    placeholder="https://meet.google.com/... o enlace interno"
+                  />
+                ) : (
+                  <input
+                    className="form-input"
+                    value={form.ubicacion}
+                    onChange={(e) => setForm({ ...form, ubicacion: e.target.value })}
+                    placeholder="Sala Creativa, Oficina Norte, etc."
+                  />
+                )
+              ) : (
+                <div style={{ fontWeight: '700', wordBreak: 'break-word' }}>
+                  {esVirtual ? (form.url_reunion || 'Sin enlace') : (form.ubicacion || 'Sin ubicacion')}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
+            <div className="form-group">
+              <label className="form-label" style={{ letterSpacing: '0.05em' }}>
+                {esVirtual ? 'INSTRUCCIONES DE ACCESO' : 'NOTAS LOGISTICAS'}
+              </label>
+              {esDuenio ? (
+                <textarea
+                  className="form-input"
+                  style={{ minHeight: '90px', resize: 'vertical', padding: '1rem 1.25rem' }}
+                  value={form.instrucciones_acceso}
+                  onChange={(e) => setForm({ ...form, instrucciones_acceso: e.target.value })}
+                  placeholder={esVirtual ? 'Codigo de acceso, camara opcional, etc.' : 'Recepcion, edificio, materiales, etc.'}
+                />
+              ) : (
+                <div style={{ fontSize: '0.95rem', color: 'var(--color-text-dim)', lineHeight: 1.5 }}>
+                  {form.instrucciones_acceso || 'Sin instrucciones adicionales'}
+                </div>
+              )}
+            </div>
+
+            {esDuenio && !esVirtual && (
+              <div className="form-group">
+                <label className="form-label" style={{ letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Video size={14} />
+                  ENLACE REMOTO OPCIONAL
+                </label>
+                <input
+                  className="form-input"
+                  value={form.url_reunion}
+                  onChange={(e) => setForm({ ...form, url_reunion: e.target.value })}
+                  placeholder="Si tambien tendra acceso remoto, pega el enlace aqui"
+                />
+              </div>
+            )}
+          </div>
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--color-border-light)', margin: '0.5rem 0' }} />
 
@@ -345,8 +478,8 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   <Users size={22} color="var(--color-primary)" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.01em' }}>Colaboración</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>Define quién puede ver este evento</div>
+                  <div style={{ fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.01em' }}>Colaboracion</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>Define quien puede ver este evento</div>
                 </div>
               </div>
               <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px' }}>
@@ -397,7 +530,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     boxShadow: !form.es_global ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
                   }}
                 >
-                  MIEMBROS ESPECÍFICOS
+                  MIEMBROS ESPECIFICOS
                 </button>
               </div>
 
@@ -479,9 +612,9 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     <Globe size={18} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: '900', marginBottom: '0.2rem' }}>Evento público</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: '900', marginBottom: '0.2rem' }}>Evento publico</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', opacity: 0.8, fontWeight: '500', lineHeight: 1.4 }}>
-                      Este evento aparecerá automáticamente en el calendario de todos los miembros del CRM.
+                      Este evento aparecera automaticamente en el calendario de todos los miembros del CRM.
                     </div>
                   </div>
                 </div>
