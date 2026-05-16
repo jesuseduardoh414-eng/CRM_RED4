@@ -80,18 +80,6 @@ const resumenOcupacionProyecto = (proyecto, usuarioId) => ({
   proyecto: { id: proyecto.id, nombre: proyecto.nombre },
 });
 
-const resumenOcupacionEvento = (evento) => ({
-  id: `evento-${evento.id}`,
-  origenId: evento.id,
-  tipo: 'evento',
-  titulo: evento.titulo,
-  estado: null,
-  prioridad: null,
-  fechaInicio: evento.fechaInicio,
-  fechaFin: evento.fechaFin || evento.fechaInicio,
-  proyecto: evento.proyecto || null,
-});
-
 const getTopUsuariosProductividad = async (usuario) => {
   const hoy = new Date();
   const inicioSemanaActual = inicioDeSemana(hoy);
@@ -168,7 +156,7 @@ const getActividadMiembros = async (usuario) => {
     const hoyInicio = new Date(ahora);
     hoyInicio.setHours(0,0,0,0);
 
-    const [hechas, hechasHoy, enProgreso, faltanHoy, faltanSemana, todasConFecha, proyectosActivos, eventos] = await Promise.all([
+    const [hechas, hechasHoy, enProgreso, faltanHoy, faltanSemana, todasConFecha, proyectosActivos] = await Promise.all([
       prisma.tarea.findMany({
         where: { ...tareasDelUsuario, estado: 'HECHO', ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
         select: tareaResumenSelect
@@ -215,28 +203,12 @@ const getActividadMiembros = async (usuario) => {
           fechaInicio: true,
           fechaFin: true
         }
-      }),
-      prisma.evento.findMany({
-        where: {
-          OR: [
-            { usuarioId: miembro.id },
-            { invitados: { some: { usuarioId: miembro.id, estado: 'aceptado' } } }
-          ]
-        },
-        select: {
-          id: true,
-          titulo: true,
-          fechaInicio: true,
-          fechaFin: true,
-          proyecto: { select: { id: true, nombre: true } }
-        }
       })
     ]);
 
     const ocupacionCalendario = [
       ...proyectosActivos.map((proyecto) => resumenOcupacionProyecto(proyecto, miembro.id)),
       ...todasConFecha.map(resumenOcupacionTarea),
-      ...eventos.map(resumenOcupacionEvento),
     ].filter((item) => item.fechaInicio && item.fechaFin);
 
     return {

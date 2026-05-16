@@ -696,7 +696,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
         {days.map(day => {
           const isCurrentMonth = day.getMonth() === monthDate.getMonth();
           const isToday = startOfDay(day).getTime() === todayKey;
-          const occupancyFromApi = selectedMember?.ocupacionCalendario || [];
+          const occupancyFromApi = (selectedMember?.ocupacionCalendario || [])
+            .filter((item) => item.tipo === 'proyecto' || item.tipo === 'tarea');
           const occupancyOnDayFromApi = occupancyFromApi.filter((item) =>
             item.fechaInicio && item.fechaFin && isDateBetween(day, item.fechaInicio, item.fechaFin)
           );
@@ -715,7 +716,6 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
 
           const projectCount = occupancyOnDay.filter((item) => item.tipo === 'proyecto').length;
           const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
-          const eventCount = occupancyOnDay.filter((item) => item.tipo === 'evento').length;
           const visibleProjects = occupancyOnDay.filter((item) => item.tipo === 'proyecto').slice(0, 2);
           const visibleTasks = occupancyOnDay.filter((item) => item.tipo === 'tarea').slice(0, 1);
           const hiddenCount = Math.max(occupancyOnDay.length - (visibleProjects.length + visibleTasks.length), 0);
@@ -729,7 +729,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                 borderRadius: '18px',
                 border: '1px solid #e2e8f0',
                 background: isCurrentMonth 
-                  ? (projectCount > 0 ? '#f0f7ff' : taskCount > 0 ? '#f0fdf4' : eventCount > 0 ? '#faf5ff' : '#fff') 
+                  ? (projectCount > 0 ? '#f0f7ff' : taskCount > 0 ? '#f0fdf4' : '#fff') 
                   : '#f8fafc',
                 padding: '0.65rem',
                 opacity: isCurrentMonth ? 1 : 0.4,
@@ -791,23 +791,6 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                   </div>
                 ))}
 
-                {eventCount > 0 && (
-                  <div style={{ 
-                    padding: '0.25rem 0.4rem', 
-                    borderRadius: '6px', 
-                    background: 'rgba(124,58,237,0.08)', 
-                    color: '#7c3aed', 
-                    fontSize: '0.55rem', 
-                    fontWeight: '900',
-                    borderLeft: '2px solid #7c3aed',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>
-                    {eventCount} Evento{eventCount > 1 ? 's' : ''}
-                  </div>
-                )}
-
                 {hiddenCount > 0 && (
                   <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#64748b' }}>
                     +{hiddenCount} mas
@@ -841,26 +824,26 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
               </button>
             </div>
             <div style={{ padding: '1.5rem 2rem 2rem', maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {expandedDay.tasks.map(t => (
+              {expandedDay.tasks.filter((t) => t.tipo === 'proyecto' || t.tipo === 'tarea').map(t => (
                 <div key={t.id} style={{ padding: '1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.5rem' }}>
                     <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a' }}>{t.titulo}</div>
                     <span style={{
                       fontSize: '0.6rem',
                       fontWeight: '900',
-                      color: t.tipo === 'proyecto' ? '#2563eb' : t.tipo === 'evento' ? '#7c3aed' : '#16a34a',
-                      background: t.tipo === 'proyecto' ? '#eff6ff' : t.tipo === 'evento' ? '#f5f3ff' : '#f0fdf4',
+                      color: t.tipo === 'proyecto' ? '#2563eb' : '#16a34a',
+                      background: t.tipo === 'proyecto' ? '#eff6ff' : '#f0fdf4',
                       padding: '0.2rem 0.5rem',
                       borderRadius: '8px',
                       textTransform: 'uppercase',
                       height: 'fit-content'
                     }}>
-                      {t.tipo === 'proyecto' ? 'PROYECTO' : t.tipo === 'evento' ? 'EVENTO' : 'TAREA'}
+                      {t.tipo === 'proyecto' ? 'PROYECTO' : 'TAREA'}
                     </span>
                   </div>
                   <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: t.tipo === 'proyecto' ? '#2563eb' : t.tipo === 'evento' ? '#7c3aed' : '#16a34a' }} />
-                    {t.proyecto?.nombre || (t.tipo === 'evento' ? 'Evento personal' : 'Sin proyecto')}
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: t.tipo === 'proyecto' ? '#2563eb' : '#16a34a' }} />
+                    {t.proyecto?.nombre || 'Sin proyecto'}
                   </div>
                 </div>
               ))}
