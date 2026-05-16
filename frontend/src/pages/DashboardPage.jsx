@@ -696,27 +696,34 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
         {days.map(day => {
           const isCurrentMonth = day.getMonth() === monthDate.getMonth();
           const isToday = startOfDay(day).getTime() === todayKey;
-          
-          const tasksOnDay = selectedMember?.todasConFecha?.filter(t => 
+          const occupancyOnDay = selectedMember?.ocupacionCalendario?.filter((item) =>
+            isDateBetween(day, item.fechaInicio, item.fechaFin)
+          ) || selectedMember?.todasConFecha?.filter((t) =>
             isDateBetween(day, t.fechaInicio || t.creadoEn, t.venceEn || t.completadoEn || t.creadoEn)
-          ) || [];
+          ).map((t) => ({
+            ...t,
+            tipo: 'tarea',
+            fechaFin: t.venceEn || t.completadoEn || t.creadoEn,
+          })) || [];
 
-          const dayProjects = [...new Set(tasksOnDay.map(t => t.proyecto?.id))].filter(Boolean);
+          const projectCount = occupancyOnDay.filter((item) => item.tipo === 'proyecto').length;
+          const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
+          const eventCount = occupancyOnDay.filter((item) => item.tipo === 'evento').length;
 
           return (
             <div
               key={day.toISOString()}
-              onClick={() => tasksOnDay.length > 0 && setExpandedDay({ date: day, tasks: tasksOnDay })}
+              onClick={() => occupancyOnDay.length > 0 && setExpandedDay({ date: day, tasks: occupancyOnDay })}
               style={{
                 minHeight: '110px',
                 borderRadius: '18px',
                 border: '1px solid #e2e8f0',
                 background: isCurrentMonth 
-                  ? (dayProjects.length > 0 ? '#f0f7ff' : '#fff') 
+                  ? (projectCount > 0 ? '#f0f7ff' : taskCount > 0 ? '#f0fdf4' : eventCount > 0 ? '#faf5ff' : '#fff') 
                   : '#f8fafc',
                 padding: '0.65rem',
                 opacity: isCurrentMonth ? 1 : 0.4,
-                cursor: tasksOnDay.length > 0 ? 'pointer' : 'default',
+                cursor: occupancyOnDay.length > 0 ? 'pointer' : 'default',
                 transition: 'all 0.2s',
                 display: 'flex',
                 flexDirection: 'column',
@@ -725,14 +732,14 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                 position: 'relative',
                 overflow: 'hidden'
               }}
-              className={tasksOnDay.length > 0 ? 'hover:border-blue-200 hover:shadow-md' : ''}
+              className={occupancyOnDay.length > 0 ? 'hover:border-blue-200 hover:shadow-md' : ''}
             >
               <div style={{ fontSize: '0.78rem', fontWeight: '900', color: isToday ? '#2563eb' : '#0f172a', position: 'relative', zIndex: 2 }}>
                 {day.getDate()}
               </div>
 
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.3rem', position: 'relative', zIndex: 2 }}>
-                {dayProjects.length > 0 && (
+                {projectCount > 0 && (
                   <div style={{ 
                     padding: '0.25rem 0.4rem', 
                     borderRadius: '6px', 
@@ -745,11 +752,11 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                     overflow: 'hidden',
                     textOverflow: 'ellipsis'
                   }}>
-                    {dayProjects.length} Proyecto{dayProjects.length > 1 ? 's' : ''}
+                    {projectCount} Proyecto{projectCount > 1 ? 's' : ''}
                   </div>
                 )}
                 
-                {tasksOnDay.length > 0 && (
+                {taskCount > 0 && (
                   <div style={{ 
                     padding: '0.25rem 0.4rem', 
                     borderRadius: '6px', 
@@ -762,7 +769,24 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                     overflow: 'hidden',
                     textOverflow: 'ellipsis'
                   }}>
-                    {tasksOnDay.length} Tarea{tasksOnDay.length > 1 ? 's' : ''}
+                    {taskCount} Tarea{taskCount > 1 ? 's' : ''}
+                  </div>
+                )}
+
+                {eventCount > 0 && (
+                  <div style={{ 
+                    padding: '0.25rem 0.4rem', 
+                    borderRadius: '6px', 
+                    background: 'rgba(124,58,237,0.08)', 
+                    color: '#7c3aed', 
+                    fontSize: '0.55rem', 
+                    fontWeight: '900',
+                    borderLeft: '2px solid #7c3aed',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    {eventCount} Evento{eventCount > 1 ? 's' : ''}
                   </div>
                 )}
               </div>
@@ -797,11 +821,22 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                 <div key={t.id} style={{ padding: '1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.5rem' }}>
                     <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a' }}>{t.titulo}</div>
-                    <span style={{ fontSize: '0.6rem', fontWeight: '900', color: '#16a34a', background: '#f0fdf4', padding: '0.2rem 0.5rem', borderRadius: '8px', textTransform: 'uppercase', height: 'fit-content' }}>TAREA</span>
+                    <span style={{
+                      fontSize: '0.6rem',
+                      fontWeight: '900',
+                      color: t.tipo === 'proyecto' ? '#2563eb' : t.tipo === 'evento' ? '#7c3aed' : '#16a34a',
+                      background: t.tipo === 'proyecto' ? '#eff6ff' : t.tipo === 'evento' ? '#f5f3ff' : '#f0fdf4',
+                      padding: '0.2rem 0.5rem',
+                      borderRadius: '8px',
+                      textTransform: 'uppercase',
+                      height: 'fit-content'
+                    }}>
+                      {t.tipo === 'proyecto' ? 'PROYECTO' : t.tipo === 'evento' ? 'EVENTO' : 'TAREA'}
+                    </span>
                   </div>
                   <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563eb' }} />
-                    {t.proyecto?.nombre || 'Sin proyecto'}
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: t.tipo === 'proyecto' ? '#2563eb' : t.tipo === 'evento' ? '#7c3aed' : '#16a34a' }} />
+                    {t.proyecto?.nombre || (t.tipo === 'evento' ? 'Evento personal' : 'Sin proyecto')}
                   </div>
                 </div>
               ))}

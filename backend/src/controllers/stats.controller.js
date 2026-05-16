@@ -52,6 +52,46 @@ const resumenTarea = (tarea) => ({
   proyecto: tarea.proyecto
 });
 
+const getFinTareaOcupacion = (tarea) => (
+  tarea.venceEn ? tarea.venceEn : (tarea.completadoEn || tarea.fechaInicio || tarea.creadoEn)
+);
+
+const resumenOcupacionTarea = (tarea) => ({
+  id: `tarea-${tarea.id}`,
+  origenId: tarea.id,
+  tipo: 'tarea',
+  titulo: tarea.titulo,
+  estado: tarea.estado,
+  prioridad: tarea.prioridad,
+  fechaInicio: tarea.fechaInicio || tarea.creadoEn,
+  fechaFin: getFinTareaOcupacion(tarea),
+  proyecto: tarea.proyecto || null,
+});
+
+const resumenOcupacionProyecto = (proyecto, usuarioId) => ({
+  id: `proyecto-${proyecto.id}-${usuarioId}`,
+  origenId: proyecto.id,
+  tipo: 'proyecto',
+  titulo: `Proyecto: ${proyecto.nombre}`,
+  estado: proyecto.estado,
+  prioridad: null,
+  fechaInicio: proyecto.fechaInicio || proyecto.creadoEn,
+  fechaFin: proyecto.fechaFin || proyecto.fechaInicio || proyecto.creadoEn,
+  proyecto: { id: proyecto.id, nombre: proyecto.nombre },
+});
+
+const resumenOcupacionEvento = (evento) => ({
+  id: `evento-${evento.id}`,
+  origenId: evento.id,
+  tipo: 'evento',
+  titulo: evento.titulo,
+  estado: null,
+  prioridad: null,
+  fechaInicio: evento.fechaInicio,
+  fechaFin: evento.fechaFin || evento.fechaInicio,
+  proyecto: evento.proyecto || null,
+});
+
 const getTopUsuariosProductividad = async (usuario) => {
   const hoy = new Date();
   const inicioSemanaActual = inicioDeSemana(hoy);
@@ -128,7 +168,7 @@ const getActividadMiembros = async (usuario) => {
     const hoyInicio = new Date(ahora);
     hoyInicio.setHours(0,0,0,0);
 
-    const [hechas, hechasHoy, enProgreso, faltanHoy, faltanSemana, todasConFecha] = await Promise.all([
+    const [hechas, hechasHoy, enProgreso, faltanHoy, faltanSemana, todasConFecha, proyectosActivos, eventos] = await Promise.all([
       prisma.tarea.findMany({
         where: { ...tareasDelUsuario, estado: 'HECHO', ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
         select: tareaResumenSelect
@@ -157,8 +197,45 @@ const getActividadMiembros = async (usuario) => {
       prisma.tarea.findMany({
         where: { ...tareasDelUsuario, ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
         select: tareaResumenSelect
+      }),
+      prisma.proyecto.findMany({
+        where: {
+          estado: { not: 'CERRADO' },
+          miembros: { some: { id: miembro.id } },
+          ...(scopeProyecto || {})
+        },
+        select: {
+          id: true,
+          nombre: true,
+          estado: true,
+          creadoEn: true,
+          fechaInicio: true,
+          fechaFin: true
+        }
+      }),
+      prisma.evento.findMany({
+        where: {
+          proyectoId: null,
+          OR: [
+            { usuarioId: miembro.id },
+            { invitados: { some: { usuarioId: miembro.id, estado: 'aceptado' } } }
+          ]
+        },
+        select: {
+          id: true,
+          titulo: true,
+          fechaInicio: true,
+          fechaFin: true,
+          proyecto: { select: { id: true, nombre: true } }
+        }
       })
     ]);
+
+    const ocupacionCalendario = [
+      ...proyectosActivos.map((proyecto) => resumenOcupacionProyecto(proyecto, miembro.id)),
+      ...todasConFecha.map(resumenOcupacionTarea),
+      ...eventos.map(resumenOcupacionEvento),
+    ].filter((item) => item.fechaInicio && item.fechaFin);
 
     return {
       id: miembro.id,
@@ -169,6 +246,7 @@ const getActividadMiembros = async (usuario) => {
       faltanHoy: sortTareas(faltanHoy).map(resumenTarea),
       faltanSemana: sortTareas(faltanSemana).map(resumenTarea),
       todasConFecha: todasConFecha.map(resumenTarea),
+      ocupacionCalendario,
       totales: {
         hechasHoy: hechasHoy.length,
         enProgreso: enProgreso.length,
