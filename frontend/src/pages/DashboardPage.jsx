@@ -709,6 +709,9 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
           const projectCount = occupancyOnDay.filter((item) => item.tipo === 'proyecto').length;
           const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
           const eventCount = occupancyOnDay.filter((item) => item.tipo === 'evento').length;
+          const visibleProjects = occupancyOnDay.filter((item) => item.tipo === 'proyecto').slice(0, 2);
+          const visibleTasks = occupancyOnDay.filter((item) => item.tipo === 'tarea').slice(0, 1);
+          const hiddenCount = Math.max(occupancyOnDay.length - (visibleProjects.length + visibleTasks.length), 0);
 
           return (
             <div
@@ -739,39 +742,47 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
               </div>
 
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.3rem', position: 'relative', zIndex: 2 }}>
-                {projectCount > 0 && (
-                  <div style={{ 
-                    padding: '0.25rem 0.4rem', 
-                    borderRadius: '6px', 
-                    background: 'rgba(37,99,235,0.08)', 
-                    color: '#2563eb', 
-                    fontSize: '0.55rem', 
-                    fontWeight: '900',
-                    borderLeft: '2px solid #2563eb',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>
-                    {projectCount} Proyecto{projectCount > 1 ? 's' : ''}
+                {visibleProjects.map((item) => (
+                  <div
+                    key={`${item.id}-${day.toISOString()}`}
+                    style={{
+                      padding: '0.25rem 0.4rem',
+                      borderRadius: '6px',
+                      background: '#2563eb',
+                      color: '#fff',
+                      fontSize: '0.55rem',
+                      fontWeight: '900',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {item.titulo}
                   </div>
-                )}
+                ))}
                 
-                {taskCount > 0 && (
-                  <div style={{ 
-                    padding: '0.25rem 0.4rem', 
-                    borderRadius: '6px', 
-                    background: 'rgba(22,163,74,0.08)', 
-                    color: '#16a34a', 
-                    fontSize: '0.55rem', 
-                    fontWeight: '900',
-                    borderLeft: '2px solid #16a34a',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>
-                    {taskCount} Tarea{taskCount > 1 ? 's' : ''}
+                {visibleTasks.map((item) => (
+                  <div
+                    key={`${item.id}-${day.toISOString()}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.35rem',
+                      padding: '0.25rem 0.4rem',
+                      borderRadius: '6px',
+                      background: '#16a34a',
+                      color: '#fff',
+                      fontSize: '0.55rem',
+                      fontWeight: '900',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Tareas</span>
+                    {taskCount > 1 && <span style={{ flexShrink: 0 }}>Ver m&aacute;s</span>}
                   </div>
-                )}
+                ))}
 
                 {eventCount > 0 && (
                   <div style={{ 
@@ -787,6 +798,12 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                     textOverflow: 'ellipsis'
                   }}>
                     {eventCount} Evento{eventCount > 1 ? 's' : ''}
+                  </div>
+                )}
+
+                {hiddenCount > 0 && (
+                  <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#64748b' }}>
+                    +{hiddenCount} mas
                   </div>
                 )}
               </div>
