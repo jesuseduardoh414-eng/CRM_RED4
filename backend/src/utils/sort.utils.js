@@ -25,8 +25,15 @@ const getDateMs = (value, fallback = Number.MAX_SAFE_INTEGER) => {
 const getPrioridadRank = (prioridad) => PRIORIDAD_ORDEN[prioridad] ?? PRIORIDAD_ORDEN.MEDIA;
 
 const compareStrings = (a, b) => String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base' });
+const getNumeroActividadRank = (tarea) => {
+  const numero = Number(tarea?.numeroActividad);
+  return Number.isFinite(numero) && numero > 0 ? numero : Number.MAX_SAFE_INTEGER;
+};
 
 const compareTareas = (a, b) => {
+  const porNumeroActividad = getNumeroActividadRank(a) - getNumeroActividadRank(b);
+  if (porNumeroActividad !== 0) return porNumeroActividad;
+
   const aHecha = a.estado === 'HECHO';
   const bHecha = b.estado === 'HECHO';
 

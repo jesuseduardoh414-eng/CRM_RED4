@@ -17,8 +17,9 @@ import {
   Activity,
   CheckSquare,
   Repeat,
+  MoreHorizontal,
 } from 'lucide-react';
-import { agendaService } from '../services/api';
+import { agendaService, tareasService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import ModalEvento from '../components/ModalEvento';
@@ -269,6 +270,25 @@ const getRangoConsulta = (date, view) => {
 
 const getHoraInicial = () => 0;
 const getHoraFinal = () => 23;
+const sumarDias = (value, days) => {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setDate(date.getDate() + days);
+  return date;
+};
+
+const moverFechaComoDia = (value, days) => {
+  const date = sumarDias(value, days);
+  return date ? getDateKey(date) : null;
+};
+
+const getTaskNumericId = (taskLike) => {
+  const rawId = String(taskLike?.id || '');
+  const match = rawId.match(/tarea-(\d+)/i);
+  if (match) return Number(match[1]);
+  const numeric = Number(rawId);
+  return Number.isFinite(numeric) ? numeric : null;
+};
 
 const AgendaPage = () => {
   const { showToast } = useToast();
@@ -392,6 +412,51 @@ const AgendaPage = () => {
 
   const handleSelectFechaMes = handleSelectFechaEvento;
 
+  const handleMoverBloqueTareas = useCallback(async (fechaBase, diasAMover) => {
+    const dias = Number(diasAMover);
+    if (!fechaBase || !Number.isInteger(dias) || dias <= 0) return false;
+
+    const tareasAgenda = eventos.filter((evento) => evento.tipo === 'tarea');
+    const tareasAMover = new Map();
+    let cursor = aFechaComparacion(fechaBase);
+
+    for (let i = 0; i < 120 && cursor; i += 1) {
+      const tareasDelDia = tareasAgenda.filter((tarea) => itemAgendaOcurreEnFecha(tarea, cursor, configLaboral, diasEspeciales));
+      if (tareasDelDia.length === 0) break;
+
+      tareasDelDia.forEach((tarea) => {
+        const taskId = getTaskNumericId(tarea);
+        if (!taskId) return;
+        tareasAMover.set(taskId, tarea);
+      });
+
+      cursor = sumarDias(cursor, 1);
+    }
+
+    if (tareasAMover.size === 0) {
+      showToast('No se encontraron tareas para mover en este bloque.', 'info');
+      return false;
+    }
+
+    try {
+      await Promise.all(
+        [...tareasAMover.values()].map((tarea) =>
+          tareasService.editar(getTaskNumericId(tarea), {
+            fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
+            venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
+          })
+        )
+      );
+
+      showToast(`Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${dias} d${dias === 1 ? 'ía' : 'ías'}.`);
+      await cargarDatos();
+      return true;
+    } catch (error) {
+      showToast(error.message || 'No se pudieron mover las tareas.', 'error');
+      return false;
+    }
+  }, [cargarDatos, configLaboral, diasEspeciales, eventos, showToast]);
+
   const handleConnectGoogle = async () => {
     if (!googleCalendar.clientId) {
       showToast('Falta configurar GOOGLE_CLIENT_ID en el backend.', 'error');
@@ -468,7 +533,7 @@ const AgendaPage = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '2rem',
+          marginBottom: isMobile ? '1.75rem' : '3rem',
           flexWrap: 'wrap',
           gap: '1rem',
         }}
@@ -629,6 +694,7 @@ const AgendaPage = () => {
               setModalOpen(true);
             }}
             onSelectDate={handleSelectFechaMes}
+            onMoveTaskBlock={handleMoverBloqueTareas}
           />
         )}
         {view === 'SEMANA' && (
@@ -731,13 +797,32 @@ const AgendaSkeleton = () => (
   </div>
 );
 
-const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate, ocultarBloquesProyecto = false }) => {
+const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate, onMoveTaskBlock, ocultarBloquesProyecto = false }) => {
   const [expandedDay, setExpandedDay] = useState(null);
+  const [activeTaskMenu, setActiveTaskMenu] = useState(null);
+  const [movingTasks, setMovingTasks] = useState(false);
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const totalDays = new Date(year, month + 1, 0).getDate();
   const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+
+  const ejecutarMovimiento = async (dias) => {
+    if (!expandedDay || movingTasks || !onMoveTaskBlock) return;
+    setMovingTasks(true);
+    setActiveTaskMenu(null);
+    const movido = await onMoveTaskBlock(expandedDay.date, dias);
+    if (movido) setExpandedDay(null);
+    setMovingTasks(false);
+  };
+
+  const pedirMovimientoPersonalizado = async () => {
+    const value = window.prompt('¿Cuántos días quieres mover este bloque de tareas?', '3');
+    if (value === null) return;
+    const dias = Number(value);
+    if (!Number.isInteger(dias) || dias <= 0) return;
+    await ejecutarMovimiento(dias);
+  };
 
   const dias = [];
   for (let i = 0; i < startOffset; i += 1) dias.push(null);
@@ -828,6 +913,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
             onClick={() => {
               if (!dia) return;
               if (itemsParaModal.length > 0) {
+                setActiveTaskMenu(null);
                 setExpandedDay({ date: dObj, items: itemsParaModal });
               } else {
                 onSelectDate({ fechaInicio: dObj });
@@ -886,6 +972,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             key={item.id}
                             onClick={(ev) => {
                               ev.stopPropagation();
+                              setActiveTaskMenu(null);
                               setExpandedDay({ date: dObj, items: itemsParaModal });
                             }}
                             style={{ 
@@ -917,6 +1004,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             type="button"
                             onClick={(ev) => {
                               ev.stopPropagation();
+                              setActiveTaskMenu(null);
                               setExpandedDay({ date: dObj, items: itemsParaModal });
                             }}
                             style={{
@@ -944,7 +1032,12 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
       })}
       {expandedDay && (
         <div
-          onClick={(ev) => ev.target === ev.currentTarget && setExpandedDay(null)}
+          onClick={(ev) => {
+            if (ev.target === ev.currentTarget) {
+              setActiveTaskMenu(null);
+              setExpandedDay(null);
+            }
+          }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
         >
           <div style={{ width: '100%', maxWidth: '540px', maxHeight: '80vh', overflow: 'hidden', background: '#fff', borderRadius: '28px', boxShadow: '0 24px 70px rgba(15,23,42,0.22)' }}>
@@ -955,7 +1048,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                 </h4>
                 <p style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: '800' }}>{expandedDay.items.length} elementos programados</p>
               </div>
-              <button type="button" onClick={() => setExpandedDay(null)} className="btn-icon-sm"><X size={16} /></button>
+              <button type="button" onClick={() => { setActiveTaskMenu(null); setExpandedDay(null); }} className="btn-icon-sm"><X size={16} /></button>
             </div>
             <div style={{ padding: '1.2rem 1.6rem 1.6rem', maxHeight: 'calc(80vh - 92px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {expandedDay.items.map((item) => {
@@ -967,24 +1060,51 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                       ? '#db2777'
                       : '#7c3aed';
                 return (
-                  <button
+                  <div
                     key={`${item.tipoVista}-${item.id}`}
                     type="button"
                     onClick={() => {
+                      setActiveTaskMenu(null);
                       setExpandedDay(null);
                       if (item.tipoVista !== 'tarea' && item.tipoVista !== 'proyecto') onSelectEvent(item);
                     }}
-                    style={{ width: '100%', textAlign: 'left', padding: '0.95rem 1rem', borderRadius: '16px', border: '1px solid #e2e8f0', background: '#fff', cursor: item.tipoVista === 'tarea' || item.tipoVista === 'proyecto' ? 'default' : 'pointer' }}
+                    style={{ width: '100%', textAlign: 'left', padding: '0.95rem 1rem', borderRadius: '16px', border: '1px solid #e2e8f0', background: '#fff', cursor: item.tipoVista === 'tarea' || item.tipoVista === 'proyecto' ? 'default' : 'pointer', position: 'relative' }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', alignItems: 'flex-start' }}>
-                      <span style={{ fontWeight: '900', color: '#0f172a', lineHeight: 1.35, overflowWrap: 'anywhere' }}>{item.tituloVista}</span>
-                      <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: '900', textTransform: 'uppercase', color, background: `${color}14`, padding: '0.2rem 0.5rem', borderRadius: '999px' }}>{item.tipoVista}</span>
+                      <span style={{ fontWeight: '900', color: '#0f172a', lineHeight: 1.35, overflowWrap: 'anywhere', paddingRight: item.tipoVista === 'tarea' ? '0.5rem' : 0 }}>{item.tituloVista}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: '900', textTransform: 'uppercase', color, background: `${color}14`, padding: '0.2rem 0.5rem', borderRadius: '999px' }}>{item.tipoVista}</span>
+                        {item.tipoVista === 'tarea' && (
+                          <button
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setActiveTaskMenu((prev) => (prev === item.id ? null : item.id));
+                            }}
+                            disabled={movingTasks}
+                            title="Mover bloque de tareas"
+                            style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === item.id ? '#eff6ff' : '#fff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
+                          >
+                            <MoreHorizontal size={15} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                       <span style={{ width: '7px', height: '7px', borderRadius: '999px', background: color }} />
                       {item.proyecto?.nombre || (item.todoElDia ? 'Todo el dia' : `${formatHora(item.fechaInicio)} - ${formatHora(item.fechaFin || item.fechaInicio)}`)}
                     </div>
-                  </button>
+                    {item.tipoVista === 'tarea' && activeTaskMenu === item.id && (
+                      <div
+                        onClick={(ev) => ev.stopPropagation()}
+                        style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: '#fff', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
+                      >
+                        <button type="button" onClick={() => ejecutarMovimiento(1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
+                        <button type="button" onClick={() => ejecutarMovimiento(2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
+                        <button type="button" onClick={pedirMovimientoPersonalizado} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>

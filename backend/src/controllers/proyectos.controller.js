@@ -198,6 +198,7 @@ const aplicarPlantillaATareas = async ({ tx, proyecto, plantilla, creadorId }) =
   for (const tarea of plantilla.tareas) {
     const creada = await tx.tarea.create({
       data: {
+        numeroActividad: typeof tarea.numeroActividad === 'number' ? tarea.numeroActividad : (tarea.orden + 1),
         titulo: tarea.titulo,
         descripcion: tarea.descripcion,
         prioridad: tarea.prioridad || 'MEDIA',

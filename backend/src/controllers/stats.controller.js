@@ -27,6 +27,7 @@ const inicioDeSemana = (fecha) => {
 const tareaResumenSelect = {
   id: true,
   titulo: true,
+  numeroActividad: true,
   estado: true,
   prioridad: true,
   creadoEn: true,
@@ -43,6 +44,7 @@ const tareaResumenSelect = {
 const resumenTarea = (tarea) => ({
   id: tarea.id,
   titulo: tarea.titulo,
+  numeroActividad: tarea.numeroActividad,
   estado: tarea.estado,
   prioridad: tarea.prioridad,
   creadoEn: tarea.creadoEn,

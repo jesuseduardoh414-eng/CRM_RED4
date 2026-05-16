@@ -3,7 +3,7 @@
 
 const express = require('express');
 const { listar, crear, editar, eliminar, actualizarEstado } = require('../controllers/tareas.controller');
-const { importar, plantillaJSON, plantillaExcel, exportarJSON, exportarExcel } = require('../controllers/importar.controller');
+const { importar, vistaPreviaImportacion, confirmarImportacion, plantillaJSON, plantillaExcel, exportarJSON, exportarExcel } = require('../controllers/importar.controller');
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin }      = require('../middlewares/roles.middleware');
 const { listar: listarComentarios, crear: crearComentario, eliminar: eliminarComentario } = require('../controllers/comentarios.controller');
@@ -28,6 +28,8 @@ routerProyecto.get('/',  listar);
 routerProyecto.post('/', upload.array('archivos', 5), crear);
 
 //  Importación masiva 
+routerProyecto.post('/importar/preview', uploadImport.single('archivo'), vistaPreviaImportacion);
+routerProyecto.post('/importar/confirmar', confirmarImportacion);
 routerProyecto.post('/importar', uploadImport.single('archivo'), importar);
 
 // Editar y cambiar estado (cualquier usuario autenticado)

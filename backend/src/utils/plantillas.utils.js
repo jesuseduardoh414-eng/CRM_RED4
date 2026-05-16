@@ -20,6 +20,8 @@ const addDays = (date, days) => {
 
 const buildTaskKeys = (tareas = []) => {
   const sorted = [...tareas].sort((a, b) => {
+    const numeroDiff = (a.numeroActividad ?? Number.MAX_SAFE_INTEGER) - (b.numeroActividad ?? Number.MAX_SAFE_INTEGER);
+    if (numeroDiff !== 0) return numeroDiff;
     const createdDiff = new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime();
     if (createdDiff !== 0) return createdDiff;
     return a.id - b.id;
@@ -38,6 +40,8 @@ const buildTemplateTasksFromProject = ({ proyecto, tareas }) => {
 
   return [...tareas]
     .sort((a, b) => {
+      const numeroDiff = (a.numeroActividad ?? Number.MAX_SAFE_INTEGER) - (b.numeroActividad ?? Number.MAX_SAFE_INTEGER);
+      if (numeroDiff !== 0) return numeroDiff;
       const createdDiff = new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime();
       if (createdDiff !== 0) return createdDiff;
       return a.id - b.id;
@@ -59,12 +63,15 @@ const serializeTasksForExport = ({ proyecto, tareas }) => {
 
   return [...tareas]
     .sort((a, b) => {
+      const numeroDiff = (a.numeroActividad ?? Number.MAX_SAFE_INTEGER) - (b.numeroActividad ?? Number.MAX_SAFE_INTEGER);
+      if (numeroDiff !== 0) return numeroDiff;
       const createdDiff = new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime();
       if (createdDiff !== 0) return createdDiff;
       return a.id - b.id;
     })
     .map((tarea, index) => ({
       clave: keyById.get(tarea.id),
+      numeroActividad: tarea.numeroActividad ?? index + 1,
       titulo: tarea.titulo,
       descripcion: tarea.descripcion || '',
       estado: tarea.estado,

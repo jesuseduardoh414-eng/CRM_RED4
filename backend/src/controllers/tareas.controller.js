@@ -35,6 +35,13 @@ const normalizarAsignadoId = (asignadoId) => {
   return Number.isNaN(id) ? null : id;
 };
 
+const normalizarNumeroActividad = (numeroActividad) => {
+  if (numeroActividad === undefined) return undefined;
+  if (numeroActividad === null || numeroActividad === '') return null;
+  const numero = parseInt(numeroActividad, 10);
+  return Number.isNaN(numero) || numero <= 0 ? null : numero;
+};
+
 const asignadoPerteneceAProyecto = (proyecto, asignadoId) => {
   if (!asignadoId) return true;
   return proyecto.miembros.some(m => m.id === asignadoId);
@@ -195,7 +202,7 @@ const crear = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
   if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
-  const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId, primerComentario } = req.body;
+  const { titulo, descripcion, numeroActividad, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId, primerComentario } = req.body;
   const archivos = req.files;
 
   if (!titulo || titulo.trim() === '') {
@@ -232,6 +239,8 @@ const crear = async (req, res) => {
       return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
 
+    const numeroActividadNormalizado = normalizarNumeroActividad(numeroActividad);
+
     // Crear la tarea
     let dInicio = fechaInicio ? new Date(fechaInicio) : new Date();
     if (dInicio.getUTCHours() === 0) dInicio.setUTCHours(12);
@@ -245,6 +254,7 @@ const crear = async (req, res) => {
       data: {
         titulo:      titulo.trim(),
         descripcion: descripcion?.trim() || null,
+        numeroActividad: numeroActividadNormalizado,
         prioridad:   prioridad  || 'MEDIA',
         estado:      estadoFinal,
         completadoEn: estadoFinal === 'HECHO' ? new Date() : null,
@@ -316,7 +326,7 @@ const editar = async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
 
-  const { titulo, descripcion, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId } = req.body;
+  const { titulo, descripcion, numeroActividad, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId } = req.body;
 
   try {
     const existente = await prisma.tarea.findUnique({ 
@@ -342,6 +352,8 @@ const editar = async (req, res) => {
       return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
 
+    const numeroActividadNormalizado = normalizarNumeroActividad(numeroActividad);
+
     let dInicio = fechaInicio !== undefined ? (fechaInicio ? new Date(fechaInicio) : new Date()) : undefined;
     if (dInicio && dInicio.getUTCHours() === 0) dInicio.setUTCHours(12);
 
@@ -355,6 +367,7 @@ const editar = async (req, res) => {
       data: {
         ...(titulo       !== undefined && { titulo: titulo.trim() }),
         ...(descripcion  !== undefined && { descripcion: descripcion?.trim() || null }),
+        ...(numeroActividad !== undefined && { numeroActividad: numeroActividadNormalizado }),
         ...(prioridad    !== undefined && { prioridad }),
         ...(estado       !== undefined && { estado }),
         ...(estado !== undefined && {

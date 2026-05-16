@@ -196,6 +196,33 @@ export const tareasService = {
     return handleResponse(res);
   },
 
+  previewImportar: async (proyectoId, archivo, modoAsignacion = 'archivo', asignadoId = null) => {
+    const fd = new FormData();
+    fd.append('archivo', archivo);
+    fd.append('modoAsignacion', modoAsignacion);
+    if (asignadoId) fd.append('asignadoId', asignadoId);
+    const token = localStorage.getItem('crm_token');
+    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar/preview`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    return handleResponse(res);
+  },
+
+  confirmarImportacion: async (proyectoId, filas, modoAsignacion = 'archivo', asignadoId = null) => {
+    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar/confirmar`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        filas,
+        modoAsignacion,
+        asignadoId,
+      }),
+    });
+    return handleResponse(res);
+  },
+
   descargarPlantilla: (tipo) => {
     const token = localStorage.getItem('crm_token');
     const url   = `${API_URL}/tareas/plantilla/${tipo}`;

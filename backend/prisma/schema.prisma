@@ -121,6 +121,7 @@ model Tarea {
   id          Int          @id @default(autoincrement())
   titulo      String
   descripcion String?
+  numeroActividad Int?
   estado      String       @default("PENDIENTE")
   prioridad   String       @default("MEDIA")
   creadoEn    DateTime     @default(now())
@@ -143,6 +144,7 @@ model Tarea {
   @@index([asignadoId])
   @@index([creadorId])
   @@index([estado])
+  @@index([proyectoId, numeroActividad])
   @@map("tareas")
 }
 

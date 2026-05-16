@@ -3,63 +3,93 @@ const prisma = require('../lib/prisma');
 
 const ESTADOS_VALIDOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 const PRIORIDADES_VALIDAS = ['BAJA', 'MEDIA', 'ALTA'];
-const COLUMNAS_EXCEL = ['titulo', 'descripcion', 'estado', 'prioridad', 'fechaInicio', 'venceEn', 'asignadoEmail'];
+const COLUMNAS_EXCEL = ['numeroActividad', 'titulo', 'descripcion', 'estado', 'prioridad', 'fechaInicio', 'venceEn', 'asignadoEmail'];
+
+const formatDateInput = (value) => {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+};
+
+const normalizarFilaEditable = (raw = {}) => ({
+  numeroActividad: raw.numeroActividad ?? '',
+  titulo: raw.titulo ?? '',
+  descripcion: raw.descripcion ?? '',
+  estado: raw.estado ?? '',
+  prioridad: raw.prioridad ?? '',
+  fechaInicio: raw.fechaInicio ?? '',
+  venceEn: raw.venceEn ?? '',
+  asignadoEmail: raw.asignadoEmail ?? '',
+});
 
 const validarFila = (raw) => {
+  const fila = normalizarFilaEditable(raw);
   const errores = [];
 
-  if (!raw.titulo || String(raw.titulo).trim() === '') {
+  if (!fila.titulo || String(fila.titulo).trim() === '') {
     errores.push('falta el campo obligatorio "titulo"');
   }
 
-  if (raw.estado) {
-    const estado = String(raw.estado).trim().toUpperCase();
+  if (fila.estado) {
+    const estado = String(fila.estado).trim().toUpperCase();
     if (!ESTADOS_VALIDOS.includes(estado)) {
-      errores.push(`estado "${raw.estado}" no valido (usa: ${ESTADOS_VALIDOS.join(' | ')})`);
+      errores.push(`estado "${fila.estado}" no valido (usa: ${ESTADOS_VALIDOS.join(' | ')})`);
     } else {
-      raw.estado = estado;
+      fila.estado = estado;
     }
   }
 
-  if (raw.prioridad) {
-    const prioridad = String(raw.prioridad).trim().toUpperCase();
+  if (fila.prioridad) {
+    const prioridad = String(fila.prioridad).trim().toUpperCase();
     if (!PRIORIDADES_VALIDAS.includes(prioridad)) {
-      errores.push(`prioridad "${raw.prioridad}" no valida (usa: ${PRIORIDADES_VALIDAS.join(' | ')})`);
+      errores.push(`prioridad "${fila.prioridad}" no valida (usa: ${PRIORIDADES_VALIDAS.join(' | ')})`);
     } else {
-      raw.prioridad = prioridad;
+      fila.prioridad = prioridad;
     }
   }
 
-  if (raw.fechaInicio) {
-    const fecha = new Date(raw.fechaInicio);
+  if (fila.fechaInicio) {
+    const fecha = new Date(fila.fechaInicio);
     if (Number.isNaN(fecha.getTime())) {
-      errores.push(`fechaInicio "${raw.fechaInicio}" no es una fecha valida (usa formato YYYY-MM-DD)`);
+      errores.push(`fechaInicio "${fila.fechaInicio}" no es una fecha valida (usa formato YYYY-MM-DD)`);
     }
   }
 
-  if (raw.venceEn) {
-    const fecha = new Date(raw.venceEn);
+  if (fila.venceEn) {
+    const fecha = new Date(fila.venceEn);
     if (Number.isNaN(fecha.getTime())) {
-      errores.push(`venceEn "${raw.venceEn}" no es una fecha valida (usa formato YYYY-MM-DD)`);
+      errores.push(`venceEn "${fila.venceEn}" no es una fecha valida (usa formato YYYY-MM-DD)`);
+    }
+  }
+
+  if (fila.numeroActividad !== undefined && fila.numeroActividad !== null && String(fila.numeroActividad).trim() !== '') {
+    const numero = parseInt(fila.numeroActividad, 10);
+    if (Number.isNaN(numero) || numero <= 0) {
+      errores.push(`numeroActividad "${fila.numeroActividad}" no es valido (usa un entero mayor a 0)`);
+    } else {
+      fila.numeroActividad = numero;
     }
   }
 
   if (errores.length > 0) {
-    return { valida: false, tarea: null, razon: errores.join('; ') };
+    return { valida: false, tarea: null, razon: errores.join('; '), filaNormalizada: fila };
   }
 
   return {
     valida: true,
     tarea: {
-      titulo: String(raw.titulo).trim(),
-      descripcion: raw.descripcion ? String(raw.descripcion).trim() : null,
-      estado: raw.estado ? String(raw.estado).toUpperCase() : 'PENDIENTE',
-      prioridad: raw.prioridad ? String(raw.prioridad).toUpperCase() : 'MEDIA',
-      fechaInicio: raw.fechaInicio ? new Date(raw.fechaInicio) : new Date(),
-      venceEn: raw.venceEn ? new Date(raw.venceEn) : null,
-      asignadoEmail: raw.asignadoEmail ? String(raw.asignadoEmail).trim().toLowerCase() : null,
+      titulo: String(fila.titulo).trim(),
+      descripcion: fila.descripcion ? String(fila.descripcion).trim() : null,
+      numeroActividad: fila.numeroActividad ? parseInt(fila.numeroActividad, 10) : null,
+      estado: fila.estado ? String(fila.estado).toUpperCase() : 'PENDIENTE',
+      prioridad: fila.prioridad ? String(fila.prioridad).toUpperCase() : 'MEDIA',
+      fechaInicio: fila.fechaInicio ? new Date(fila.fechaInicio) : new Date(),
+      venceEn: fila.venceEn ? new Date(fila.venceEn) : null,
+      asignadoEmail: fila.asignadoEmail ? String(fila.asignadoEmail).trim().toLowerCase() : null,
     },
     razon: null,
+    filaNormalizada: fila,
   };
 };
 
@@ -70,7 +100,7 @@ const obtenerTextoDesdeFuente = (fileSource) => {
   return String(fileSource || '');
 };
 
-const procesarJSON = async (fileSource, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
+const parseJSONRows = (fileSource) => {
   let raw;
   try {
     const contenido = obtenerTextoDesdeFuente(fileSource).replace(/^\uFEFF/, '').trim();
@@ -87,10 +117,10 @@ const procesarJSON = async (fileSource, proyectoId, miembros, registrarActividad
     }
   }
 
-  return procesarFilas(raw, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
+  return raw;
 };
 
-const procesarExcel = async (fileSource, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
+const parseExcelRows = (fileSource) => {
   let workbook;
   try {
     workbook = Buffer.isBuffer(fileSource)
@@ -113,11 +143,92 @@ const procesarExcel = async (fileSource, proyectoId, miembros, registrarActivida
     throw new Error(`El archivo Excel no tiene la columna "titulo". Columnas esperadas: ${COLUMNAS_EXCEL.join(', ')}`);
   }
 
-  const filasValidas = rows.filter((row) =>
+  return rows.filter((row) =>
     COLUMNAS_EXCEL.some((col) => row[col] && String(row[col]).trim() !== '')
   );
+};
 
-  return procesarFilas(filasValidas, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
+const parseRowsFromFile = (fileSource, ext) => {
+  if (ext === '.json') return parseJSONRows(fileSource);
+  if (ext === '.xlsx' || ext === '.xls') return parseExcelRows(fileSource);
+  throw new Error('Tipo de archivo no soportado. Usa .json, .xlsx o .xls');
+};
+
+const resolverAsignado = (asignadoEmail, miembros, asignadoPorDefecto = null) => {
+  if (!asignadoEmail) {
+    return {
+      asignadoId: asignadoPorDefecto,
+      asignadoNombre: miembros.find((m) => m.id === asignadoPorDefecto)?.nombre || '',
+      aviso: null,
+    };
+  }
+
+  const miembro = miembros.find((m) => m.email.toLowerCase() === asignadoEmail);
+  if (miembro) {
+    return {
+      asignadoId: miembro.id,
+      asignadoNombre: miembro.nombre,
+      aviso: null,
+    };
+  }
+
+  if (asignadoPorDefecto) {
+    return {
+      asignadoId: asignadoPorDefecto,
+      asignadoNombre: miembros.find((m) => m.id === asignadoPorDefecto)?.nombre || '',
+      aviso: `No se encontró el correo "${asignadoEmail}". Se usará la asignación por defecto.`,
+    };
+  }
+
+  return {
+    asignadoId: null,
+    asignadoNombre: '',
+    aviso: `No se encontró el correo "${asignadoEmail}". La tarea quedará sin asignar.`,
+  };
+};
+
+const construirVistaPrevia = (filas, miembros, asignadoPorDefecto = null) => {
+  const preview = filas.map((fila, index) => {
+    const { valida, tarea, razon, filaNormalizada } = validarFila(fila);
+
+    if (!valida) {
+      return {
+        fila: index + 1,
+        ...normalizarFilaEditable(filaNormalizada),
+        valida: false,
+        errores: razon.split('; ').filter(Boolean),
+        avisos: [],
+        asignadoNombre: '',
+      };
+    }
+
+    const asignacion = resolverAsignado(tarea.asignadoEmail, miembros, asignadoPorDefecto);
+
+    return {
+      fila: index + 1,
+      numeroActividad: tarea.numeroActividad ?? '',
+      titulo: tarea.titulo,
+      descripcion: tarea.descripcion || '',
+      estado: tarea.estado,
+      prioridad: tarea.prioridad,
+      fechaInicio: formatDateInput(tarea.fechaInicio),
+      venceEn: formatDateInput(tarea.venceEn),
+      asignadoEmail: tarea.asignadoEmail || '',
+      valida: true,
+      errores: [],
+      avisos: asignacion.aviso ? [asignacion.aviso] : [],
+      asignadoNombre: asignacion.asignadoNombre,
+    };
+  });
+
+  return {
+    filas: preview,
+    resumen: {
+      total: preview.length,
+      validas: preview.filter((fila) => fila.valida).length,
+      invalidas: preview.filter((fila) => !fila.valida).length,
+    },
+  };
 };
 
 const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
@@ -133,12 +244,8 @@ const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, us
       continue;
     }
 
-    if (tarea.asignadoEmail) {
-      const miembro = miembros.find((m) => m.email.toLowerCase() === tarea.asignadoEmail);
-      tarea.asignadoId = miembro ? miembro.id : asignadoPorDefecto;
-    } else {
-      tarea.asignadoId = asignadoPorDefecto;
-    }
+    const asignacion = resolverAsignado(tarea.asignadoEmail, miembros, asignadoPorDefecto);
+    tarea.asignadoId = asignacion.asignadoId;
 
     delete tarea.asignadoEmail;
     tarea.proyectoId = proyectoId;
@@ -164,8 +271,19 @@ const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, us
   return { creadas, errores };
 };
 
+const procesarJSON = async (fileSource, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
+  const rows = parseJSONRows(fileSource);
+  return procesarFilas(rows, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
+};
+
+const procesarExcel = async (fileSource, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {
+  const rows = parseExcelRows(fileSource);
+  return procesarFilas(rows, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto);
+};
+
 const generarPlantillaJSON = () => ([
   {
+    numeroActividad: 1,
     titulo: 'Diseno de interfaz de usuario',
     descripcion: 'Crear wireframes y mockups para la nueva pantalla de reportes',
     estado: 'PENDIENTE',
@@ -175,6 +293,7 @@ const generarPlantillaJSON = () => ([
     asignadoEmail: 'miembro@empresa.com',
   },
   {
+    numeroActividad: 2,
     titulo: 'Integracion con API de pagos',
     descripcion: 'Conectar el modulo de facturacion con el gateway de pago seleccionado',
     estado: 'EN_PROGRESO',
@@ -183,6 +302,7 @@ const generarPlantillaJSON = () => ([
     asignadoEmail: '',
   },
   {
+    numeroActividad: 3,
     titulo: 'Documentacion tecnica',
     descripcion: 'Escribir la documentacion del modulo de autenticacion',
     estado: 'PENDIENTE',
@@ -198,6 +318,7 @@ const generarPlantillaExcel = () => {
   const ws = XLSX.utils.json_to_sheet(datos, { header: COLUMNAS_EXCEL });
 
   ws['!cols'] = [
+    { wch: 16 },
     { wch: 35 },
     { wch: 55 },
     { wch: 15 },
@@ -212,8 +333,15 @@ const generarPlantillaExcel = () => {
 };
 
 module.exports = {
-  procesarJSON,
-  procesarExcel,
-  generarPlantillaJSON,
+  COLUMNAS_EXCEL,
+  ESTADOS_VALIDOS,
+  PRIORIDADES_VALIDAS,
+  construirVistaPrevia,
   generarPlantillaExcel,
+  generarPlantillaJSON,
+  parseRowsFromFile,
+  procesarExcel,
+  procesarFilas,
+  procesarJSON,
+  validarFila,
 };

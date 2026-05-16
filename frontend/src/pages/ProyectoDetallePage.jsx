@@ -275,7 +275,6 @@ const ProyectoDetallePage = () => {
     try {
       const { tarea } = await tareasService.actualizarEstado(id, est);
       setTareas(prev => sortTareas(prev.map(x => x.id === id ? tarea : x)));
-      await cargar();
       if (tareaEditando?.id === id) {
         setTareaEditando(tarea);
       }
@@ -516,6 +515,7 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
   const [form, setForm] = useState({
     titulo: tarea?.titulo || '',
     descripcion: tarea?.descripcion || '',
+    numeroActividad: tarea?.numeroActividad || '',
     asignadoId: tarea?.asignado?.id || '',
     prioridad: tarea?.prioridad || 'MEDIA',
     estado: tarea?.estado || 'PENDIENTE',
@@ -523,6 +523,7 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
     venceEn: tarea?.venceEn ? tarea.venceEn.slice(0,10) : ''
   });
   const [cargando, setCargando] = useState(false);
+  const [archivos, setArchivos] = useState([]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -533,6 +534,7 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
       } else {
         const fd = new FormData();
         Object.entries(form).forEach(([k,v]) => fd.append(k,v));
+        archivos.forEach((file) => fd.append('archivos', file));
         await tareasService.crear(proyectoId, fd);
       }
       onGuardar();
@@ -578,6 +580,18 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">NUMERO DE ACTIVIDAD</label>
+              <input
+                type="number"
+                min="1"
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
+                value={form.numeroActividad}
+                onChange={e => setForm({ ...form, numeroActividad: e.target.value })}
+                placeholder="Ej. 10"
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ASIGNADO A</label>
@@ -617,6 +631,49 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
                 />
               </div>
             </div>
+
+            {!tarea && (
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DOCUMENTOS DE APOYO</label>
+                <div className="relative group">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={e => setArchivos(prev => [...prev, ...Array.from(e.target.files || [])])}
+                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                  />
+                  <div className="flex items-center gap-3 p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl group-hover:border-blue-400 transition-all">
+                    <div className="p-2 bg-white rounded-xl shadow-sm text-slate-400 group-hover:text-blue-500">
+                      <Plus size={20} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Haz clic para subir documentos</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Se permite cualquier tipo de archivo</p>
+                    </div>
+                  </div>
+                </div>
+
+                {archivos.length > 0 && (
+                  <div className="grid grid-cols-1 gap-2 mt-2">
+                    {archivos.map((file, idx) => (
+                      <div key={`${file.name}-${idx}`} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-xl">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileSpreadsheet size={16} className="text-blue-500 shrink-0" />
+                          <span className="text-[10px] font-black text-slate-600 truncate">{file.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setArchivos(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-red-500 hover:bg-red-50 p-1 rounded-md transition-colors"
+                        >
+                          <Plus size={16} className="rotate-45" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         </div>
 
@@ -742,5 +799,3 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
 };
 
 export default ProyectoDetallePage;
-
-

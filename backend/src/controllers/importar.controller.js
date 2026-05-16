@@ -13,6 +13,9 @@ const { registrarActividad } = require('../utils/logger');
 const { serializeTasksForExport } = require('../utils/plantillas.utils');
 const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
 const {
+  construirVistaPrevia,
+  parseRowsFromFile,
+  procesarFilas,
   procesarJSON,
   procesarExcel,
   generarPlantillaJSON,
@@ -50,6 +53,31 @@ const verificarAccesoProyecto = async (proyectoId, usuario) => {
   }
 
   return { proyecto };
+};
+
+const resolverAsignadoPorDefecto = (modoAsignacion, proyecto, usuario, asignadoIdRaw) => {
+  if (modoAsignacion === 'yo') return usuario.id;
+
+  if (modoAsignacion === 'miembro') {
+    const miembroId = parseInt(asignadoIdRaw, 10);
+    if (Number.isNaN(miembroId)) {
+      throw new Error('El miembro seleccionado no es valido');
+    }
+    const esMiembro = proyecto.miembros.some((m) => m.id === miembroId);
+    if (!esMiembro) {
+      throw new Error('El miembro seleccionado no pertenece a este proyecto');
+    }
+    return miembroId;
+  }
+
+  return null;
+};
+
+const obtenerProyectoImportacion = async (proyectoId) => {
+  return prisma.proyecto.findUnique({
+    where: { id: proyectoId },
+    include: { miembros: { select: { id: true, email: true, nombre: true } } },
+  });
 };
 
 //  POST /api/proyectos/:proyectoId/tareas/importar 
@@ -136,6 +164,99 @@ const importar = async (req, res) => {
 
   } catch (error) {
     console.error('[importar tareas]', error);
+    return res.status(400).json({ error: error.message });
+  }
+};
+
+const vistaPreviaImportacion = async (req, res) => {
+  const proyectoId = parseInt(req.params.id);
+
+  if (isNaN(proyectoId)) {
+    return res.status(400).json({ error: 'ID de proyecto inválido' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se recibió ningún archivo. Envía el archivo en el campo "archivo"' });
+  }
+
+  try {
+    const proyecto = await obtenerProyectoImportacion(proyectoId);
+    if (!proyecto) {
+      return res.status(404).json({ error: 'Proyecto no encontrado' });
+    }
+
+    if (esAdmin(req.usuario)) {
+      if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
+      }
+    } else {
+      const esMiembro = proyecto.miembros.some((m) => m.id === req.usuario.id);
+      if (!esMiembro) {
+        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
+      }
+    }
+
+    const modoAsignacion = req.body.modoAsignacion || 'archivo';
+    const asignadoPorDefecto = resolverAsignadoPorDefecto(modoAsignacion, proyecto, req.usuario, req.body.asignadoId);
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const filas = parseRowsFromFile(req.file.buffer, ext);
+    const preview = construirVistaPrevia(filas, proyecto.miembros, asignadoPorDefecto);
+
+    return res.status(200).json({
+      archivo: req.file.originalname,
+      modoAsignacion,
+      ...preview,
+    });
+  } catch (error) {
+    console.error('[preview importar tareas]', error);
+    return res.status(400).json({ error: error.message });
+  }
+};
+
+const confirmarImportacion = async (req, res) => {
+  const proyectoId = parseInt(req.params.id);
+
+  if (isNaN(proyectoId)) {
+    return res.status(400).json({ error: 'ID de proyecto inválido' });
+  }
+
+  try {
+    const proyecto = await obtenerProyectoImportacion(proyectoId);
+    if (!proyecto) {
+      return res.status(404).json({ error: 'Proyecto no encontrado' });
+    }
+
+    if (esAdmin(req.usuario)) {
+      if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
+        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
+      }
+    } else {
+      const esMiembro = proyecto.miembros.some((m) => m.id === req.usuario.id);
+      if (!esMiembro) {
+        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
+      }
+    }
+
+    const modoAsignacion = req.body.modoAsignacion || 'archivo';
+    const asignadoPorDefecto = resolverAsignadoPorDefecto(modoAsignacion, proyecto, req.usuario, req.body.asignadoId);
+    const filas = Array.isArray(req.body.filas) ? req.body.filas : [];
+
+    if (filas.length === 0) {
+      return res.status(400).json({ error: 'No hay filas para importar' });
+    }
+
+    const resultado = await procesarFilas(
+      filas,
+      proyectoId,
+      proyecto.miembros,
+      registrarActividad,
+      req.usuario.id,
+      asignadoPorDefecto
+    );
+
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error('[confirmar importar tareas]', error);
     return res.status(400).json({ error: error.message });
   }
 };
@@ -250,4 +371,4 @@ const exportarExcel = async (req, res) => {
   }
 };
 
-module.exports = { importar, plantillaJSON, plantillaExcel, exportarJSON, exportarExcel };
+module.exports = { importar, vistaPreviaImportacion, confirmarImportacion, plantillaJSON, plantillaExcel, exportarJSON, exportarExcel };
