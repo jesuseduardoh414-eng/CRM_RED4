@@ -601,8 +601,8 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
         const diaEventos = dia ? eventos.filter((evento) => itemAgendaOcurreEnFecha(evento, dObj, configLaboral, diasEspeciales) && !esBloqueProyecto(evento)) : [];
         const diaTareas = diaEventos.filter((evento) => evento.tipo === 'tarea');
         const diaEventosVisibles = diaEventos.filter((evento) => evento.tipo !== 'tarea');
-        const eventosMostrados = diaEventosVisibles.slice(0, diaTareas.length ? 1 : 2);
-        const eventosOcultos = Math.max(diaEventosVisibles.length - eventosMostrados.length, 0);
+        const diaReuniones = diaEventosVisibles.filter((evento) => evento.tipo === 'reunion');
+        const diaEventosSolo = diaEventosVisibles.filter((evento) => evento.tipo !== 'reunion');
         const diaProyectos = dia && !ocultarBloquesProyecto
           ? eventos.filter((evento) => itemAgendaOcurreEnFecha(evento, dObj, configLaboral, diasEspeciales) && esBloqueProyecto(evento))
           : [];
@@ -613,30 +613,38 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
         const circleColor = esHoy ? 'text-white' : dia ? (esLaboral ? 'text-slate-600' : 'text-red-400') : 'text-slate-300';
 
         const todosLosItems = dia ? [
-          ...diaProyectos.map(p => ({
-            id: p.id,
-            text: (p.titulo || '').replace('Proyecto: ', ''),
+          ...(diaProyectos.length > 0 ? [{
+            id: 'proyectos-group',
+            text: `${diaProyectos.length} Proyecto${diaProyectos.length > 1 ? 's' : ''}`,
+            count: diaProyectos.length,
             color: '#2563eb',
             bg: '#eaf1ff',
-            type: 'proyecto',
-            raw: p
-          })),
+            type: 'proyecto-group',
+          }] : []),
           ...(diaTareas.length > 0 ? [{
             id: 'tareas-group',
             text: `${diaTareas.length} Tarea${diaTareas.length > 1 ? 's' : ''}`,
+            count: diaTareas.length,
             color: '#16a34a',
             bg: '#dcfce7',
             type: 'tarea-group',
-            raw: null
           }] : []),
-          ...diaEventosVisibles.map(e => ({
-            id: e.id,
-            text: e.titulo,
-            color: e.color || '#8b5cf6',
-            bg: e.color ? `${e.color}15` : '#f3e8ff',
-            type: e.tipo,
-            raw: e
-          }))
+          ...(diaEventosSolo.length > 0 ? [{
+            id: 'eventos-group',
+            text: `${diaEventosSolo.length} Evento${diaEventosSolo.length > 1 ? 's' : ''}`,
+            count: diaEventosSolo.length,
+            color: '#7c3aed',
+            bg: '#f3e8ff',
+            type: 'evento-group',
+          }] : []),
+          ...(diaReuniones.length > 0 ? [{
+            id: 'reuniones-group',
+            text: `${diaReuniones.length} Reunion${diaReuniones.length > 1 ? 'es' : ''}`,
+            count: diaReuniones.length,
+            color: '#db2777',
+            bg: '#fce7f3',
+            type: 'reunion-group',
+          }] : []),
         ] : [];
 
         const itemsParaModal = dia ? [
@@ -709,13 +717,13 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             key={item.id}
                             onClick={(ev) => {
                               ev.stopPropagation();
-                              if (item.type === 'tarea-group') {
-                                setExpandedDay({ date: dObj, items: itemsParaModal });
-                              } else {
-                                onSelectEvent(item.raw);
-                              }
+                              setExpandedDay({ date: dObj, items: itemsParaModal });
                             }}
                             style={{ 
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '0.35rem',
                               padding: '0.25rem 0.4rem', 
                               borderRadius: '7px', 
                               background: item.bg, 
@@ -730,7 +738,8 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             }}
                             title={item.text}
                           >
-                            {item.text}
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</span>
+                            <span style={{ flexShrink: 0 }}>Ver mas</span>
                           </div>
                         ))}
 
@@ -781,7 +790,13 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
             </div>
             <div style={{ padding: '1.2rem 1.6rem 1.6rem', maxHeight: 'calc(80vh - 92px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {expandedDay.items.map((item) => {
-                const color = item.tipoVista === 'proyecto' ? '#2563eb' : item.tipoVista === 'tarea' ? '#16a34a' : (item.color || '#7c3aed');
+                const color = item.tipoVista === 'proyecto'
+                  ? '#2563eb'
+                  : item.tipoVista === 'tarea'
+                    ? '#16a34a'
+                    : item.tipoVista === 'reunion'
+                      ? '#db2777'
+                      : '#7c3aed';
                 return (
                   <button
                     key={`${item.tipoVista}-${item.id}`}
