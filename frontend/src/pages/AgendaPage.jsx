@@ -24,6 +24,25 @@ import { useAuth } from '../context/AuthContext';
 import ModalEvento from '../components/ModalEvento';
 import ModalConfiguracionAgenda from '../components/ModalConfiguracionAgenda';
 
+let googleScriptPromise = null;
+
+const cargarGoogleIdentityScript = () => {
+  if (window.google?.accounts?.oauth2) return Promise.resolve(window.google);
+  if (googleScriptPromise) return googleScriptPromise;
+
+  googleScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(window.google);
+    script.onerror = () => reject(new Error('No se pudo cargar Google Identity Services'));
+    document.head.appendChild(script);
+  });
+
+  return googleScriptPromise;
+};
+
 const VISTAS = [
   { id: 'MES', label: 'Mes', icon: <LayoutGrid size={16} /> },
   { id: 'SEMANA', label: 'Semana', icon: <Columns size={16} /> },
@@ -261,6 +280,14 @@ const AgendaPage = () => {
   const [invitaciones, setInvitaciones] = useState([]);
   const [configLaboral, setConfigLaboral] = useState(normalizarConfigLaboral(null));
   const [diasEspeciales, setDiasEspeciales] = useState([]);
+  const [googleCalendar, setGoogleCalendar] = useState({
+    configured: false,
+    connected: false,
+    email: null,
+    clientId: null,
+    scope: '',
+  });
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalConfigOpen, setModalConfigOpen] = useState(false);
@@ -287,17 +314,25 @@ const AgendaPage = () => {
       const anio = currentDate.getFullYear();
       const rango = getRangoConsulta(currentDate, view);
 
-      const [resEventos, resInvitaciones, resConfig, resDias] = await Promise.all([
+      const [resEventos, resInvitaciones, resConfig, resDias, resGoogle] = await Promise.all([
         agendaService.listar(rango.inicio.toISOString(), rango.fin.toISOString()),
         agendaService.invitacionesPendientes(),
         agendaService.getConfigLaboral(),
         agendaService.listarDiasEspeciales(mes, anio),
+        agendaService.getGoogleCalendarStatus(),
       ]);
 
       setEventos(resEventos.eventos || []);
       setInvitaciones(resInvitaciones.invitaciones || resInvitaciones.pendientes || []);
       setConfigLaboral(normalizarConfigLaboral(resConfig.config));
       setDiasEspeciales(resDias.dias || []);
+      setGoogleCalendar({
+        configured: !!resGoogle.configured,
+        connected: !!resGoogle.connected,
+        email: resGoogle.email || null,
+        clientId: resGoogle.clientId || null,
+        scope: resGoogle.scope || '',
+      });
     } catch (error) {
       showToast(error.message || 'Error al cargar la agenda', 'error');
     } finally {
@@ -357,6 +392,73 @@ const AgendaPage = () => {
 
   const handleSelectFechaMes = handleSelectFechaEvento;
 
+  const handleConnectGoogle = async () => {
+    if (!googleCalendar.clientId) {
+      showToast('Falta configurar GOOGLE_CLIENT_ID en el backend.', 'error');
+      return;
+    }
+
+    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+      showToast('Falta VITE_GOOGLE_CLIENT_ID en el frontend.', 'error');
+      return;
+    }
+
+    setGoogleLoading(true);
+    try {
+      const google = await cargarGoogleIdentityScript();
+      await new Promise((resolve, reject) => {
+        const client = google.accounts.oauth2.initCodeClient({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          scope: googleCalendar.scope,
+          ux_mode: 'popup',
+          callback: async (response) => {
+            if (!response?.code) {
+              reject(new Error('No se recibió el código de Google'));
+              return;
+            }
+
+            try {
+              const res = await agendaService.connectGoogleCalendar(response.code);
+              setGoogleCalendar((prev) => ({
+                ...prev,
+                connected: true,
+                email: res.email || prev.email,
+              }));
+              showToast('Google Calendar conectado correctamente');
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          },
+          error_callback: () => reject(new Error('No se pudo completar la autorización con Google')),
+        });
+
+        client.requestCode();
+      });
+    } catch (error) {
+      showToast(error.message || 'No se pudo conectar Google Calendar', 'error');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    setGoogleLoading(true);
+    try {
+      await agendaService.disconnectGoogleCalendar();
+      setGoogleCalendar((prev) => ({
+        ...prev,
+        connected: false,
+        email: null,
+      }));
+      showToast('Google Calendar desconectado');
+    } catch (error) {
+      showToast(error.message || 'No se pudo desconectar Google Calendar', 'error');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   if (cargando && !eventos.length) return <AgendaSkeleton />;
 
   return (
@@ -390,6 +492,40 @@ const AgendaPage = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={googleCalendar.connected ? handleDisconnectGoogle : handleConnectGoogle}
+            disabled={googleLoading || !googleCalendar.configured}
+            title={
+              googleCalendar.connected
+                ? `Conectado con ${googleCalendar.email || 'Google Calendar'}`
+                : 'Conectar Google Calendar'
+            }
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.6rem 0.95rem',
+              borderRadius: '12px',
+              border: '1px solid',
+              borderColor: googleCalendar.connected ? 'rgba(16,185,129,0.28)' : 'var(--color-border)',
+              background: googleCalendar.connected ? 'rgba(16,185,129,0.08)' : 'var(--color-surface-2)',
+              color: googleCalendar.connected ? '#047857' : 'var(--color-text)',
+              fontSize: '0.78rem',
+              fontWeight: '900',
+              cursor: googleLoading || !googleCalendar.configured ? 'not-allowed' : 'pointer',
+              opacity: googleLoading || !googleCalendar.configured ? 0.65 : 1,
+              boxShadow: googleCalendar.connected ? '0 10px 24px rgba(16,185,129,0.10)' : 'none',
+            }}
+          >
+            <Globe size={16} />
+            {googleLoading
+              ? (googleCalendar.connected ? 'Desconectando...' : 'Conectando...')
+              : googleCalendar.connected
+                ? (isMobile ? 'Google' : 'Google conectado')
+                : (isMobile ? 'Google' : 'Conectar Google')}
+          </button>
+
           <button
             onClick={() => setShowInvitaciones(!showInvitaciones)}
             style={{ position: 'relative', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: '0.6rem', borderRadius: '10px', cursor: 'pointer' }}
