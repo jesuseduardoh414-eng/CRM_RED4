@@ -371,7 +371,10 @@ export const adjuntosService = {
 // ── Estadísticas ──────────────────────────────────────────────────────────
 export const statsService = {
   getAdminStats: async () => {
-    const res = await fetch(`${API_URL}/stats/admin`, { headers: getHeaders() });
+    const res = await fetch(`${API_URL}/stats/admin?t=${Date.now()}`, {
+      headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },
+      cache: 'no-store',
+    });
     return handleResponse(res);
   }
 };

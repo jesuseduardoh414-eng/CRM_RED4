@@ -201,7 +201,10 @@ const getActividadMiembros = async (usuario) => {
       prisma.proyecto.findMany({
         where: {
           estado: { not: 'CERRADO' },
-          miembros: { some: { id: miembro.id } },
+          OR: [
+            { miembros: { some: { id: miembro.id } } },
+            { creadorId: miembro.id }
+          ],
           ...(scopeProyecto || {})
         },
         select: {
@@ -215,7 +218,6 @@ const getActividadMiembros = async (usuario) => {
       }),
       prisma.evento.findMany({
         where: {
-          proyectoId: null,
           OR: [
             { usuarioId: miembro.id },
             { invitados: { some: { usuarioId: miembro.id, estado: 'aceptado' } } }
