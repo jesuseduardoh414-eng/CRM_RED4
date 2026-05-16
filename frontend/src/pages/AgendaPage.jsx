@@ -62,6 +62,12 @@ const getHoras = (start, end) => {
   return horas;
 };
 
+const horaDecimal = (value, fallback = 0) => {
+  const [hours, minutes] = String(value || '').split(':').map(Number);
+  if (!Number.isFinite(hours)) return fallback;
+  return hours + (Number.isFinite(minutes) ? minutes / 60 : 0);
+};
+
 const normalizarConfigLaboral = (config) => ({
   diasLaborales: config?.diasLaborales || config?.dias_laborales || LABORALES_DEFAULT,
   horaEntrada: config?.horaEntrada || config?.hora_entrada || '09:00',
@@ -927,6 +933,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
   const hStart = getHoraInicial(configLaboral);
   const hEnd = getHoraFinal(configLaboral);
   const horas = getHoras(hStart, hEnd);
+  const { esLaboral, diaEspecial } = getEstadoLaboral(date, configLaboral, diasEspeciales);
   const proyectosDelDia = ocultarBloquesProyecto
     ? []
     : eventos.filter((evento) => itemAgendaOcurreEnFecha(evento, date, configLaboral, diasEspeciales) && esBloqueProyecto(evento));
@@ -950,12 +957,18 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
     })
     .filter(Boolean);
   const altoGrid = horas.length * 80;
+  const inicioLaboral = Math.max(hStart, horaDecimal(configLaboral?.horaEntrada, hStart));
+  const finLaboral = Math.min(hEnd + 1, horaDecimal(configLaboral?.horaSalida, hEnd + 1));
+  const topLaboral = Math.max(0, (inicioLaboral - hStart) * 80);
+  const bottomLaboral = Math.min(altoGrid, (finLaboral - hStart) * 80);
+  const rangoTareas = bottomLaboral > topLaboral
+    ? [{ start: topLaboral, end: bottomLaboral }]
+    : [{ start: 0, end: altoGrid }];
   const huecosTareas = restarIntervalos(
-    [{ start: 0, end: altoGrid }],
+    rangoTareas,
     eventosConHora.map(({ top, height }) => ({ start: Math.max(0, top - 8), end: Math.min(altoGrid, top + height + 8) }))
   );
   const posicionesTareas = distribuirEnHuecos(tareasDelDia, huecosTareas, altoGrid);
-  const { esLaboral, diaEspecial } = getEstadoLaboral(date, configLaboral, diasEspeciales);
   const colorHeader = esLaboral ? 'var(--color-primary)' : '#ef4444';
 
   return (
