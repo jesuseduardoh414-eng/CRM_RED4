@@ -171,6 +171,16 @@ const itemAgendaOcurreEnFecha = (evento, date, configLaboral, diasEspeciales) =>
     ? tareaOcurreEnFecha(evento, date, configLaboral, diasEspeciales)
     : eventoOcurreEnFecha(evento, date);
 
+const dedupeAgendaItems = (items = []) => {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.tipoVista || item.tipo || 'item'}-${item.proyecto?.id || item.origenId || item.id || item.tituloVista || item.titulo}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const restarIntervalos = (base, ocupados) => {
   let libres = [...base];
   ocupados.forEach((ocupado) => {
@@ -656,11 +666,11 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
           }] : []),
         ] : [];
 
-        const itemsParaModal = dia ? [
+        const itemsParaModal = dia ? dedupeAgendaItems([
           ...diaProyectos.map((p) => ({ ...p, tipoVista: 'proyecto', tituloVista: (p.titulo || '').replace('Proyecto: ', '') })),
           ...diaTareas.map((t) => ({ ...t, tipoVista: 'tarea', tituloVista: t.titulo.replace(/^TAREA:\s*/i, '') })),
           ...diaEventosVisibles.map((e) => ({ ...e, tipoVista: e.tipo || 'evento', tituloVista: e.titulo })),
-        ] : [];
+        ]) : [];
 
         return (
           <div
