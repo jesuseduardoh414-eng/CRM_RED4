@@ -1,5 +1,12 @@
 // Controlador de Agenda Personal y Compartida
 const prisma = require('../lib/prisma');
+const {
+  getConnectionStatus,
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  syncEventoToGoogle,
+  deleteEventoFromGoogle,
+} = require('../services/google-calendar.service');
 
 const DIAS_LABORALES_DEFAULT = [1, 2, 3, 4, 5];
 const TIPOS_NO_LABORALES = ['festivo', 'vacacion', 'permiso'];
@@ -11,6 +18,22 @@ const COLOR_CATEGORIA = {
 };
 
 const getColorCategoria = (tipo) => COLOR_CATEGORIA[tipo] || COLOR_CATEGORIA.evento;
+
+const syncEventoBestEffort = async (eventoId) => {
+  try {
+    await syncEventoToGoogle(eventoId);
+  } catch (error) {
+    console.warn('[agenda.google.sync]', error.message);
+  }
+};
+
+const deleteEventoGoogleBestEffort = async (evento) => {
+  try {
+    await deleteEventoFromGoogle(evento);
+  } catch (error) {
+    console.warn('[agenda.google.delete]', error.message);
+  }
+};
 
 const getDateKeyUTC = (date) => date.toISOString().split('T')[0];
 const getFinTareaParaDisponibilidad = (tarea) => (
@@ -356,6 +379,8 @@ const editar = async (req, res) => {
       });
     }
 
+    await syncEventoBestEffort(evento.id);
+
     return res.json({ evento });
   } catch (error) {
     console.error('[agenda.editar]', error);
@@ -499,6 +524,8 @@ const crear = async (req, res) => {
       await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo, !!es_global);
     }
 
+    await syncEventoBestEffort(evento.id);
+
     return res.status(201).json({ evento });
   } catch (error) {
     console.error('[agenda.crear]', error);
@@ -571,6 +598,7 @@ const eliminar = async (req, res) => {
 
     if (evento.creadoPorId === usuarioId || evento.usuarioId === usuarioId) {
       // Es el creador -> Eliminar todo
+      await deleteEventoGoogleBestEffort(evento);
       await prisma.evento.delete({ where: { id } });
       return res.json({ ok: true, mensaje: 'Evento eliminado para todos' });
     } else {
@@ -876,6 +904,42 @@ const eliminarDiaEspecial = async (req, res) => {
   }
 };
 
+const getGoogleCalendarStatus = async (req, res) => {
+  try {
+    const status = await getConnectionStatus(req.usuario.id);
+    return res.json(status);
+  } catch (error) {
+    console.error('[agenda.google.status]', error);
+    return res.status(500).json({ error: 'Error al consultar Google Calendar' });
+  }
+};
+
+const connectGoogleCalendarController = async (req, res) => {
+  const { code } = req.body;
+
+  if (!code) {
+    return res.status(400).json({ error: 'Codigo de autorizacion requerido' });
+  }
+
+  try {
+    const connection = await connectGoogleCalendar({ usuarioId: req.usuario.id, code });
+    return res.json(connection);
+  } catch (error) {
+    console.error('[agenda.google.connect]', error);
+    return res.status(500).json({ error: error.message || 'No se pudo conectar Google Calendar' });
+  }
+};
+
+const disconnectGoogleCalendarController = async (req, res) => {
+  try {
+    await disconnectGoogleCalendar(req.usuario.id);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('[agenda.google.disconnect]', error);
+    return res.status(500).json({ error: 'No se pudo desconectar Google Calendar' });
+  }
+};
+
 const recordatoriosProximos = async (req, res) => {
   const usuarioId = req.usuario.id;
   const ahora = new Date();
@@ -913,5 +977,8 @@ module.exports = {
   listarDiasEspeciales,
   crearDiaEspecial,
   eliminarDiaEspecial,
+  getGoogleCalendarStatus,
+  connectGoogleCalendarController,
+  disconnectGoogleCalendarController,
   recordatoriosProximos,
 };

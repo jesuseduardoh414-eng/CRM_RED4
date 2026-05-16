@@ -443,6 +443,22 @@ export const agendaService = {
     });
     return handleResponse(res);
   },
+  getGoogleCalendarStatus: async () => {
+    const res = await fetch(`${API_URL}/agenda/google-calendar/status`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  connectGoogleCalendar: async (code) => {
+    const res = await fetch(`${API_URL}/agenda/google-calendar/connect`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ code }),
+    });
+    return handleResponse(res);
+  },
+  disconnectGoogleCalendar: async () => {
+    const res = await fetch(`${API_URL}/agenda/google-calendar/connect`, {
+      method: 'DELETE', headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
 
   // Phase 8.1 - Días Especiales
   listarDiasEspeciales: async (mes, anio) => {

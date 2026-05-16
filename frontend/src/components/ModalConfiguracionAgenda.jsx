@@ -40,12 +40,39 @@ const normalizarConfig = (config) => ({
   hora_comida_fin: config?.horaComidaFin || config?.hora_comida_fin || CONFIG_DEFAULT.hora_comida_fin,
 });
 
+let googleScriptPromise = null;
+
+const cargarGoogleIdentityScript = () => {
+  if (window.google?.accounts?.oauth2) return Promise.resolve(window.google);
+  if (googleScriptPromise) return googleScriptPromise;
+
+  googleScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(window.google);
+    script.onerror = () => reject(new Error('No se pudo cargar Google Identity Services'));
+    document.head.appendChild(script);
+  });
+
+  return googleScriptPromise;
+};
+
 const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
   const [tab, setTab] = useState('HORARIO');
   const [cargando, setCargando] = useState(false);
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [config, setConfig] = useState(CONFIG_DEFAULT);
   const [diasEspeciales, setDiasEspeciales] = useState([]);
+  const [googleCalendar, setGoogleCalendar] = useState({
+    configured: false,
+    connected: false,
+    email: null,
+    clientId: null,
+    scope: '',
+  });
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [nuevoDia, setNuevoDia] = useState({
     fecha_inicio: new Date().toISOString().split('T')[0],
     fecha_fin: new Date().toISOString().split('T')[0],
@@ -56,13 +83,21 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
   const cargarDatos = useCallback(async () => {
     try {
       setCargandoInicial(true);
-      const [resConfig, resDias] = await Promise.all([
+      const [resConfig, resDias, resGoogle] = await Promise.all([
         agendaService.getConfigLaboral(),
         agendaService.listarDiasEspeciales(new Date().getMonth() + 1, new Date().getFullYear()),
+        agendaService.getGoogleCalendarStatus(),
       ]);
 
       setConfig(normalizarConfig(resConfig.config));
       setDiasEspeciales(resDias.dias || []);
+      setGoogleCalendar({
+        configured: !!resGoogle.configured,
+        connected: !!resGoogle.connected,
+        email: resGoogle.email || null,
+        clientId: resGoogle.clientId || null,
+        scope: resGoogle.scope || '',
+      });
     } catch (err) {
       showToast(err.message || 'Error al cargar la configuración', 'error');
     } finally {
@@ -83,6 +118,73 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
       showToast(err.message, 'error');
     } finally {
       setCargando(false);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    if (!googleCalendar.clientId) {
+      showToast('Falta configurar GOOGLE_CLIENT_ID en el backend.', 'error');
+      return;
+    }
+
+    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+      showToast('Falta VITE_GOOGLE_CLIENT_ID en el frontend.', 'error');
+      return;
+    }
+
+    setGoogleLoading(true);
+    try {
+      const google = await cargarGoogleIdentityScript();
+      await new Promise((resolve, reject) => {
+        const client = google.accounts.oauth2.initCodeClient({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          scope: googleCalendar.scope,
+          ux_mode: 'popup',
+          callback: async (response) => {
+            if (!response?.code) {
+              reject(new Error('No se recibió el código de Google'));
+              return;
+            }
+
+            try {
+              const res = await agendaService.connectGoogleCalendar(response.code);
+              setGoogleCalendar((prev) => ({
+                ...prev,
+                connected: true,
+                email: res.email || prev.email,
+              }));
+              showToast('Google Calendar conectado correctamente');
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          },
+          error_callback: () => reject(new Error('No se pudo completar la autorización con Google')),
+        });
+
+        client.requestCode();
+      });
+    } catch (error) {
+      showToast(error.message || 'No se pudo conectar Google Calendar', 'error');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    setGoogleLoading(true);
+    try {
+      await agendaService.disconnectGoogleCalendar();
+      setGoogleCalendar((prev) => ({
+        ...prev,
+        connected: false,
+        email: null,
+      }));
+      showToast('Google Calendar desconectado');
+    } catch (error) {
+      showToast(error.message || 'No se pudo desconectar Google Calendar', 'error');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -176,6 +278,51 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
                       <input type="time" className="form-input" style={{ flex: 1 }} value={config.hora_comida_fin} onChange={(e) => setConfig({ ...config, hora_comida_fin: e.target.value })} />
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)', border: '1px solid var(--color-border)', borderRadius: '1.5rem', padding: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.75rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.78rem', fontWeight: '900', letterSpacing: '0.08em', color: '#334155' }}>GOOGLE CALENDAR</div>
+                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0f172a', marginTop: '0.25rem' }}>
+                      {googleCalendar.connected ? 'Cuenta conectada' : 'Sincronización desactivada'}
+                    </div>
+                  </div>
+                  <div style={{ padding: '0.4rem 0.75rem', borderRadius: '999px', background: googleCalendar.connected ? 'rgba(16,185,129,0.14)' : 'rgba(148,163,184,0.16)', color: googleCalendar.connected ? '#047857' : '#475569', fontSize: '0.72rem', fontWeight: '900' }}>
+                    {googleCalendar.connected ? 'ACTIVA' : 'INACTIVA'}
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>
+                  {googleCalendar.connected
+                    ? `Los eventos que crees o edites en el CRM se sincronizarán con ${googleCalendar.email || 'tu calendario principal de Google'}.`
+                    : 'Conecta tu cuenta para enviar automáticamente tus eventos del CRM a tu calendario principal de Google.'}
+                </div>
+                {!googleCalendar.configured && (
+                  <div style={{ marginTop: '0.85rem', fontSize: '0.78rem', color: '#b45309', fontWeight: '700' }}>
+                    El servidor aún no tiene configuradas las credenciales de Google Calendar.
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.1rem' }}>
+                  {!googleCalendar.connected ? (
+                    <button
+                      type="button"
+                      onClick={handleConnectGoogle}
+                      disabled={googleLoading || !googleCalendar.configured}
+                      style={{ flex: 1, height: '48px', borderRadius: '14px', border: 'none', background: '#111827', color: '#fff', fontWeight: '900', cursor: googleLoading || !googleCalendar.configured ? 'not-allowed' : 'pointer', opacity: googleLoading || !googleCalendar.configured ? 0.6 : 1 }}
+                    >
+                      {googleLoading ? 'CONECTANDO...' : 'CONECTAR GOOGLE CALENDAR'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleDisconnectGoogle}
+                      disabled={googleLoading}
+                      style={{ flex: 1, height: '48px', borderRadius: '14px', border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', fontWeight: '900', cursor: googleLoading ? 'not-allowed' : 'pointer', opacity: googleLoading ? 0.6 : 1 }}
+                    >
+                      {googleLoading ? 'DESCONECTANDO...' : 'DESCONECTAR'}
+                    </button>
+                  )}
                 </div>
               </div>
 

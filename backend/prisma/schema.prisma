@@ -24,6 +24,10 @@ model Usuario {
   tokenInvitacion          String?        @unique @map("token_invitacion")
   tokenExpiraEn            DateTime?      @map("token_expira_en")
   passwordHash             String?        @map("password_hash")
+  googleCalendarEmail      String?        @map("google_calendar_email")
+  googleAccessToken        String?        @map("google_access_token")
+  googleRefreshToken       String?        @map("google_refresh_token")
+  googleTokenExpiresAt     DateTime?      @map("google_token_expires_at")
   adjuntos                 Adjunto[]      @relation("AutorAdjunto")
   comentarios              Comentario[]   @relation("AutorComentario")
   actividades              LogActividad[] @relation("AutorActividad")
@@ -233,6 +237,7 @@ model Evento {
   esRecurrente      Boolean   @default(false) @map("es_recurrente")
   patronRecurrencia String?   @map("patron_recurrencia") // JSON: { tipo:'semanal', dias:[0,6], horaInicio:'09:00', horaFin:'18:00' }
   fechaFinRecurr    DateTime? @map("fecha_fin_recurrencia")
+  googleCalendarEventId String? @map("google_calendar_event_id")
 
   @@map("eventos")
 }

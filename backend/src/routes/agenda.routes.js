@@ -10,6 +10,9 @@ router.use(verificarToken);
 // Configuración laboral (Debe ir antes de /:id para evitar conflictos)
 router.get('/config-laboral', agendaController.getConfigLaboral);
 router.put('/config-laboral', agendaController.updateConfigLaboral);
+router.get('/google-calendar/status', agendaController.getGoogleCalendarStatus);
+router.post('/google-calendar/connect', agendaController.connectGoogleCalendarController);
+router.delete('/google-calendar/connect', agendaController.disconnectGoogleCalendarController);
 
 // Endpoints principales
 router.get('/',               agendaController.listar);
