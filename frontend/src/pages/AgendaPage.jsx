@@ -631,46 +631,60 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
         const circleBg = esHoy ? 'bg-blue-600' : '';
         const circleColor = esHoy ? 'text-white' : dia ? (esLaboral ? 'text-slate-600' : 'text-red-400') : 'text-slate-300';
 
+        const proyectosModal = dia ? dedupeAgendaItems(
+          diaProyectos.map((p) => ({ ...p, tipoVista: 'proyecto', tituloVista: (p.titulo || '').replace('Proyecto: ', '') }))
+        ) : [];
+        const tareasModal = dia ? dedupeAgendaItems(
+          diaTareas.map((t) => ({ ...t, tipoVista: 'tarea', tituloVista: t.titulo.replace(/^TAREA:\s*/i, '') }))
+        ) : [];
+        const eventosModal = dia ? dedupeAgendaItems(
+          diaEventosSolo.map((e) => ({ ...e, tipoVista: e.tipo || 'evento', tituloVista: e.titulo }))
+        ) : [];
+        const reunionesModal = dia ? dedupeAgendaItems(
+          diaReuniones.map((e) => ({ ...e, tipoVista: 'reunion', tituloVista: e.titulo }))
+        ) : [];
+
         const todosLosItems = dia ? [
-          ...(diaProyectos.length > 0 ? [{
+          ...(proyectosModal.length > 0 ? [{
             id: 'proyectos-group',
-            text: `${diaProyectos.length} Proyecto${diaProyectos.length > 1 ? 's' : ''}`,
-            count: diaProyectos.length,
+            text: `${proyectosModal.length} Proyecto${proyectosModal.length > 1 ? 's' : ''}`,
+            count: proyectosModal.length,
             color: '#2563eb',
             bg: '#eaf1ff',
             type: 'proyecto-group',
           }] : []),
-          ...(diaTareas.length > 0 ? [{
+          ...(tareasModal.length > 0 ? [{
             id: 'tareas-group',
-            text: `${diaTareas.length} Tarea${diaTareas.length > 1 ? 's' : ''}`,
-            count: diaTareas.length,
+            text: `${tareasModal.length} Tarea${tareasModal.length > 1 ? 's' : ''}`,
+            count: tareasModal.length,
             color: '#16a34a',
             bg: '#dcfce7',
             type: 'tarea-group',
           }] : []),
-          ...(diaEventosSolo.length > 0 ? [{
+          ...(eventosModal.length > 0 ? [{
             id: 'eventos-group',
-            text: `${diaEventosSolo.length} Evento${diaEventosSolo.length > 1 ? 's' : ''}`,
-            count: diaEventosSolo.length,
+            text: `${eventosModal.length} Evento${eventosModal.length > 1 ? 's' : ''}`,
+            count: eventosModal.length,
             color: '#7c3aed',
             bg: '#f3e8ff',
             type: 'evento-group',
           }] : []),
-          ...(diaReuniones.length > 0 ? [{
+          ...(reunionesModal.length > 0 ? [{
             id: 'reuniones-group',
-            text: `${diaReuniones.length} Reunion${diaReuniones.length > 1 ? 'es' : ''}`,
-            count: diaReuniones.length,
+            text: `${reunionesModal.length} Reunion${reunionesModal.length > 1 ? 'es' : ''}`,
+            count: reunionesModal.length,
             color: '#db2777',
             bg: '#fce7f3',
             type: 'reunion-group',
           }] : []),
         ] : [];
 
-        const itemsParaModal = dia ? dedupeAgendaItems([
-          ...diaProyectos.map((p) => ({ ...p, tipoVista: 'proyecto', tituloVista: (p.titulo || '').replace('Proyecto: ', '') })),
-          ...diaTareas.map((t) => ({ ...t, tipoVista: 'tarea', tituloVista: t.titulo.replace(/^TAREA:\s*/i, '') })),
-          ...diaEventosVisibles.map((e) => ({ ...e, tipoVista: e.tipo || 'evento', tituloVista: e.titulo })),
-        ]) : [];
+        const itemsParaModal = dia ? [
+          ...proyectosModal,
+          ...tareasModal,
+          ...eventosModal,
+          ...reunionesModal,
+        ] : [];
 
         return (
           <div
