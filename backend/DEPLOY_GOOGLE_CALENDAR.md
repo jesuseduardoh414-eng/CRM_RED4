@@ -17,7 +17,7 @@ GOOGLE_CLIENT_SECRET=TU_GOOGLE_CLIENT_SECRET
 Notas:
 
 - `FRONTEND_URL` debe apuntar al dominio real del frontend en producción.
-- El script `vercel-build` ya quedó preparado para correr `prisma migrate deploy` automáticamente.
+- Las migraciones se aplican manualmente con conexión directa antes del deploy; Vercel solo ejecuta `prisma generate` para evitar builds lentos con el pooler.
 
 ## Frontend
 
