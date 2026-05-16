@@ -157,7 +157,6 @@ const ProyectoDetallePage = () => {
   const { showToast } = useToast();
 
   const [proyecto, setProyecto] = useState(null);
-  const [progreso, setProgreso] = useState(null);
   const [tareas, setTareas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -176,7 +175,6 @@ const ProyectoDetallePage = () => {
       const t = await tareasService.listar(id);
       setProyecto(t.proyecto);
       setTareas(sortTareas(t.tareas));
-      setProgreso(t.progreso);
       setUsuarios(t.proyecto?.miembros || []);
     } catch (err) { showToast(err.message, 'error'); }
     finally { setCargando(false); }
@@ -190,21 +188,6 @@ const ProyectoDetallePage = () => {
   }, [cargar]);
 
   const stats = useMemo(() => {
-    // Si la API nos dio progreso real, lo usamos
-    if (progreso) {
-      return {
-        total: progreso.general.total,
-        hechas: progreso.general.hechas,
-        progreso: progreso.general.enProgreso,
-        pendientes: progreso.general.pendientes,
-        pct: progreso.general.porcentaje,
-        totalMiembro: progreso.miembro.total,
-        hechasMiembro: progreso.miembro.hechas,
-        pctMiembro: progreso.miembro.porcentaje,
-      };
-    }
-
-    // Fallback (mientras carga o si falla)
     const hechas = tareas.filter(t => t.estado === 'HECHO').length;
     const prog = tareas.filter(t => t.estado === 'EN_PROGRESO').length;
     const pendientes = tareas.filter(t => t.estado === 'PENDIENTE').length;
@@ -225,7 +208,7 @@ const ProyectoDetallePage = () => {
       hechasMiembro,
       pctMiembro,
     };
-  }, [tareas, usuario?.id, progreso]);
+  }, [tareas, usuario?.id]);
 
   const progresoGeneral = stats.pct;
   const progresoMiembro = stats.pctMiembro;
