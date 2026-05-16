@@ -68,12 +68,21 @@ const horaDecimal = (value, fallback = 0) => {
   return hours + (Number.isFinite(minutes) ? minutes / 60 : 0);
 };
 
-const getHoraInicioLaboral = (configLaboral) => Math.floor(horaDecimal(configLaboral?.horaEntrada, 9));
-const getHoraFinLaboralExclusiva = (configLaboral) => Math.ceil(horaDecimal(configLaboral?.horaSalida, 18));
+const getRangoLaboralBase = (configLaboral) => {
+  const entrada = horaDecimal(configLaboral?.horaEntrada, 9);
+  const salida = horaDecimal(configLaboral?.horaSalida, 18);
+  const pareceTodoElDia = entrada <= 0 && salida >= 23;
+
+  return {
+    inicio: Math.floor(pareceTodoElDia ? 9 : entrada),
+    finExclusivo: Math.ceil(pareceTodoElDia ? 18 : salida),
+  };
+};
 
 const getRangoHorasVisible = (configLaboral, eventos = [], fechas = []) => {
-  let inicio = getHoraInicioLaboral(configLaboral);
-  let finExclusivo = getHoraFinLaboralExclusiva(configLaboral);
+  const rangoBase = getRangoLaboralBase(configLaboral);
+  let inicio = rangoBase.inicio;
+  let finExclusivo = rangoBase.finExclusivo;
 
   const keys = new Set(fechas.map((fecha) => getDateKey(fecha)));
   eventos.forEach((evento) => {
@@ -849,8 +858,9 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
       : eventos.filter((e) => itemAgendaOcurreEnFecha(e, d, configLaboral, diasEspeciales) && esBloqueProyecto(e))
   ));
   const altoGrid = horas.length * 50;
-  const inicioLaboral = Math.max(hStart, horaDecimal(configLaboral?.horaEntrada, hStart));
-  const finLaboral = Math.min(hEnd + 1, horaDecimal(configLaboral?.horaSalida, hEnd + 1));
+  const rangoBase = getRangoLaboralBase(configLaboral);
+  const inicioLaboral = Math.max(hStart, rangoBase.inicio);
+  const finLaboral = Math.min(hEnd + 1, rangoBase.finExclusivo);
   const topLaboral = Math.max(0, (inicioLaboral - hStart) * 50);
   const bottomLaboral = Math.min(altoGrid, (finLaboral - hStart) * 50);
   const rangoTareas = bottomLaboral > topLaboral
@@ -1055,8 +1065,9 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
     })
     .filter(Boolean);
   const altoGrid = horas.length * 80;
-  const inicioLaboral = Math.max(hStart, horaDecimal(configLaboral?.horaEntrada, hStart));
-  const finLaboral = Math.min(hEnd + 1, horaDecimal(configLaboral?.horaSalida, hEnd + 1));
+  const rangoBase = getRangoLaboralBase(configLaboral);
+  const inicioLaboral = Math.max(hStart, rangoBase.inicio);
+  const finLaboral = Math.min(hEnd + 1, rangoBase.finExclusivo);
   const topLaboral = Math.max(0, (inicioLaboral - hStart) * 80);
   const bottomLaboral = Math.min(altoGrid, (finLaboral - hStart) * 80);
   const rangoTareas = bottomLaboral > topLaboral
