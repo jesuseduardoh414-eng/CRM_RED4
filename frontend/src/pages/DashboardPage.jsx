@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { proyectosService, tareasService, statsService } from '../services/api';
 import { PageSkeleton } from '../components/Skeleton';
 import {
@@ -22,6 +23,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  MoreHorizontal,
 } from 'lucide-react';
 
 const AREA_CONF = {
@@ -106,6 +108,32 @@ const uniqueCalendarItems = (items = []) => {
     seen.add(key);
     return true;
   });
+};
+
+const getDateKey = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const sumarDias = (value, days) => {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setDate(date.getDate() + days);
+  return date;
+};
+
+const moverFechaComoDia = (value, days) => {
+  const date = sumarDias(value, days);
+  return date ? getDateKey(date) : null;
+};
+
+const getTaskNumericId = (taskLike) => {
+  const rawId = String(taskLike?.origenId || taskLike?.id || '');
+  const match = rawId.match(/tarea-(\d+)/i);
+  if (match) return Number(match[1]);
+  const numeric = Number(rawId);
+  return Number.isFinite(numeric) ? numeric : null;
 };
 
 const StatCard = ({ value, sub, icon, color, bg, onClick, helper }) => (
@@ -491,7 +519,7 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
               <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid #e2e8f0' }}>
                 <div style={{ fontWeight: '900', color: '#0f172a', marginBottom: '0.25rem' }}>{entry.project.nombre}</div>
                 <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700' }}>
-                  {entry.project.estado || 'ACTIVO'} · {progress}% · {entry.project._count?.tareas || 0} tareas
+                  {entry.project.estado || 'ACTIVO'} - {progress}% - {entry.project._count?.tareas || 0} tareas
                 </div>
               </div>
 
@@ -623,16 +651,130 @@ const DashboardMiembro = ({ usuario }) => {
   );
 };
 
-const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
+const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }) => {
+  const { showToast } = useToast();
   const [selectedId, setSelectedId] = useState(miembros[0]?.id || null);
   const [monthDate, setMonthDate] = useState(new Date());
   const [expandedDay, setExpandedDay] = useState(null);
+  const [activeTaskMenu, setActiveTaskMenu] = useState(null);
+  const [movingTasks, setMovingTasks] = useState(false);
+  const [draggedGroup, setDraggedGroup] = useState(null);
 
   const days = useMemo(() => buildCalendarDays(monthDate), [monthDate]);
   const weekLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
   const todayKey = startOfDay(new Date()).getTime();
 
   const selectedMember = useMemo(() => miembros.find(m => m.id === selectedId), [miembros, selectedId]);
+
+  const getDayModalItems = useCallback((day) => {
+    const occupancyFromApi = (selectedMember?.ocupacionCalendario || [])
+      .filter((item) => item.tipo === 'proyecto' || item.tipo === 'tarea');
+    const occupancyOnDayFromApi = occupancyFromApi.filter((item) =>
+      item.fechaInicio && item.fechaFin && isDateBetween(day, item.fechaInicio, item.fechaFin)
+    );
+    const hasTasksFromApi = occupancyOnDayFromApi.some((item) => item.tipo === 'tarea');
+    const taskFallbackOnDay = hasTasksFromApi ? [] : (selectedMember?.todasConFecha || [])
+      .filter((t) => isDateBetween(day, t.fechaInicio || t.creadoEn, t.venceEn || t.completadoEn || t.creadoEn))
+      .map((t) => ({
+        ...t,
+        id: `tarea-fallback-${t.id}`,
+        origenId: t.id,
+        tipo: 'tarea',
+        fechaInicio: t.fechaInicio || t.creadoEn,
+        fechaFin: t.venceEn || t.completadoEn || t.creadoEn,
+      }));
+
+    const occupancyOnDay = uniqueCalendarItems([...occupancyOnDayFromApi, ...taskFallbackOnDay]);
+    const modalItems = [...occupancyOnDay].sort((a, b) => {
+      const tipoA = a.tipo === 'proyecto' ? 0 : 1;
+      const tipoB = b.tipo === 'proyecto' ? 0 : 1;
+      return tipoA - tipoB || String(a.titulo || '').localeCompare(String(b.titulo || ''));
+    });
+
+    return { occupancyOnDay, modalItems };
+  }, [selectedMember]);
+
+  const handleMoverBloqueTareas = useCallback(async (fechaBase, diasAMover) => {
+    const dias = Number(diasAMover);
+    if (!fechaBase || !Number.isInteger(dias) || dias === 0) return false;
+
+    const tareasAMover = new Map();
+    let cursor = startOfDay(fechaBase);
+
+    for (let i = 0; i < 120 && cursor; i += 1) {
+      const { modalItems } = getDayModalItems(cursor);
+      const tareasDelDia = modalItems.filter((item) => item.tipo === 'tarea');
+      if (tareasDelDia.length === 0) break;
+
+      tareasDelDia.forEach((tarea) => {
+        const taskId = getTaskNumericId(tarea);
+        if (!taskId) return;
+        tareasAMover.set(taskId, tarea);
+      });
+
+      cursor = sumarDias(cursor, 1);
+    }
+
+    if (tareasAMover.size === 0) {
+      showToast('No se encontraron tareas para mover en este bloque.', 'info');
+      return false;
+    }
+
+    try {
+      await Promise.all(
+        [...tareasAMover.values()].map((tarea) =>
+          tareasService.editar(getTaskNumericId(tarea), {
+            fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
+            venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
+          })
+        )
+      );
+
+      showToast(`Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`);
+      await onRefresh?.();
+      return true;
+    } catch (error) {
+      showToast(error.message || 'No se pudieron mover las tareas.', 'error');
+      return false;
+    }
+  }, [getDayModalItems, onRefresh, showToast]);
+
+  const moverTareaIndividual = useCallback(async (tarea, diasAMover) => {
+    const dias = Number(diasAMover);
+    const taskId = getTaskNumericId(tarea);
+    if (!taskId || !Number.isInteger(dias) || dias === 0) return false;
+
+    try {
+      await tareasService.editar(taskId, {
+        fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
+        venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
+      });
+      showToast(`Se movió 1 tarea ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`);
+      await onRefresh?.();
+      return true;
+    } catch (error) {
+      showToast(error.message || 'No se pudo mover la tarea.', 'error');
+      return false;
+    }
+  }, [onRefresh, showToast]);
+
+  const ejecutarMovimiento = async (tarea, dias) => {
+    if (!tarea || movingTasks) return;
+    setMovingTasks(true);
+    setActiveTaskMenu(null);
+    const movido = await moverTareaIndividual(tarea, dias);
+    if (movido) setExpandedDay(null);
+    setMovingTasks(false);
+  };
+
+  const pedirMovimientoPersonalizado = async (tarea) => {
+    if (!tarea) return;
+    const value = window.prompt('Mover esta tarea cuántos días?', '3');
+    if (value === null) return;
+    const dias = Number(value);
+    if (!Number.isInteger(dias) || dias === 0) return;
+    await ejecutarMovimiento(tarea, dias);
+  };
 
   const onMonthChange = (delta) => {
     setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + delta, 1));
@@ -698,7 +840,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.6rem' }}>
+      <div style={{ background: '#fff', border: '1px solid #eef2f7', borderRadius: '28px', padding: embedded ? '1rem' : '1.15rem', boxShadow: '0 20px 45px rgba(15,23,42,0.05)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.7rem' }}>
         {weekLabels.map(l => (
           <div key={l} style={{ fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{l}</div>
         ))}
@@ -706,28 +849,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
         {days.map(day => {
           const isCurrentMonth = day.getMonth() === monthDate.getMonth();
           const isToday = startOfDay(day).getTime() === todayKey;
-          const occupancyFromApi = (selectedMember?.ocupacionCalendario || [])
-            .filter((item) => item.tipo === 'proyecto' || item.tipo === 'tarea');
-          const occupancyOnDayFromApi = occupancyFromApi.filter((item) =>
-            item.fechaInicio && item.fechaFin && isDateBetween(day, item.fechaInicio, item.fechaFin)
-          );
-          const hasTasksFromApi = occupancyOnDayFromApi.some((item) => item.tipo === 'tarea');
-          const taskFallbackOnDay = hasTasksFromApi ? [] : (selectedMember?.todasConFecha || [])
-            .filter((t) => isDateBetween(day, t.fechaInicio || t.creadoEn, t.venceEn || t.completadoEn || t.creadoEn))
-            .map((t) => ({
-              ...t,
-              id: `tarea-fallback-${t.id}`,
-              origenId: t.id,
-              tipo: 'tarea',
-              fechaInicio: t.fechaInicio || t.creadoEn,
-              fechaFin: t.venceEn || t.completadoEn || t.creadoEn,
-            }));
-          const occupancyOnDay = uniqueCalendarItems([...occupancyOnDayFromApi, ...taskFallbackOnDay]);
-          const modalItems = [...occupancyOnDay].sort((a, b) => {
-            const tipoA = a.tipo === 'proyecto' ? 0 : 1;
-            const tipoB = b.tipo === 'proyecto' ? 0 : 1;
-            return tipoA - tipoB || String(a.titulo || '').localeCompare(String(b.titulo || ''));
-          });
+          const { occupancyOnDay, modalItems } = getDayModalItems(day);
 
           const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
           const visibleProjects = occupancyOnDay.filter((item) => item.tipo === 'proyecto').slice(0, 2);
@@ -738,6 +860,26 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
             <div
               key={day.toISOString()}
               onClick={() => modalItems.length > 0 && setExpandedDay({ date: day, tasks: modalItems })}
+              onDragOver={(ev) => {
+                if (!draggedGroup) return;
+                ev.preventDefault();
+              }}
+              onDrop={async (ev) => {
+                if (!draggedGroup) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                const delta = Math.round((startOfDay(day).getTime() - startOfDay(draggedGroup.sourceDate).getTime()) / 86400000);
+                if (!delta) {
+                  setDraggedGroup(null);
+                  return;
+                }
+                setActiveTaskMenu(null);
+                setMovingTasks(true);
+                const movido = await handleMoverBloqueTareas(draggedGroup.sourceDate, delta);
+                if (movido) setExpandedDay(null);
+                setDraggedGroup(null);
+                setMovingTasks(false);
+              }}
               style={{
                 minHeight: '116px',
                 borderRadius: '18px',
@@ -754,7 +896,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                 gap: '0.35rem',
                 boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)' : 'none',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                outline: draggedGroup ? '1px dashed rgba(37,99,235,0.16)' : undefined,
               }}
               className={modalItems.length > 0 ? 'hover:border-blue-200 hover:shadow-md' : ''}
             >
@@ -786,6 +929,13 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                 {visibleTasks.map((item) => (
                   <div
                     key={`${item.id}-${day.toISOString()}`}
+                    draggable
+                    onDragStart={(ev) => {
+                      ev.stopPropagation();
+                      setDraggedGroup({ sourceDate: day });
+                      ev.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragEnd={() => setDraggedGroup(null)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -799,7 +949,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                       fontSize: '0.55rem',
                       fontWeight: '900',
                       whiteSpace: 'nowrap',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
+                      cursor: 'grab'
                     }}
                   >
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Tareas</span>
@@ -817,6 +968,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
           );
         })}
       </div>
+      </div>
     </>
   );
 
@@ -826,7 +978,12 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
 
       {expandedDay && (
         <div
-          onClick={(e) => e.target === e.currentTarget && setExpandedDay(null)}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setActiveTaskMenu(null);
+              setExpandedDay(null);
+            }
+          }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
         >
           <div style={{ width: '100%', maxWidth: '500px', background: '#fff', borderRadius: '32px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
@@ -835,32 +992,58 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
                 <h4 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0f172a' }}>{expandedDay.date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
                 <p style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b' }}>Agenda de {selectedMember?.nombre}</p>
               </div>
-              <button onClick={() => setExpandedDay(null)} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-slate-100">
+              <button onClick={() => { setActiveTaskMenu(null); setExpandedDay(null); }} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-slate-100">
                 <ChevronDown size={20} style={{ transform: 'rotate(90deg)' }} />
               </button>
             </div>
             <div style={{ padding: '1.5rem 2rem 2rem', maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {expandedDay.tasks.filter((t) => t.tipo === 'proyecto' || t.tipo === 'tarea').map(t => (
-                <div key={t.id} style={{ padding: '1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px' }}>
+                <div key={t.id} style={{ padding: '1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px', position: 'relative' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.5rem' }}>
                     <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.titulo}</div>
-                    <span style={{
-                      fontSize: '0.6rem',
-                      fontWeight: '900',
-                      color: t.tipo === 'proyecto' ? '#2563eb' : '#16a34a',
-                      background: t.tipo === 'proyecto' ? '#eff6ff' : '#f0fdf4',
-                      padding: '0.2rem 0.5rem',
-                      borderRadius: '8px',
-                      textTransform: 'uppercase',
-                      height: 'fit-content'
-                    }}>
-                      {t.tipo === 'proyecto' ? 'PROYECTO' : 'TAREA'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                      <span style={{
+                        fontSize: '0.6rem',
+                        fontWeight: '900',
+                        color: t.tipo === 'proyecto' ? '#2563eb' : '#16a34a',
+                        background: t.tipo === 'proyecto' ? '#eff6ff' : '#f0fdf4',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '8px',
+                        textTransform: 'uppercase',
+                        height: 'fit-content'
+                      }}>
+                        {t.tipo === 'proyecto' ? 'PROYECTO' : 'TAREA'}
+                      </span>
+                      {t.tipo === 'tarea' && (
+                        <button
+                          type="button"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            setActiveTaskMenu((prev) => (prev === t.id ? null : t.id));
+                          }}
+                          disabled={movingTasks}
+                          title="Mover solo esta tarea"
+                          style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === t.id ? '#eff6ff' : '#fff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
+                        >
+                          <MoreHorizontal size={15} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: t.tipo === 'proyecto' ? '#2563eb' : '#16a34a' }} />
                     {t.proyecto?.nombre || 'Sin proyecto'}
                   </div>
+                  {t.tipo === 'tarea' && activeTaskMenu === t.id && (
+                    <div
+                      onClick={(ev) => ev.stopPropagation()}
+                      style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: '#fff', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
+                    >
+                      <button type="button" onClick={() => ejecutarMovimiento(t, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
+                      <button type="button" onClick={() => ejecutarMovimiento(t, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
+                      <button type="button" onClick={() => pedirMovimientoPersonalizado(t)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -873,6 +1056,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false }) => {
 
 const DashboardAdmin = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [stats, setStats] = useState(null);
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
@@ -882,25 +1066,26 @@ const DashboardAdmin = () => {
   const [activeCalendarView, setActiveCalendarView] = useState('projects');
   const [cargando, setCargando] = useState(true);
 
+  const cargarDashboard = useCallback(async () => {
+    try {
+      const [statsData, projectsData] = await Promise.all([
+        statsService.getAdminStats(),
+        proyectosService.listar(),
+      ]);
+
+      setStats(statsData);
+      setProjects(projectsData.proyectos || []);
+    } catch (error) {
+      console.error(error);
+      showToast?.(error.message || 'No se pudo actualizar el dashboard', 'error');
+    } finally {
+      setCargando(false);
+    }
+  }, [showToast]);
+
   useEffect(() => {
-    const cargar = async () => {
-      try {
-        const [statsData, projectsData] = await Promise.all([
-          statsService.getAdminStats(),
-          proyectosService.listar(),
-        ]);
-
-        setStats(statsData);
-        setProjects(projectsData.proyectos || []);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setCargando(false);
-      }
-    };
-
-    cargar();
-  }, []);
+    cargarDashboard();
+  }, [cargarDashboard]);
 
   const openTaskProject = (task) => {
     const projectId = task?.proyecto?.id || task?.proyectoId || selectedProjectId;
@@ -1083,7 +1268,7 @@ const DashboardAdmin = () => {
                   embedded
                 />
               ) : (
-                <TeamOccupationCalendar miembros={actividadMiembros} embedded />
+                <TeamOccupationCalendar miembros={actividadMiembros} embedded onRefresh={cargarDashboard} />
               )}
             </div>
           )}
@@ -1210,3 +1395,6 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
+
+
+

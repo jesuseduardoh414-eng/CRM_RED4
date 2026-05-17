@@ -47,16 +47,16 @@ const cargarGoogleIdentityScript = () => {
 const VISTAS = [
   { id: 'MES', label: 'Mes', icon: <LayoutGrid size={16} /> },
   { id: 'SEMANA', label: 'Semana', icon: <Columns size={16} /> },
-  { id: 'DIA', label: 'Día', icon: <List size={16} /> },
+  { id: 'DIA', label: 'Dia', icon: <List size={16} /> },
 ];
 
 const DIAS_SEMANA = [
   'Lunes',
   'Martes',
-  'Miércoles',
+  'Miercoles',
   'Jueves',
   'Viernes',
-  'Sábado',
+  'Sabado',
   'Domingo',
 ];
 
@@ -282,12 +282,30 @@ const moverFechaComoDia = (value, days) => {
   return date ? getDateKey(date) : null;
 };
 
+const moverFechaHora = (value, days) => {
+  const date = sumarDias(value, days);
+  return date ? date.toISOString() : null;
+};
+
 const getTaskNumericId = (taskLike) => {
   const rawId = String(taskLike?.id || '');
   const match = rawId.match(/tarea-(\d+)/i);
   if (match) return Number(match[1]);
   const numeric = Number(rawId);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const getEventNumericId = (eventLike) => {
+  const rawId = eventLike?.esOcurrencia ? eventLike?.eventoBaseId : eventLike?.id;
+  const numeric = Number(rawId);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const getDayDiff = (from, to) => {
+  const start = aFechaComparacion(from);
+  const end = aFechaComparacion(to);
+  if (!start || !end) return 0;
+  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
 };
 
 const AgendaPage = () => {
@@ -385,7 +403,7 @@ const AgendaPage = () => {
   const handleResponder = async (eventoId, respuesta) => {
     try {
       await agendaService.responderInvitacion(eventoId, respuesta);
-      showToast(`Invitación ${respuesta === 'aceptado' ? 'aceptada' : 'rechazada'}`);
+      showToast(`Invitacion ${respuesta === 'aceptado' ? 'aceptada' : 'rechazada'}`);
       cargarDatos();
     } catch (error) {
       showToast(error.message, 'error');
@@ -393,7 +411,7 @@ const AgendaPage = () => {
   };
 
   const handleEliminar = async (id) => {
-    if (!window.confirm('¿Eliminar este evento?')) return;
+    if (!window.confirm('Eliminar este evento?')) return;
     try {
       await agendaService.eliminar(id);
       showToast('Evento eliminado');
@@ -448,7 +466,7 @@ const AgendaPage = () => {
         )
       );
 
-      showToast(`Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${dias} d${dias === 1 ? 'ía' : 'ías'}.`);
+      showToast(`Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${dias} dia${dias === 1 ? '' : 's'}.`);
       await cargarDatos();
       return true;
     } catch (error) {
@@ -456,6 +474,132 @@ const AgendaPage = () => {
       return false;
     }
   }, [cargarDatos, configLaboral, diasEspeciales, eventos, showToast]);
+
+  const moverTareaAgenda = useCallback(async (tarea, dias) => {
+    const taskId = getTaskNumericId(tarea);
+    if (!taskId) return;
+
+    await tareasService.editar(taskId, {
+      fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
+      venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
+    });
+  }, []);
+
+  const moverEventoAgenda = useCallback(async (evento, dias) => {
+    const eventId = getEventNumericId(evento);
+    if (!eventId) return;
+
+    await agendaService.actualizar(eventId, {
+      fecha_inicio: evento.todoElDia ? moverFechaComoDia(evento.fechaInicio, dias) : moverFechaHora(evento.fechaInicio, dias),
+      fecha_fin: evento.fechaFin
+        ? (evento.todoElDia ? moverFechaComoDia(evento.fechaFin, dias) : moverFechaHora(evento.fechaFin, dias))
+        : null,
+      todo_el_dia: !!evento.todoElDia,
+      tipo: evento.tipo,
+    });
+  }, []);
+
+  const obtenerBloqueTareasDesdeFecha = useCallback((fechaBase) => {
+    const tareasAgenda = eventos.filter((evento) => evento.tipo === 'tarea');
+    const tareasAMover = new Map();
+    let cursor = aFechaComparacion(fechaBase);
+
+    for (let i = 0; i < 120 && cursor; i += 1) {
+      const tareasDelDia = tareasAgenda.filter((tarea) => itemAgendaOcurreEnFecha(tarea, cursor, configLaboral, diasEspeciales));
+      if (tareasDelDia.length === 0) break;
+
+      tareasDelDia.forEach((tarea) => {
+        const taskId = getTaskNumericId(tarea);
+        if (!taskId) return;
+        tareasAMover.set(taskId, tarea);
+      });
+
+      cursor = sumarDias(cursor, 1);
+    }
+
+    return [...tareasAMover.values()];
+  }, [configLaboral, diasEspeciales, eventos]);
+
+  const handleMoverBloqueTareasDelta = useCallback(async (fechaBase, diasAMover) => {
+    const dias = Number(diasAMover);
+    if (!fechaBase || !Number.isInteger(dias) || dias === 0) return false;
+
+    const tareasAMover = obtenerBloqueTareasDesdeFecha(fechaBase);
+    if (tareasAMover.length === 0) {
+      showToast('No se encontraron tareas para mover en este bloque.', 'info');
+      return false;
+    }
+
+    try {
+      await Promise.all(tareasAMover.map((tarea) => moverTareaAgenda(tarea, dias)));
+      showToast(`Se movieron ${tareasAMover.length} tarea${tareasAMover.length === 1 ? '' : 's'} ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`);
+      await cargarDatos();
+      return true;
+    } catch (error) {
+      showToast(error.message || 'No se pudieron mover las tareas.', 'error');
+      return false;
+    }
+  }, [cargarDatos, moverTareaAgenda, obtenerBloqueTareasDesdeFecha, showToast]);
+
+  const handleMoverItemAgenda = useCallback(async (item, diasAMover) => {
+    const dias = Number(diasAMover);
+    if (!item || !Number.isInteger(dias) || dias === 0) return false;
+
+    try {
+      if (item.tipoVista === 'tarea') {
+        await moverTareaAgenda(item, dias);
+      } else if (item.tipoVista === 'evento' || item.tipoVista === 'reunion') {
+        await moverEventoAgenda(item, dias);
+      } else {
+        return false;
+      }
+
+      await cargarDatos();
+      showToast(`${item.tipoVista === 'tarea' ? 'Tarea' : item.tipoVista === 'reunion' ? 'Reunion' : 'Evento'} movido ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`);
+      return true;
+    } catch (error) {
+      showToast(error.message || 'No se pudo mover el elemento.', 'error');
+      return false;
+    }
+  }, [cargarDatos, moverEventoAgenda, moverTareaAgenda, showToast]);
+
+  const handleMoverGrupoAgenda = useCallback(async ({ sourceDate, targetDate, groupType }) => {
+    const dias = getDayDiff(sourceDate, targetDate);
+    if (!dias) return false;
+
+    try {
+      if (groupType === 'tarea-group') {
+        return handleMoverBloqueTareasDelta(sourceDate, dias);
+      }
+
+      const sourceDay = new Date(sourceDate);
+      const itemsDelDia = eventos.filter((evento) => {
+        if (groupType === 'evento-group') {
+          return (evento.tipo || 'evento') !== 'reunion'
+            && evento.tipo !== 'tarea'
+            && itemAgendaOcurreEnFecha(evento, sourceDay, configLaboral, diasEspeciales)
+            && !esBloqueProyecto(evento);
+        }
+        if (groupType === 'reunion-group') {
+          return evento.tipo === 'reunion' && itemAgendaOcurreEnFecha(evento, sourceDay, configLaboral, diasEspeciales);
+        }
+        return false;
+      });
+
+      if (!itemsDelDia.length) {
+        showToast('No se encontraron elementos para mover.', 'info');
+        return false;
+      }
+
+      await Promise.all(itemsDelDia.map((item) => moverEventoAgenda(item, dias)));
+      await cargarDatos();
+      showToast(`Se movieron ${itemsDelDia.length} elemento${itemsDelDia.length === 1 ? '' : 's'} al nuevo dia.`);
+      return true;
+    } catch (error) {
+      showToast(error.message || 'No se pudo mover el bloque.', 'error');
+      return false;
+    }
+  }, [cargarDatos, configLaboral, diasEspeciales, eventos, handleMoverBloqueTareasDelta, moverEventoAgenda, showToast]);
 
   const handleConnectGoogle = async () => {
     if (!googleCalendar.clientId) {
@@ -478,7 +622,7 @@ const AgendaPage = () => {
           ux_mode: 'popup',
           callback: async (response) => {
             if (!response?.code) {
-              reject(new Error('No se recibió el código de Google'));
+              reject(new Error('No se recibio el codigo de Google'));
               return;
             }
 
@@ -495,7 +639,7 @@ const AgendaPage = () => {
               reject(error);
             }
           },
-          error_callback: () => reject(new Error('No se pudo completar la autorización con Google')),
+          error_callback: () => reject(new Error('No se pudo completar la autorizacion con Google')),
         });
 
         client.requestCode();
@@ -678,7 +822,7 @@ const AgendaPage = () => {
         </div>
       )}
 
-      <div className="card" style={{ padding: '0', borderRadius: isMobile ? '1rem' : '2rem', overflow: 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
+      <div className="card" style={{ padding: view === 'MES' ? (isMobile ? '1rem' : '1.5rem') : '0', borderRadius: isMobile ? '1.2rem' : '2rem', overflow: view === 'MES' ? 'visible' : 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
         {view === 'MES' && (
           <VistaMensual
             date={currentDate}
@@ -695,6 +839,8 @@ const AgendaPage = () => {
             }}
             onSelectDate={handleSelectFechaMes}
             onMoveTaskBlock={handleMoverBloqueTareas}
+            onMoveItem={handleMoverItemAgenda}
+            onMoveGroup={handleMoverGrupoAgenda}
           />
         )}
         {view === 'SEMANA' && (
@@ -797,31 +943,42 @@ const AgendaSkeleton = () => (
   </div>
 );
 
-const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate, onMoveTaskBlock, ocultarBloquesProyecto = false }) => {
+const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate, onMoveItem, onMoveGroup, ocultarBloquesProyecto = false }) => {
   const [expandedDay, setExpandedDay] = useState(null);
   const [activeTaskMenu, setActiveTaskMenu] = useState(null);
   const [movingTasks, setMovingTasks] = useState(false);
+  const [draggedGroup, setDraggedGroup] = useState(null);
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const totalDays = new Date(year, month + 1, 0).getDate();
   const startOffset = firstDay === 0 ? 6 : firstDay - 1;
 
-  const ejecutarMovimiento = async (dias) => {
-    if (!expandedDay || movingTasks || !onMoveTaskBlock) return;
+  const ejecutarMovimiento = async (item, dias) => {
+    if (!item || movingTasks || !onMoveItem) return;
     setMovingTasks(true);
     setActiveTaskMenu(null);
-    const movido = await onMoveTaskBlock(expandedDay.date, dias);
+    const movido = await onMoveItem(item, dias);
     if (movido) setExpandedDay(null);
     setMovingTasks(false);
   };
 
   const pedirMovimientoPersonalizado = async () => {
-    const value = window.prompt('¿Cuántos días quieres mover este bloque de tareas?', '3');
+    const value = window.prompt('Cuantos dias quieres mover este bloque de tareas?', '3');
     if (value === null) return;
     const dias = Number(value);
     if (!Number.isInteger(dias) || dias <= 0) return;
     await ejecutarMovimiento(dias);
+  };
+
+  const pedirMovimientoPersonalizadoItem = async (item) => {
+    if (!item) return;
+    const etiqueta = item.tipoVista === 'tarea' ? 'esta tarea' : item.tipoVista === 'reunion' ? 'esta reunion' : 'este evento';
+    const value = window.prompt(`Mover ${etiqueta} cuántos días?`, '3');
+    if (value === null) return;
+    const dias = Number(value);
+    if (!Number.isInteger(dias) || dias === 0) return;
+    await ejecutarMovimiento(item, dias);
   };
 
   const dias = [];
@@ -829,7 +986,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
   for (let i = 1; i <= totalDays; i += 1) dias.push(i);
 
   return (
-    <div className="grid grid-cols-7 gap-2 lg:gap-3">
+    <div className="grid grid-cols-7 gap-2.5 lg:gap-4">
       {DIAS_SEMANA.map((diaSemana) => (
         <div key={diaSemana} className="pb-1 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
           {isMobile ? diaSemana.charAt(0) : diaSemana}
@@ -919,8 +1076,27 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                 onSelectDate({ fechaInicio: dObj });
               }
             }}
+            onDragOver={(ev) => {
+              if (!dia || !draggedGroup || !onMoveGroup) return;
+              ev.preventDefault();
+            }}
+            onDrop={async (ev) => {
+              if (!dia || !draggedGroup || !onMoveGroup) return;
+              ev.preventDefault();
+              ev.stopPropagation();
+              setActiveTaskMenu(null);
+              setMovingTasks(true);
+              const movido = await onMoveGroup({
+                sourceDate: draggedGroup.sourceDate,
+                targetDate: dObj,
+                groupType: draggedGroup.groupType,
+              });
+              if (movido) setExpandedDay(null);
+              setDraggedGroup(null);
+              setMovingTasks(false);
+            }}
             className={`
-              min-h-[86px] lg:min-h-[116px] p-2 lg:p-2.5 relative transition-colors rounded-[18px] border border-slate-200
+              min-h-[90px] lg:min-h-[122px] p-2.5 lg:p-3 relative transition-colors rounded-[20px] border border-slate-200
               ${dia ? 'cursor-pointer hover:border-blue-200 hover:shadow-md' : 'bg-slate-50/70'}
             `}
             style={{
@@ -930,6 +1106,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
               boxShadow: esHoy
                 ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)'
                 : (diaProyectos.length ? 'inset 0 0 0 1px rgba(37, 99, 235, 0.05)' : undefined),
+              outline: draggedGroup && dia ? '1px dashed rgba(37,99,235,0.16)' : undefined,
             }}
           >
             {dia && (
@@ -970,6 +1147,17 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                         {itemsMostrados.map(item => (
                           <div
                             key={item.id}
+                            draggable={item.type !== 'proyecto-group'}
+                            onDragStart={(ev) => {
+                              if (!dia || item.type === 'proyecto-group') return;
+                              ev.stopPropagation();
+                              setDraggedGroup({
+                                sourceDate: dObj,
+                                groupType: item.type,
+                              });
+                              ev.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragEnd={() => setDraggedGroup(null)}
                             onClick={(ev) => {
                               ev.stopPropagation();
                               setActiveTaskMenu(null);
@@ -995,7 +1183,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             title={item.text}
                           >
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</span>
-                            <span style={{ flexShrink: 0 }}>Ver mas</span>
+                            <span style={{ flexShrink: 0 }}>{item.type === 'proyecto-group' ? 'Ver mas' : 'Arrastrar'}</span>
                           </div>
                         ))}
 
@@ -1074,7 +1262,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                       <span style={{ fontWeight: '900', color: '#0f172a', lineHeight: 1.35, overflowWrap: 'anywhere', paddingRight: item.tipoVista === 'tarea' ? '0.5rem' : 0 }}>{item.tituloVista}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                         <span style={{ fontSize: '0.6rem', fontWeight: '900', textTransform: 'uppercase', color, background: `${color}14`, padding: '0.2rem 0.5rem', borderRadius: '999px' }}>{item.tipoVista}</span>
-                        {item.tipoVista === 'tarea' && (
+                        {(item.tipoVista === 'tarea' || item.tipoVista === 'evento' || item.tipoVista === 'reunion') && (
                           <button
                             type="button"
                             onClick={(ev) => {
@@ -1082,7 +1270,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                               setActiveTaskMenu((prev) => (prev === item.id ? null : item.id));
                             }}
                             disabled={movingTasks}
-                            title="Mover bloque de tareas"
+                            title="Mover solo este elemento"
                             style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === item.id ? '#eff6ff' : '#fff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
                           >
                             <MoreHorizontal size={15} />
@@ -1094,14 +1282,14 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                       <span style={{ width: '7px', height: '7px', borderRadius: '999px', background: color }} />
                       {item.proyecto?.nombre || (item.todoElDia ? 'Todo el dia' : `${formatHora(item.fechaInicio)} - ${formatHora(item.fechaFin || item.fechaInicio)}`)}
                     </div>
-                    {item.tipoVista === 'tarea' && activeTaskMenu === item.id && (
+                    {(item.tipoVista === 'tarea' || item.tipoVista === 'evento' || item.tipoVista === 'reunion') && activeTaskMenu === item.id && (
                       <div
                         onClick={(ev) => ev.stopPropagation()}
                         style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: '#fff', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
                       >
-                        <button type="button" onClick={() => ejecutarMovimiento(1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
-                        <button type="button" onClick={() => ejecutarMovimiento(2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
-                        <button type="button" onClick={pedirMovimientoPersonalizado} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
+                        <button type="button" onClick={() => ejecutarMovimiento(item, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
+                        <button type="button" onClick={() => ejecutarMovimiento(item, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
+                        <button type="button" onClick={() => pedirMovimientoPersonalizadoItem(item)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
                       </div>
                     )}
                   </div>
@@ -1193,7 +1381,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
             ))}
             {eventosTodoElDiaPorDia[dayIdx].length > 2 && (
               <div style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--color-primary)' }}>
-                + {eventosTodoElDiaPorDia[dayIdx].length - 2} más
+                + {eventosTodoElDiaPorDia[dayIdx].length - 2} mas
               </div>
             )}
           </div>
@@ -1447,7 +1635,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
           <div>
             <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{formatFechaLarga(date)}</div>
             <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>
-              {esLaboral ? 'DÍA LABORAL' : diaEspecial?.descripcion || 'DÍA DE DESCANSO'}
+              {esLaboral ? 'DIA LABORAL' : diaEspecial?.descripcion || 'DIA DE DESCANSO'}
             </div>
           </div>
         </div>
@@ -1547,3 +1735,6 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
 };
 
 export default AgendaPage;
+
+
+
