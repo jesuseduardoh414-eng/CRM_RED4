@@ -910,34 +910,6 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', pb: '1rem', marginBottom: '2rem', paddingBottom: '0.5rem' }}>
-        {miembros.map(m => (
-          <button
-            key={m.id}
-            onClick={() => setSelectedId(m.id)}
-            style={{
-              padding: '0.75rem 1.25rem',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: selectedId === m.id ? '#2563eb' : '#e2e8f0',
-              background: selectedId === m.id ? '#eff6ff' : '#fff',
-              color: selectedId === m.id ? '#2563eb' : '#475569',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: selectedId === m.id ? '#2563eb' : '#f1f5f9', color: selectedId === m.id ? '#fff' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '900' }}>
-              {m.nombre.charAt(0)}
-            </div>
-            <span style={{ fontSize: '0.82rem', fontWeight: '800' }}>{m.nombre}</span>
-          </button>
-        ))}
-      </div>
-
       <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.25rem' }}>
         {[
           { id: 'todo', label: 'Todo' },
@@ -990,6 +962,34 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
             ))}
           </select>
         )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', pb: '1rem', marginBottom: '2rem', paddingBottom: '0.5rem' }}>
+        {miembros.map(m => (
+          <button
+            key={m.id}
+            onClick={() => setSelectedId(m.id)}
+            style={{
+              padding: '0.75rem 1.25rem',
+              borderRadius: '16px',
+              border: '1px solid',
+              borderColor: selectedId === m.id ? '#2563eb' : '#e2e8f0',
+              background: selectedId === m.id ? '#eff6ff' : '#fff',
+              color: selectedId === m.id ? '#2563eb' : '#475569',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: selectedId === m.id ? '#2563eb' : '#f1f5f9', color: selectedId === m.id ? '#fff' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '900' }}>
+              {m.nombre.charAt(0)}
+            </div>
+            <span style={{ fontSize: '0.82rem', fontWeight: '800' }}>{m.nombre}</span>
+          </button>
+        ))}
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #eef2f7', borderRadius: '28px', padding: embedded ? '1rem' : '1.15rem', boxShadow: '0 20px 45px rgba(15,23,42,0.05)' }}>

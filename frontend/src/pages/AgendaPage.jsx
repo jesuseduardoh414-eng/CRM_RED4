@@ -335,6 +335,9 @@ const desplazarDiasPatronSemanal = (patronRaw, dias) => {
 };
 
 const getAgendaItemStableKey = (item) => `${item?.tipo || 'evento'}-${item?.esOcurrencia ? item?.eventoBaseId : item?.id}-${item?.fechaInicio || ''}`;
+const getAgendaItemIdentity = (item) => `${item?.tipo || 'evento'}-${item?.esOcurrencia ? item?.eventoBaseId : item?.id}`;
+
+const agendaItemMatchesIdentity = (item, identity) => getAgendaItemIdentity(item) === identity;
 
 const moverItemAgendaLocal = (item, dias) => ({
   ...item,
@@ -422,6 +425,12 @@ const AgendaPage = () => {
       setCargando(false);
     }
   }, [currentDate, showToast, view]);
+
+  const cargarEventosAgenda = useCallback(async () => {
+    const rango = getRangoConsulta(currentDate, view);
+    const resEventos = await agendaService.listar(rango.inicio.toISOString(), rango.fin.toISOString());
+    return resEventos.eventos || [];
+  }, [currentDate, view]);
 
   useEffect(() => {
     cargarDatos();
@@ -587,13 +596,20 @@ const AgendaPage = () => {
     return [...tareasAMover.values()];
   }, [configLaboral, diasEspeciales, eventos]);
 
-  const aplicarCambioOptimistaAgenda = useCallback(async ({ construirSiguienteEstado, ejecutarCambio, mensajeExito, mensajeError }) => {
+  const aplicarCambioOptimistaAgenda = useCallback(async ({ construirSiguienteEstado, ejecutarCambio, mensajeExito, mensajeError, verificar }) => {
     const estadoAnterior = eventos;
     const estadoSiguiente = construirSiguienteEstado(estadoAnterior);
     setEventos(estadoSiguiente);
 
     try {
       await ejecutarCambio();
+      const eventosActualizados = await cargarEventosAgenda();
+      if (verificar && !verificar(eventosActualizados)) {
+        setEventos(estadoAnterior);
+        showToast('El servidor no guardo el movimiento. Intentalo de nuevo.', 'error');
+        return false;
+      }
+      setEventos(eventosActualizados);
       showToast(mensajeExito);
       void cargarDatos();
       return true;
@@ -602,7 +618,7 @@ const AgendaPage = () => {
       showToast(error.message || mensajeError, 'error');
       return false;
     }
-  }, [cargarDatos, eventos, showToast]);
+  }, [cargarDatos, cargarEventosAgenda, eventos, showToast]);
 
   const handleMoverBloqueTareasDelta = useCallback(async (fechaBase, diasAMover) => {
     const dias = Number(diasAMover);
@@ -615,15 +631,23 @@ const AgendaPage = () => {
     }
 
     const keys = new Set(tareasAMover.map((tarea) => getAgendaItemStableKey(tarea)));
+    const identities = new Set(tareasAMover.map(getAgendaItemIdentity));
+    const destino = sumarDias(fechaBase, dias);
     return aplicarCambioOptimistaAgenda({
       construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((evento) => (
         keys.has(getAgendaItemStableKey(evento)) ? moverItemAgendaLocal(evento, dias) : evento
       )),
       ejecutarCambio: () => Promise.all(tareasAMover.map((tarea) => moverTareaAgenda(tarea, dias))),
+      verificar: (eventosActualizados) => destino && [...identities].every((identity) =>
+        eventosActualizados.some((evento) =>
+          agendaItemMatchesIdentity(evento, identity) &&
+          itemAgendaOcurreEnFecha(evento, destino, configLaboral, diasEspeciales)
+        )
+      ),
       mensajeExito: `Se movieron ${tareasAMover.length} tarea${tareasAMover.length === 1 ? '' : 's'} ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`,
       mensajeError: 'No se pudieron mover las tareas.',
     });
-  }, [aplicarCambioOptimistaAgenda, moverTareaAgenda, obtenerBloqueTareasDesdeFecha]);
+  }, [aplicarCambioOptimistaAgenda, configLaboral, diasEspeciales, moverTareaAgenda, obtenerBloqueTareasDesdeFecha]);
 
   const handleMoverItemAgenda = useCallback(async (item, diasAMover) => {
     const dias = Number(diasAMover);
@@ -634,6 +658,8 @@ const AgendaPage = () => {
     }
 
     const itemKey = getAgendaItemStableKey(item);
+    const identity = getAgendaItemIdentity(item);
+    const destino = sumarDias(item.fechaInicio, dias);
     return aplicarCambioOptimistaAgenda({
       construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((evento) => (
         getAgendaItemStableKey(evento) === itemKey ? moverItemAgendaLocal(evento, dias) : evento
@@ -642,10 +668,14 @@ const AgendaPage = () => {
         if (item.tipoVista === 'tarea') return moverTareaAgenda(item, dias);
         return moverEventoAgenda(item, dias);
       },
+      verificar: (eventosActualizados) => destino && eventosActualizados.some((evento) =>
+        agendaItemMatchesIdentity(evento, identity) &&
+        itemAgendaOcurreEnFecha(evento, destino, configLaboral, diasEspeciales)
+      ),
       mensajeExito: `${item.tipoVista === 'tarea' ? 'Tarea' : item.tipoVista === 'reunion' ? 'Reunion' : 'Evento'} movido ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`,
       mensajeError: 'No se pudo mover el elemento.',
     });
-  }, [aplicarCambioOptimistaAgenda, moverEventoAgenda, moverTareaAgenda]);
+  }, [aplicarCambioOptimistaAgenda, configLaboral, diasEspeciales, moverEventoAgenda, moverTareaAgenda]);
 
   const handleMoverGrupoAgenda = useCallback(async ({ sourceDate, targetDate, groupType }) => {
     const dias = getDayDiff(sourceDate, targetDate);
@@ -675,11 +705,19 @@ const AgendaPage = () => {
     }
 
     const keys = new Set(itemsDelDia.map((item) => getAgendaItemStableKey(item)));
+    const identities = new Set(itemsDelDia.map(getAgendaItemIdentity));
+    const destino = new Date(targetDate);
     return aplicarCambioOptimistaAgenda({
       construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((evento) => (
         keys.has(getAgendaItemStableKey(evento)) ? moverItemAgendaLocal(evento, dias) : evento
       )),
       ejecutarCambio: () => Promise.all(itemsDelDia.map((item) => moverEventoAgenda(item, dias))),
+      verificar: (eventosActualizados) => [...identities].every((identity) =>
+        eventosActualizados.some((evento) =>
+          agendaItemMatchesIdentity(evento, identity) &&
+          itemAgendaOcurreEnFecha(evento, destino, configLaboral, diasEspeciales)
+        )
+      ),
       mensajeExito: `Se movieron ${itemsDelDia.length} elemento${itemsDelDia.length === 1 ? '' : 's'} al nuevo dia.`,
       mensajeError: 'No se pudo mover el bloque.',
     });
