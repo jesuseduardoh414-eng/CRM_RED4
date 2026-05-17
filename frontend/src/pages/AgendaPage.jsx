@@ -308,6 +308,16 @@ const getDayDiff = (from, to) => {
   return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
 };
 
+const getAgendaItemStableKey = (item) => `${item?.tipo || 'evento'}-${item?.esOcurrencia ? item?.eventoBaseId : item?.id}-${item?.fechaInicio || ''}`;
+
+const moverItemAgendaLocal = (item, dias) => ({
+  ...item,
+  fechaInicio: item.todoElDia || item.tipo === 'tarea' ? moverFechaComoDia(item.fechaInicio, dias) : moverFechaHora(item.fechaInicio, dias),
+  fechaFin: item.fechaFin
+    ? (item.todoElDia || item.tipo === 'tarea' ? moverFechaComoDia(item.fechaFin, dias) : moverFechaHora(item.fechaFin, dias))
+    : null,
+});
+
 const AgendaPage = () => {
   const { showToast } = useToast();
   const { usuario } = useAuth();
@@ -520,6 +530,23 @@ const AgendaPage = () => {
     return [...tareasAMover.values()];
   }, [configLaboral, diasEspeciales, eventos]);
 
+  const aplicarCambioOptimistaAgenda = useCallback(async ({ construirSiguienteEstado, ejecutarCambio, mensajeExito, mensajeError }) => {
+    const estadoAnterior = eventos;
+    const estadoSiguiente = construirSiguienteEstado(estadoAnterior);
+    setEventos(estadoSiguiente);
+
+    try {
+      await ejecutarCambio();
+      showToast(mensajeExito);
+      void cargarDatos();
+      return true;
+    } catch (error) {
+      setEventos(estadoAnterior);
+      showToast(error.message || mensajeError, 'error');
+      return false;
+    }
+  }, [cargarDatos, eventos, showToast]);
+
   const handleMoverBloqueTareasDelta = useCallback(async (fechaBase, diasAMover) => {
     const dias = Number(diasAMover);
     if (!fechaBase || !Number.isInteger(dias) || dias === 0) return false;
@@ -530,76 +557,76 @@ const AgendaPage = () => {
       return false;
     }
 
-    try {
-      await Promise.all(tareasAMover.map((tarea) => moverTareaAgenda(tarea, dias)));
-      showToast(`Se movieron ${tareasAMover.length} tarea${tareasAMover.length === 1 ? '' : 's'} ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`);
-      await cargarDatos();
-      return true;
-    } catch (error) {
-      showToast(error.message || 'No se pudieron mover las tareas.', 'error');
-      return false;
-    }
-  }, [cargarDatos, moverTareaAgenda, obtenerBloqueTareasDesdeFecha, showToast]);
+    const keys = new Set(tareasAMover.map((tarea) => getAgendaItemStableKey(tarea)));
+    return aplicarCambioOptimistaAgenda({
+      construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((evento) => (
+        keys.has(getAgendaItemStableKey(evento)) ? moverItemAgendaLocal(evento, dias) : evento
+      )),
+      ejecutarCambio: () => Promise.all(tareasAMover.map((tarea) => moverTareaAgenda(tarea, dias))),
+      mensajeExito: `Se movieron ${tareasAMover.length} tarea${tareasAMover.length === 1 ? '' : 's'} ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`,
+      mensajeError: 'No se pudieron mover las tareas.',
+    });
+  }, [aplicarCambioOptimistaAgenda, moverTareaAgenda, obtenerBloqueTareasDesdeFecha]);
 
   const handleMoverItemAgenda = useCallback(async (item, diasAMover) => {
     const dias = Number(diasAMover);
     if (!item || !Number.isInteger(dias) || dias === 0) return false;
 
-    try {
-      if (item.tipoVista === 'tarea') {
-        await moverTareaAgenda(item, dias);
-      } else if (item.tipoVista === 'evento' || item.tipoVista === 'reunion') {
-        await moverEventoAgenda(item, dias);
-      } else {
-        return false;
-      }
-
-      await cargarDatos();
-      showToast(`${item.tipoVista === 'tarea' ? 'Tarea' : item.tipoVista === 'reunion' ? 'Reunion' : 'Evento'} movido ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`);
-      return true;
-    } catch (error) {
-      showToast(error.message || 'No se pudo mover el elemento.', 'error');
+    if (item.tipoVista !== 'tarea' && item.tipoVista !== 'evento' && item.tipoVista !== 'reunion') {
       return false;
     }
-  }, [cargarDatos, moverEventoAgenda, moverTareaAgenda, showToast]);
+
+    const itemKey = getAgendaItemStableKey(item);
+    return aplicarCambioOptimistaAgenda({
+      construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((evento) => (
+        getAgendaItemStableKey(evento) === itemKey ? moverItemAgendaLocal(evento, dias) : evento
+      )),
+      ejecutarCambio: () => {
+        if (item.tipoVista === 'tarea') return moverTareaAgenda(item, dias);
+        return moverEventoAgenda(item, dias);
+      },
+      mensajeExito: `${item.tipoVista === 'tarea' ? 'Tarea' : item.tipoVista === 'reunion' ? 'Reunion' : 'Evento'} movido ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`,
+      mensajeError: 'No se pudo mover el elemento.',
+    });
+  }, [aplicarCambioOptimistaAgenda, moverEventoAgenda, moverTareaAgenda]);
 
   const handleMoverGrupoAgenda = useCallback(async ({ sourceDate, targetDate, groupType }) => {
     const dias = getDayDiff(sourceDate, targetDate);
     if (!dias) return false;
 
-    try {
-      if (groupType === 'tarea-group') {
-        return handleMoverBloqueTareasDelta(sourceDate, dias);
+    if (groupType === 'tarea-group') {
+      return handleMoverBloqueTareasDelta(sourceDate, dias);
+    }
+
+    const sourceDay = new Date(sourceDate);
+    const itemsDelDia = eventos.filter((evento) => {
+      if (groupType === 'evento-group') {
+        return (evento.tipo || 'evento') !== 'reunion'
+          && evento.tipo !== 'tarea'
+          && itemAgendaOcurreEnFecha(evento, sourceDay, configLaboral, diasEspeciales)
+          && !esBloqueProyecto(evento);
       }
-
-      const sourceDay = new Date(sourceDate);
-      const itemsDelDia = eventos.filter((evento) => {
-        if (groupType === 'evento-group') {
-          return (evento.tipo || 'evento') !== 'reunion'
-            && evento.tipo !== 'tarea'
-            && itemAgendaOcurreEnFecha(evento, sourceDay, configLaboral, diasEspeciales)
-            && !esBloqueProyecto(evento);
-        }
-        if (groupType === 'reunion-group') {
-          return evento.tipo === 'reunion' && itemAgendaOcurreEnFecha(evento, sourceDay, configLaboral, diasEspeciales);
-        }
-        return false;
-      });
-
-      if (!itemsDelDia.length) {
-        showToast('No se encontraron elementos para mover.', 'info');
-        return false;
+      if (groupType === 'reunion-group') {
+        return evento.tipo === 'reunion' && itemAgendaOcurreEnFecha(evento, sourceDay, configLaboral, diasEspeciales);
       }
+      return false;
+    });
 
-      await Promise.all(itemsDelDia.map((item) => moverEventoAgenda(item, dias)));
-      await cargarDatos();
-      showToast(`Se movieron ${itemsDelDia.length} elemento${itemsDelDia.length === 1 ? '' : 's'} al nuevo dia.`);
-      return true;
-    } catch (error) {
-      showToast(error.message || 'No se pudo mover el bloque.', 'error');
+    if (!itemsDelDia.length) {
+      showToast('No se encontraron elementos para mover.', 'info');
       return false;
     }
-  }, [cargarDatos, configLaboral, diasEspeciales, eventos, handleMoverBloqueTareasDelta, moverEventoAgenda, showToast]);
+
+    const keys = new Set(itemsDelDia.map((item) => getAgendaItemStableKey(item)));
+    return aplicarCambioOptimistaAgenda({
+      construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((evento) => (
+        keys.has(getAgendaItemStableKey(evento)) ? moverItemAgendaLocal(evento, dias) : evento
+      )),
+      ejecutarCambio: () => Promise.all(itemsDelDia.map((item) => moverEventoAgenda(item, dias))),
+      mensajeExito: `Se movieron ${itemsDelDia.length} elemento${itemsDelDia.length === 1 ? '' : 's'} al nuevo dia.`,
+      mensajeError: 'No se pudo mover el bloque.',
+    });
+  }, [aplicarCambioOptimistaAgenda, configLaboral, diasEspeciales, eventos, handleMoverBloqueTareasDelta, moverEventoAgenda]);
 
   const handleConnectGoogle = async () => {
     if (!googleCalendar.clientId) {

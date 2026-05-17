@@ -136,6 +136,15 @@ const getTaskNumericId = (taskLike) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const getTaskStableKey = (taskLike) => `tarea-${getTaskNumericId(taskLike) || taskLike?.origenId || taskLike?.id}-${taskLike?.fechaInicio || ''}`;
+
+const moverTareaLocal = (tarea, dias) => ({
+  ...tarea,
+  fechaInicio: moverFechaComoDia(tarea.fechaInicio || tarea.creadoEn, dias),
+  fechaFin: moverFechaComoDia(tarea.fechaFin || tarea.venceEn || tarea.fechaInicio || tarea.creadoEn, dias),
+  venceEn: moverFechaComoDia(tarea.venceEn || tarea.fechaFin || tarea.fechaInicio || tarea.creadoEn, dias),
+});
+
 const StatCard = ({ value, sub, icon, color, bg, onClick, helper }) => (
   <button
     type="button"
@@ -653,6 +662,7 @@ const DashboardMiembro = ({ usuario }) => {
 
 const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }) => {
   const { showToast } = useToast();
+  const [localMiembros, setLocalMiembros] = useState(miembros || []);
   const [selectedId, setSelectedId] = useState(miembros[0]?.id || null);
   const [monthDate, setMonthDate] = useState(new Date());
   const [expandedDay, setExpandedDay] = useState(null);
@@ -664,7 +674,14 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
   const weekLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
   const todayKey = startOfDay(new Date()).getTime();
 
-  const selectedMember = useMemo(() => miembros.find(m => m.id === selectedId), [miembros, selectedId]);
+  useEffect(() => {
+    setLocalMiembros(miembros || []);
+    if (!miembros?.some((miembro) => miembro.id === selectedId)) {
+      setSelectedId(miembros?.[0]?.id || null);
+    }
+  }, [miembros, selectedId]);
+
+  const selectedMember = useMemo(() => localMiembros.find(m => m.id === selectedId), [localMiembros, selectedId]);
 
   const getDayModalItems = useCallback((day) => {
     const occupancyFromApi = (selectedMember?.ocupacionCalendario || [])
@@ -694,6 +711,23 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
     return { occupancyOnDay, modalItems };
   }, [selectedMember]);
 
+  const aplicarCambioOptimistaMiembro = useCallback(async ({ construirSiguienteEstado, ejecutarCambio, mensajeExito, mensajeError }) => {
+    const estadoAnterior = localMiembros;
+    const estadoSiguiente = construirSiguienteEstado(estadoAnterior);
+    setLocalMiembros(estadoSiguiente);
+
+    try {
+      await ejecutarCambio();
+      showToast(mensajeExito);
+      void onRefresh?.();
+      return true;
+    } catch (error) {
+      setLocalMiembros(estadoAnterior);
+      showToast(error.message || mensajeError, 'error');
+      return false;
+    }
+  }, [localMiembros, onRefresh, showToast]);
+
   const handleMoverBloqueTareas = useCallback(async (fechaBase, diasAMover) => {
     const dias = Number(diasAMover);
     if (!fechaBase || !Number.isInteger(dias) || dias === 0) return false;
@@ -720,43 +754,60 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
       return false;
     }
 
-    try {
-      await Promise.all(
+    const keys = new Set([...tareasAMover.values()].map((tarea) => getTaskStableKey(tarea)));
+    return aplicarCambioOptimistaMiembro({
+      construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((miembro) => {
+        if (miembro.id !== selectedId) return miembro;
+        return {
+          ...miembro,
+          ocupacionCalendario: (miembro.ocupacionCalendario || []).map((item) => (
+            item.tipo === 'tarea' && keys.has(getTaskStableKey(item)) ? moverTareaLocal(item, dias) : item
+          )),
+          todasConFecha: (miembro.todasConFecha || []).map((item) => (
+            keys.has(getTaskStableKey(item)) ? moverTareaLocal(item, dias) : item
+          )),
+        };
+      }),
+      ejecutarCambio: () => Promise.all(
         [...tareasAMover.values()].map((tarea) =>
           tareasService.editar(getTaskNumericId(tarea), {
             fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
             venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
           })
         )
-      );
-
-      showToast(`Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`);
-      await onRefresh?.();
-      return true;
-    } catch (error) {
-      showToast(error.message || 'No se pudieron mover las tareas.', 'error');
-      return false;
-    }
-  }, [getDayModalItems, onRefresh, showToast]);
+      ),
+      mensajeExito: `Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`,
+      mensajeError: 'No se pudieron mover las tareas.',
+    });
+  }, [aplicarCambioOptimistaMiembro, getDayModalItems, selectedId, showToast]);
 
   const moverTareaIndividual = useCallback(async (tarea, diasAMover) => {
     const dias = Number(diasAMover);
     const taskId = getTaskNumericId(tarea);
     if (!taskId || !Number.isInteger(dias) || dias === 0) return false;
 
-    try {
-      await tareasService.editar(taskId, {
+    const taskKey = getTaskStableKey(tarea);
+    return aplicarCambioOptimistaMiembro({
+      construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((miembro) => {
+        if (miembro.id !== selectedId) return miembro;
+        return {
+          ...miembro,
+          ocupacionCalendario: (miembro.ocupacionCalendario || []).map((item) => (
+            item.tipo === 'tarea' && getTaskStableKey(item) === taskKey ? moverTareaLocal(item, dias) : item
+          )),
+          todasConFecha: (miembro.todasConFecha || []).map((item) => (
+            getTaskStableKey(item) === taskKey ? moverTareaLocal(item, dias) : item
+          )),
+        };
+      }),
+      ejecutarCambio: () => tareasService.editar(taskId, {
         fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
         venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
-      });
-      showToast(`Se movió 1 tarea ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`);
-      await onRefresh?.();
-      return true;
-    } catch (error) {
-      showToast(error.message || 'No se pudo mover la tarea.', 'error');
-      return false;
-    }
-  }, [onRefresh, showToast]);
+      }),
+      mensajeExito: `Se movió 1 tarea ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`,
+      mensajeError: 'No se pudo mover la tarea.',
+    });
+  }, [aplicarCambioOptimistaMiembro, selectedId]);
 
   const ejecutarMovimiento = async (tarea, dias) => {
     if (!tarea || movingTasks) return;
