@@ -1138,6 +1138,22 @@ const DashboardAdmin = () => {
     cargarDashboard();
   }, [cargarDashboard]);
 
+  useEffect(() => {
+    let timeoutId = null;
+    const handleScheduleChanged = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        void cargarDashboard();
+      }, 150);
+    };
+
+    window.addEventListener('crm:schedule-changed', handleScheduleChanged);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('crm:schedule-changed', handleScheduleChanged);
+    };
+  }, [cargarDashboard]);
+
   const openTaskProject = (task) => {
     const projectId = task?.proyecto?.id || task?.proyectoId || selectedProjectId;
     if (projectId) navigate(`/proyectos/${projectId}`);

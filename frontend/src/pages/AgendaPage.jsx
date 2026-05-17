@@ -287,6 +287,13 @@ const moverFechaHora = (value, days) => {
   return date ? date.toISOString() : null;
 };
 
+const moverFechaTodoElDiaIso = (value, days, endOfDay = false) => {
+  const date = sumarDias(value, days);
+  if (!date) return null;
+  date.setHours(endOfDay ? 23 : 12, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  return date.toISOString();
+};
+
 const getTaskNumericId = (taskLike) => {
   const rawId = String(taskLike?.id || '');
   const match = rawId.match(/tarea-(\d+)/i);
@@ -308,14 +315,42 @@ const getDayDiff = (from, to) => {
   return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
 };
 
+const desplazarDiasPatronSemanal = (patronRaw, dias) => {
+  if (!patronRaw) return null;
+  let patron = patronRaw;
+  if (typeof patronRaw === 'string') {
+    try {
+      patron = JSON.parse(patronRaw);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(patron?.dias)) return patron;
+
+  const offset = ((dias % 7) + 7) % 7;
+  return {
+    ...patron,
+    dias: patron.dias.map((dia) => (dia + offset) % 7),
+  };
+};
+
 const getAgendaItemStableKey = (item) => `${item?.tipo || 'evento'}-${item?.esOcurrencia ? item?.eventoBaseId : item?.id}-${item?.fechaInicio || ''}`;
 
 const moverItemAgendaLocal = (item, dias) => ({
   ...item,
-  fechaInicio: item.todoElDia || item.tipo === 'tarea' ? moverFechaComoDia(item.fechaInicio, dias) : moverFechaHora(item.fechaInicio, dias),
+  fechaInicio: item.tipo === 'tarea'
+    ? moverFechaComoDia(item.fechaInicio, dias)
+    : item.todoElDia
+      ? moverFechaTodoElDiaIso(item.fechaInicio, dias)
+      : moverFechaHora(item.fechaInicio, dias),
   fechaFin: item.fechaFin
-    ? (item.todoElDia || item.tipo === 'tarea' ? moverFechaComoDia(item.fechaFin, dias) : moverFechaHora(item.fechaFin, dias))
+    ? (item.tipo === 'tarea'
+      ? moverFechaComoDia(item.fechaFin, dias)
+      : item.todoElDia
+        ? moverFechaTodoElDiaIso(item.fechaFin, dias, true)
+        : moverFechaHora(item.fechaFin, dias))
     : null,
+  patronRecurrencia: item.patronRecurrencia ? desplazarDiasPatronSemanal(item.patronRecurrencia, dias) : item.patronRecurrencia,
 });
 
 const AgendaPage = () => {
@@ -390,6 +425,22 @@ const AgendaPage = () => {
 
   useEffect(() => {
     cargarDatos();
+  }, [cargarDatos]);
+
+  useEffect(() => {
+    let timeoutId = null;
+    const handleScheduleChanged = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        void cargarDatos();
+      }, 150);
+    };
+
+    window.addEventListener('crm:schedule-changed', handleScheduleChanged);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('crm:schedule-changed', handleScheduleChanged);
+    };
   }, [cargarDatos]);
 
   const nav = {
@@ -499,13 +550,19 @@ const AgendaPage = () => {
     const eventId = getEventNumericId(evento);
     if (!eventId) return;
 
+    const patronRecurrente = desplazarDiasPatronSemanal(evento.patronRecurrencia, dias);
+    const esRecurrente = !!(evento.esRecurrente || evento.esOcurrencia || evento.patronRecurrencia);
+
     await agendaService.actualizar(eventId, {
-      fecha_inicio: evento.todoElDia ? moverFechaComoDia(evento.fechaInicio, dias) : moverFechaHora(evento.fechaInicio, dias),
+      fecha_inicio: evento.todoElDia ? moverFechaTodoElDiaIso(evento.fechaInicio, dias) : moverFechaHora(evento.fechaInicio, dias),
       fecha_fin: evento.fechaFin
-        ? (evento.todoElDia ? moverFechaComoDia(evento.fechaFin, dias) : moverFechaHora(evento.fechaFin, dias))
+        ? (evento.todoElDia ? moverFechaTodoElDiaIso(evento.fechaFin, dias, true) : moverFechaHora(evento.fechaFin, dias))
         : null,
       todo_el_dia: !!evento.todoElDia,
       tipo: evento.tipo,
+      es_recurrente: esRecurrente,
+      patron_recurrencia: esRecurrente ? patronRecurrente : undefined,
+      fecha_fin_recurrencia: evento.fechaFinRecurr || undefined,
     });
   }, []);
 

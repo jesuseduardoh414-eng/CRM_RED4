@@ -30,6 +30,11 @@ const handleResponse = async (res) => {
   return data;
 };
 
+const emitScheduleSync = (detail = {}) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('crm:schedule-changed', { detail }));
+};
+
 // ── Auth ──────────────────────────────────────────────────────────────────
 
 export const authService = {
@@ -156,21 +161,27 @@ export const tareasService = {
       headers: getHeaders(isMultipart),
       body: isMultipart ? datos : JSON.stringify(datos),
     });
-    return handleResponse(res);
+    const data = await handleResponse(res);
+    emitScheduleSync({ entity: 'tarea', action: 'crear', proyectoId });
+    return data;
   },
 
   editar: async (id, datos) => {
     const res = await fetch(`${API_URL}/tareas/${id}`, {
       method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos),
     });
-    return handleResponse(res);
+    const data = await handleResponse(res);
+    emitScheduleSync({ entity: 'tarea', action: 'editar', id });
+    return data;
   },
 
   eliminar: async (id) => {
     const res = await fetch(`${API_URL}/tareas/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
-    return handleResponse(res);
+    const data = await handleResponse(res);
+    emitScheduleSync({ entity: 'tarea', action: 'eliminar', id });
+    return data;
   },
 
   // Cambio rápido de estado inline
@@ -178,7 +189,9 @@ export const tareasService = {
     const res = await fetch(`${API_URL}/tareas/${id}/estado`, {
       method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ estado }),
     });
-    return handleResponse(res);
+    const data = await handleResponse(res);
+    emitScheduleSync({ entity: 'tarea', action: 'estado', id, estado });
+    return data;
   },
 
   // ── Importación masiva ──────────────────────────────────────────────────
@@ -420,19 +433,25 @@ export const agendaService = {
     const res = await fetch(`${API_URL}/agenda`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
     });
-    return handleResponse(res);
+    const data = await handleResponse(res);
+    emitScheduleSync({ entity: 'agenda', action: 'crear' });
+    return data;
   },
   editar: async (id, datos) => {
     const res = await fetch(`${API_URL}/agenda/${id}`, {
       method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos),
     });
-    return handleResponse(res);
+    const data = await handleResponse(res);
+    emitScheduleSync({ entity: 'agenda', action: 'editar', id });
+    return data;
   },
   eliminar: async (id) => {
     const res = await fetch(`${API_URL}/agenda/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
-    return handleResponse(res);
+    const data = await handleResponse(res);
+    emitScheduleSync({ entity: 'agenda', action: 'eliminar', id });
+    return data;
   },
   recordatorios: async () => {
     const res = await fetch(`${API_URL}/agenda/recordatorios`, { headers: getHeaders() });
