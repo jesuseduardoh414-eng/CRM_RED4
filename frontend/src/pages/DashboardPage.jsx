@@ -145,6 +145,8 @@ const moverTareaLocal = (tarea, dias) => ({
   venceEn: moverFechaComoDia(tarea.venceEn || tarea.fechaFin || tarea.fechaInicio || tarea.creadoEn, dias),
 });
 
+const getItemProjectId = (item) => item?.proyecto?.id || item?.proyectoId || (item?.tipo === 'proyecto' ? item?.origenId : null);
+
 const StatCard = ({ value, sub, icon, color, bg, onClick, helper }) => (
   <button
     type="button"
@@ -669,6 +671,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
   const [activeTaskMenu, setActiveTaskMenu] = useState(null);
   const [movingTasks, setMovingTasks] = useState(false);
   const [draggedGroup, setDraggedGroup] = useState(null);
+  const [calendarFilter, setCalendarFilter] = useState('todo');
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState('todos');
 
   const days = useMemo(() => buildCalendarDays(monthDate), [monthDate]);
   const weekLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
@@ -683,15 +687,57 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
 
   const selectedMember = useMemo(() => localMiembros.find(m => m.id === selectedId), [localMiembros, selectedId]);
 
+  const projectFilterOptions = useMemo(() => {
+    const byId = new Map();
+    const sources = [
+      ...(selectedMember?.ocupacionCalendario || []),
+      ...(selectedMember?.todasConFecha || []),
+    ];
+
+    sources.forEach((item) => {
+      const projectId = getItemProjectId(item);
+      const projectName = item?.proyecto?.nombre || (item?.tipo === 'proyecto' ? String(item.titulo || '').replace(/^Proyecto:\s*/i, '') : null);
+      if (projectId && projectName && !byId.has(String(projectId))) {
+        byId.set(String(projectId), { id: String(projectId), nombre: projectName });
+      }
+    });
+
+    return [...byId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [selectedMember]);
+
+  useEffect(() => {
+    if (selectedProjectFilter !== 'todos' && !projectFilterOptions.some((project) => project.id === selectedProjectFilter)) {
+      setSelectedProjectFilter('todos');
+    }
+  }, [projectFilterOptions, selectedProjectFilter]);
+
+  const itemPasaFiltros = useCallback((item) => {
+    if (calendarFilter !== 'todo') {
+      const tipo = item.tipo === 'reunion' ? 'reunion' : item.tipo;
+      if (calendarFilter === 'proyecto' && tipo !== 'proyecto') return false;
+      if (calendarFilter === 'tarea' && tipo !== 'tarea') return false;
+      if (calendarFilter === 'evento' && tipo !== 'evento') return false;
+      if (calendarFilter === 'reunion' && tipo !== 'reunion') return false;
+    }
+
+    if ((calendarFilter === 'proyecto' || calendarFilter === 'tarea') && selectedProjectFilter !== 'todos') {
+      return String(getItemProjectId(item) || '') === selectedProjectFilter;
+    }
+
+    return true;
+  }, [calendarFilter, selectedProjectFilter]);
+
   const getDayModalItems = useCallback((day) => {
     const occupancyFromApi = (selectedMember?.ocupacionCalendario || [])
-      .filter((item) => item.tipo === 'proyecto' || item.tipo === 'tarea');
+      .filter((item) => ['proyecto', 'tarea', 'evento', 'reunion'].includes(item.tipo))
+      .filter(itemPasaFiltros);
     const occupancyOnDayFromApi = occupancyFromApi.filter((item) =>
       item.fechaInicio && item.fechaFin && isDateBetween(day, item.fechaInicio, item.fechaFin)
     );
     const hasTasksFromApi = occupancyOnDayFromApi.some((item) => item.tipo === 'tarea');
-    const taskFallbackOnDay = hasTasksFromApi ? [] : (selectedMember?.todasConFecha || [])
+    const taskFallbackOnDay = hasTasksFromApi || calendarFilter === 'proyecto' || calendarFilter === 'evento' || calendarFilter === 'reunion' ? [] : (selectedMember?.todasConFecha || [])
       .filter((t) => isDateBetween(day, t.fechaInicio || t.creadoEn, t.venceEn || t.completadoEn || t.creadoEn))
+      .filter(itemPasaFiltros)
       .map((t) => ({
         ...t,
         id: `tarea-fallback-${t.id}`,
@@ -703,13 +749,14 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
 
     const occupancyOnDay = uniqueCalendarItems([...occupancyOnDayFromApi, ...taskFallbackOnDay]);
     const modalItems = [...occupancyOnDay].sort((a, b) => {
-      const tipoA = a.tipo === 'proyecto' ? 0 : 1;
-      const tipoB = b.tipo === 'proyecto' ? 0 : 1;
+      const tipoOrden = { proyecto: 0, tarea: 1, evento: 2, reunion: 3 };
+      const tipoA = tipoOrden[a.tipo] ?? 9;
+      const tipoB = tipoOrden[b.tipo] ?? 9;
       return tipoA - tipoB || String(a.titulo || '').localeCompare(String(b.titulo || ''));
     });
 
     return { occupancyOnDay, modalItems };
-  }, [selectedMember]);
+  }, [calendarFilter, itemPasaFiltros, selectedMember]);
 
   const aplicarCambioOptimistaMiembro = useCallback(async ({ construirSiguienteEstado, ejecutarCambio, mensajeExito, mensajeError }) => {
     const estadoAnterior = localMiembros;
@@ -891,6 +938,60 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
         ))}
       </div>
 
+      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.25rem' }}>
+        {[
+          { id: 'todo', label: 'Todo' },
+          { id: 'proyecto', label: 'Proyectos' },
+          { id: 'tarea', label: 'Tareas' },
+          { id: 'evento', label: 'Eventos' },
+          { id: 'reunion', label: 'Reuniones' },
+        ].map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            onClick={() => setCalendarFilter(filter.id)}
+            style={{
+              border: '1px solid',
+              borderColor: calendarFilter === filter.id ? '#2563eb' : '#dbe3ef',
+              background: calendarFilter === filter.id ? '#2563eb' : '#fff',
+              color: calendarFilter === filter.id ? '#fff' : '#475569',
+              borderRadius: '999px',
+              padding: '0.55rem 0.9rem',
+              fontSize: '0.72rem',
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              cursor: 'pointer',
+            }}
+          >
+            {filter.label}
+          </button>
+        ))}
+
+        {(calendarFilter === 'proyecto' || calendarFilter === 'tarea') && (
+          <select
+            value={selectedProjectFilter}
+            onChange={(event) => setSelectedProjectFilter(event.target.value)}
+            style={{
+              border: '1px solid #dbe3ef',
+              background: '#fff',
+              color: '#0f172a',
+              borderRadius: '999px',
+              padding: '0.55rem 0.9rem',
+              fontSize: '0.72rem',
+              fontWeight: '900',
+              outline: 'none',
+              maxWidth: '260px',
+            }}
+          >
+            <option value="todos">Todos los proyectos</option>
+            {projectFilterOptions.map((project) => (
+              <option key={project.id} value={project.id}>{project.nombre}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
       <div style={{ background: '#fff', border: '1px solid #eef2f7', borderRadius: '28px', padding: embedded ? '1rem' : '1.15rem', boxShadow: '0 20px 45px rgba(15,23,42,0.05)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.7rem' }}>
         {weekLabels.map(l => (
@@ -905,7 +1006,9 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
           const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
           const visibleProjects = occupancyOnDay.filter((item) => item.tipo === 'proyecto').slice(0, 2);
           const visibleTasks = occupancyOnDay.filter((item) => item.tipo === 'tarea').slice(0, 1);
-          const hiddenCount = Math.max(occupancyOnDay.length - (visibleProjects.length + visibleTasks.length), 0);
+          const visibleEvents = occupancyOnDay.filter((item) => item.tipo === 'evento').slice(0, 1);
+          const visibleMeetings = occupancyOnDay.filter((item) => item.tipo === 'reunion').slice(0, 1);
+          const hiddenCount = Math.max(occupancyOnDay.length - (visibleProjects.length + visibleTasks.length + visibleEvents.length + visibleMeetings.length), 0);
 
           return (
             <div
@@ -1009,6 +1112,46 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                   </div>
                 ))}
 
+                {visibleEvents.map((item) => (
+                  <div
+                    key={`${item.id}-${day.toISOString()}`}
+                    style={{
+                      padding: '0.25rem 0.4rem',
+                      borderRadius: '7px',
+                      background: '#f3e8ff',
+                      color: '#7c3aed',
+                      borderLeft: '2px solid #7c3aed',
+                      fontSize: '0.55rem',
+                      fontWeight: '900',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {item.titulo}
+                  </div>
+                ))}
+
+                {visibleMeetings.map((item) => (
+                  <div
+                    key={`${item.id}-${day.toISOString()}`}
+                    style={{
+                      padding: '0.25rem 0.4rem',
+                      borderRadius: '7px',
+                      background: '#fce7f3',
+                      color: '#db2777',
+                      borderLeft: '2px solid #db2777',
+                      fontSize: '0.55rem',
+                      fontWeight: '900',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {item.titulo}
+                  </div>
+                ))}
+
                 {hiddenCount > 0 && (
                   <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#475569', paddingLeft: '0.2rem' }}>
                     +{hiddenCount} mas
@@ -1048,7 +1191,13 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
               </button>
             </div>
             <div style={{ padding: '1.5rem 2rem 2rem', maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {expandedDay.tasks.filter((t) => t.tipo === 'proyecto' || t.tipo === 'tarea').map(t => (
+              {expandedDay.tasks.filter((t) => ['proyecto', 'tarea', 'evento', 'reunion'].includes(t.tipo)).map(t => {
+                const isProject = t.tipo === 'proyecto';
+                const isTask = t.tipo === 'tarea';
+                const color = isProject ? '#2563eb' : isTask ? '#16a34a' : t.tipo === 'reunion' ? '#db2777' : '#7c3aed';
+                const bg = isProject ? '#eff6ff' : isTask ? '#f0fdf4' : t.tipo === 'reunion' ? '#fce7f3' : '#f3e8ff';
+                const label = isProject ? 'PROYECTO' : isTask ? 'TAREA' : t.tipo === 'reunion' ? 'REUNION' : 'EVENTO';
+                return (
                 <div key={t.id} style={{ padding: '1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px', position: 'relative' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.5rem' }}>
                     <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.titulo}</div>
@@ -1056,14 +1205,14 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                       <span style={{
                         fontSize: '0.6rem',
                         fontWeight: '900',
-                        color: t.tipo === 'proyecto' ? '#2563eb' : '#16a34a',
-                        background: t.tipo === 'proyecto' ? '#eff6ff' : '#f0fdf4',
+                        color,
+                        background: bg,
                         padding: '0.2rem 0.5rem',
                         borderRadius: '8px',
                         textTransform: 'uppercase',
                         height: 'fit-content'
                       }}>
-                        {t.tipo === 'proyecto' ? 'PROYECTO' : 'TAREA'}
+                        {label}
                       </span>
                       {t.tipo === 'tarea' && (
                         <button
@@ -1082,8 +1231,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                     </div>
                   </div>
                   <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: t.tipo === 'proyecto' ? '#2563eb' : '#16a34a' }} />
-                    {t.proyecto?.nombre || 'Sin proyecto'}
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color }} />
+                    {t.proyecto?.nombre || (t.tipo === 'evento' || t.tipo === 'reunion' ? 'Agenda' : 'Sin proyecto')}
                   </div>
                   {t.tipo === 'tarea' && activeTaskMenu === t.id && (
                     <div
@@ -1096,7 +1245,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                     </div>
                   )}
                 </div>
-              ))}
+              );})}
             </div>
           </div>
         </div>

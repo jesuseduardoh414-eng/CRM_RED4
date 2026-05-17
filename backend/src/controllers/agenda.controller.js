@@ -325,8 +325,8 @@ const editar = async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para editar este evento' });
     }
 
-    const fechaInicioFinal = fecha_inicio ? new Date(fecha_inicio) : existente.fechaInicio;
-    const fechaFinFinal = fecha_fin ? new Date(fecha_fin) : existente.fechaFin;
+    const fechaInicioFinal = fecha_inicio !== undefined ? new Date(fecha_inicio) : existente.fechaInicio;
+    const fechaFinFinal = fecha_fin !== undefined ? (fecha_fin ? new Date(fecha_fin) : null) : existente.fechaFin;
     if (
       fechaFinFinal &&
       !Number.isNaN(fechaInicioFinal.getTime()) &&

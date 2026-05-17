@@ -553,7 +553,7 @@ const AgendaPage = () => {
     const patronRecurrente = desplazarDiasPatronSemanal(evento.patronRecurrencia, dias);
     const esRecurrente = !!(evento.esRecurrente || evento.esOcurrencia || evento.patronRecurrencia);
 
-    await agendaService.actualizar(eventId, {
+    await agendaService.editar(eventId, {
       fecha_inicio: evento.todoElDia ? moverFechaTodoElDiaIso(evento.fechaInicio, dias) : moverFechaHora(evento.fechaInicio, dias),
       fecha_fin: evento.fechaFin
         ? (evento.todoElDia ? moverFechaTodoElDiaIso(evento.fechaFin, dias, true) : moverFechaHora(evento.fechaFin, dias))

@@ -82,6 +82,18 @@ const resumenOcupacionProyecto = (proyecto, usuarioId) => ({
   proyecto: { id: proyecto.id, nombre: proyecto.nombre },
 });
 
+const resumenOcupacionEvento = (evento) => ({
+  id: `evento-${evento.id}`,
+  origenId: evento.id,
+  tipo: evento.tipo === 'reunion' ? 'reunion' : 'evento',
+  titulo: evento.titulo,
+  estado: null,
+  prioridad: null,
+  fechaInicio: evento.fechaInicio,
+  fechaFin: evento.fechaFin || evento.fechaInicio,
+  proyecto: evento.proyecto || null,
+});
+
 const getTopUsuariosProductividad = async (usuario) => {
   const hoy = new Date();
   const inicioSemanaActual = inicioDeSemana(hoy);
@@ -138,6 +150,12 @@ const getActividadMiembros = async (usuario) => {
   const ahora = new Date();
   const hoyFin = finDelDia(ahora);
   const semanaFin = finDeSemana(ahora);
+  const calendarioInicio = new Date(ahora);
+  calendarioInicio.setMonth(calendarioInicio.getMonth() - 6);
+  calendarioInicio.setHours(0, 0, 0, 0);
+  const calendarioFin = new Date(ahora);
+  calendarioFin.setMonth(calendarioFin.getMonth() + 12);
+  calendarioFin.setHours(23, 59, 59, 999);
   const filtroAreaUsuarios = esAdminDeArea(usuario) ? { area: usuario.area } : {};
   const scopeProyecto = buildScopeProyectoParaAdmin(usuario);
 
@@ -158,7 +176,7 @@ const getActividadMiembros = async (usuario) => {
     const hoyInicio = new Date(ahora);
     hoyInicio.setHours(0,0,0,0);
 
-    const [hechas, hechasHoy, enProgreso, faltanHoy, faltanSemana, todasConFecha, proyectosActivos] = await Promise.all([
+    const [hechas, hechasHoy, enProgreso, faltanHoy, faltanSemana, todasConFecha, proyectosActivos, eventosAgenda] = await Promise.all([
       prisma.tarea.findMany({
         where: { ...tareasDelUsuario, estado: 'HECHO', ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
         select: tareaResumenSelect
@@ -205,12 +223,41 @@ const getActividadMiembros = async (usuario) => {
           fechaInicio: true,
           fechaFin: true
         }
+      }),
+      prisma.evento.findMany({
+        where: {
+          AND: [
+            {
+              OR: [
+                { usuarioId: miembro.id },
+                { creadoPorId: miembro.id },
+                { invitados: { some: { usuarioId: miembro.id, estado: 'aceptado' } } },
+              ],
+            },
+            { fechaInicio: { lte: calendarioFin } },
+            {
+              OR: [
+                { fechaFin: { gte: calendarioInicio } },
+                { fechaFin: null, fechaInicio: { gte: calendarioInicio } },
+              ],
+            },
+          ],
+        },
+        select: {
+          id: true,
+          titulo: true,
+          tipo: true,
+          fechaInicio: true,
+          fechaFin: true,
+          proyecto: { select: { id: true, nombre: true } },
+        },
       })
     ]);
 
     const ocupacionCalendario = [
       ...proyectosActivos.map((proyecto) => resumenOcupacionProyecto(proyecto, miembro.id)),
       ...todasConFecha.map(resumenOcupacionTarea),
+      ...eventosAgenda.map(resumenOcupacionEvento),
     ].filter((item) => item.fechaInicio && item.fechaFin);
 
     return {
