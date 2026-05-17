@@ -5,6 +5,41 @@ const ESTADOS_VALIDOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 const PRIORIDADES_VALIDAS = ['BAJA', 'MEDIA', 'ALTA'];
 const COLUMNAS_EXCEL = ['numeroActividad', 'titulo', 'descripcion', 'estado', 'prioridad', 'fechaInicio', 'venceEn', 'asignadoEmail'];
 
+const normalizarEstado = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (!raw) return '';
+
+  const mapa = {
+    PENDIENTE: 'PENDIENTE',
+    'POR HACER': 'PENDIENTE',
+    POR_HACER: 'PENDIENTE',
+    EN_PROGRESO: 'EN_PROGRESO',
+    'EN PROGRESO': 'EN_PROGRESO',
+    'EN-PROGRESO': 'EN_PROGRESO',
+    HECHO: 'HECHO',
+    COMPLETADO: 'HECHO',
+    TERMINADO: 'HECHO',
+  };
+
+  return mapa[raw] || raw;
+};
+
+const normalizarPrioridad = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (!raw) return '';
+
+  const mapa = {
+    BAJA: 'BAJA',
+    MEDIA: 'MEDIA',
+    ALTA: 'ALTA',
+    LOW: 'BAJA',
+    MEDIUM: 'MEDIA',
+    HIGH: 'ALTA',
+  };
+
+  return mapa[raw] || raw;
+};
+
 const formatDateInput = (value) => {
   if (!value) return '';
   const date = value instanceof Date ? value : new Date(value);
@@ -16,8 +51,8 @@ const normalizarFilaEditable = (raw = {}) => ({
   numeroActividad: raw.numeroActividad ?? '',
   titulo: raw.titulo ?? '',
   descripcion: raw.descripcion ?? '',
-  estado: raw.estado ?? '',
-  prioridad: raw.prioridad ?? '',
+  estado: normalizarEstado(raw.estado),
+  prioridad: normalizarPrioridad(raw.prioridad),
   fechaInicio: raw.fechaInicio ?? '',
   venceEn: raw.venceEn ?? '',
   asignadoEmail: raw.asignadoEmail ?? '',
@@ -32,7 +67,7 @@ const validarFila = (raw) => {
   }
 
   if (fila.estado) {
-    const estado = String(fila.estado).trim().toUpperCase();
+    const estado = normalizarEstado(fila.estado);
     if (!ESTADOS_VALIDOS.includes(estado)) {
       errores.push(`estado "${fila.estado}" no valido (usa: ${ESTADOS_VALIDOS.join(' | ')})`);
     } else {
@@ -41,7 +76,7 @@ const validarFila = (raw) => {
   }
 
   if (fila.prioridad) {
-    const prioridad = String(fila.prioridad).trim().toUpperCase();
+    const prioridad = normalizarPrioridad(fila.prioridad);
     if (!PRIORIDADES_VALIDAS.includes(prioridad)) {
       errores.push(`prioridad "${fila.prioridad}" no valida (usa: ${PRIORIDADES_VALIDAS.join(' | ')})`);
     } else {

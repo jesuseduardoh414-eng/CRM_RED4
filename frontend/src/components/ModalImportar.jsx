@@ -77,13 +77,48 @@ const MODOS = [
 const ESTADOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 const PRIORIDADES = ['BAJA', 'MEDIA', 'ALTA'];
 
+const normalizarEstado = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (!raw) return '';
+
+  const mapa = {
+    PENDIENTE: 'PENDIENTE',
+    'POR HACER': 'PENDIENTE',
+    POR_HACER: 'PENDIENTE',
+    EN_PROGRESO: 'EN_PROGRESO',
+    'EN PROGRESO': 'EN_PROGRESO',
+    'EN-PROGRESO': 'EN_PROGRESO',
+    HECHO: 'HECHO',
+    COMPLETADO: 'HECHO',
+    TERMINADO: 'HECHO',
+  };
+
+  return mapa[raw] || raw;
+};
+
+const normalizarPrioridad = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (!raw) return '';
+
+  const mapa = {
+    BAJA: 'BAJA',
+    MEDIA: 'MEDIA',
+    ALTA: 'ALTA',
+    LOW: 'BAJA',
+    MEDIUM: 'MEDIA',
+    HIGH: 'ALTA',
+  };
+
+  return mapa[raw] || raw;
+};
+
 const normalizarFila = (fila = {}) => ({
   fila: fila.fila,
   numeroActividad: fila.numeroActividad ?? '',
   titulo: fila.titulo ?? '',
   descripcion: fila.descripcion ?? '',
-  estado: fila.estado ?? '',
-  prioridad: fila.prioridad ?? '',
+  estado: normalizarEstado(fila.estado),
+  prioridad: normalizarPrioridad(fila.prioridad),
   fechaInicio: fila.fechaInicio ?? '',
   venceEn: fila.venceEn ?? '',
   asignadoEmail: fila.asignadoEmail ?? '',
@@ -99,11 +134,11 @@ const validarFilaPreview = (fila) => {
     if (!Number.isInteger(numero) || numero <= 0) errores.push('El número de actividad debe ser un entero mayor a 0.');
   }
 
-  if (fila.estado && !ESTADOS.includes(String(fila.estado).trim().toUpperCase())) {
+  if (fila.estado && !ESTADOS.includes(normalizarEstado(fila.estado))) {
     errores.push('El estado no es válido.');
   }
 
-  if (fila.prioridad && !PRIORIDADES.includes(String(fila.prioridad).trim().toUpperCase())) {
+  if (fila.prioridad && !PRIORIDADES.includes(normalizarPrioridad(fila.prioridad))) {
     errores.push('La prioridad no es válida.');
   }
 
@@ -256,7 +291,15 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
   const updateFila = (filaIndex, field, value) => {
     setPreviewRows((prev) => prev.map((fila, index) => (
       index === filaIndex
-        ? { ...fila, [field]: value }
+        ? {
+            ...fila,
+            [field]:
+              field === 'estado'
+                ? normalizarEstado(value)
+                : field === 'prioridad'
+                  ? normalizarPrioridad(value)
+                  : value,
+          }
         : fila
     )));
   };

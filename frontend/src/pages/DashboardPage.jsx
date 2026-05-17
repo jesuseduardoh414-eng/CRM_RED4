@@ -33,6 +33,14 @@ const AREA_CONF = {
   MARKETING: { label: 'Marketing', color: '#db2777', bg: 'rgba(219,39,119,0.08)', icon: <Megaphone size={18} /> },
 };
 
+const CALENDAR_FILTERS = [
+  { id: 'todo', label: 'Todo', color: '#0f172a', bg: '#f8fafc' },
+  { id: 'proyecto', label: 'Proyectos', color: '#2563eb', bg: '#eff6ff' },
+  { id: 'tarea', label: 'Tareas', color: '#16a34a', bg: '#f0fdf4' },
+  { id: 'evento', label: 'Eventos', color: '#7c3aed', bg: '#f5f3ff' },
+  { id: 'reunion', label: 'Reuniones', color: '#db2777', bg: '#fdf2f8' },
+];
+
 const IconProjects = () => <Layers size={20} strokeWidth={2.5} />;
 const IconTasks = () => <ClipboardList size={20} strokeWidth={2.5} />;
 const IconChart = () => <BarChart3 size={20} strokeWidth={2.5} />;
@@ -136,6 +144,34 @@ const getTaskNumericId = (taskLike) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const PROJECT_TIMELINE_COLORS = [
+  { solid: '#2563eb', soft: 'rgba(37,99,235,0.16)', accent: '#93c5fd' },
+  { solid: '#0f766e', soft: 'rgba(15,118,110,0.16)', accent: '#5eead4' },
+  { solid: '#c2410c', soft: 'rgba(194,65,12,0.16)', accent: '#fdba74' },
+  { solid: '#7c3aed', soft: 'rgba(124,58,237,0.16)', accent: '#c4b5fd' },
+  { solid: '#db2777', soft: 'rgba(219,39,119,0.16)', accent: '#f9a8d4' },
+  { solid: '#65a30d', soft: 'rgba(101,163,13,0.16)', accent: '#bef264' },
+  { solid: '#1d4ed8', soft: 'rgba(29,78,216,0.16)', accent: '#60a5fa' },
+  { solid: '#b45309', soft: 'rgba(180,83,9,0.16)', accent: '#fbbf24' },
+];
+
+const PROJECT_STATUS_CONF = {
+  ACTIVO: { label: 'Activo', color: '#2563eb', bg: '#eff6ff', icon: 'live' },
+  PAUSA: { label: 'En pausa', color: '#f59e0b', bg: '#fff7ed', icon: 'pause' },
+  PAUSADO: { label: 'En pausa', color: '#f59e0b', bg: '#fff7ed', icon: 'pause' },
+  TERMINADO: { label: 'Terminado', color: '#16a34a', bg: '#f0fdf4', icon: 'done' },
+  CERRADO: { label: 'Cerrado', color: '#16a34a', bg: '#f0fdf4', icon: 'done' },
+};
+
+const getProjectTimelineColor = (project) => {
+  const seed = String(project?.nombre || project?.id || '')
+    .split('')
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return PROJECT_TIMELINE_COLORS[seed % PROJECT_TIMELINE_COLORS.length];
+};
+
+const getProjectStatusConf = (estado) => PROJECT_STATUS_CONF[String(estado || 'ACTIVO').toUpperCase()] || PROJECT_STATUS_CONF.ACTIVO;
+
 const getTaskStableKey = (taskLike) => `tarea-${getTaskNumericId(taskLike) || taskLike?.origenId || taskLike?.id}-${taskLike?.fechaInicio || ''}`;
 
 const moverTareaLocal = (tarea, dias) => ({
@@ -146,6 +182,19 @@ const moverTareaLocal = (tarea, dias) => ({
 });
 
 const getItemProjectId = (item) => item?.proyecto?.id || item?.proyectoId || (item?.tipo === 'proyecto' ? item?.origenId : null);
+const getItemProjectName = (item) => item?.proyecto?.nombre || (item?.tipo === 'proyecto' ? String(item?.titulo || '').replace(/^Proyecto:\s*/i, '').trim() : null);
+const normalizeProjectName = (name) => String(name || '').trim().toLowerCase();
+
+const itemMatchesProjectFilter = (item, projectFilter) => {
+  if (!projectFilter) return true;
+  const itemProjectId = String(getItemProjectId(item) || '');
+  const itemProjectName = normalizeProjectName(getItemProjectName(item));
+
+  return (
+    (itemProjectId && projectFilter.ids?.includes(itemProjectId)) ||
+    (itemProjectName && itemProjectName === projectFilter.key)
+  );
+};
 
 const StatCard = ({ value, sub, icon, color, bg, onClick, helper }) => (
   <button
@@ -481,6 +530,8 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
 
   const getOffset = (date) => ((startOfDay(date) - startOfDay(range.start)) / (1000 * 60 * 60 * 24) / totalDays) * 100;
 
+  const todayOffset = getOffset(new Date());
+
   if (!validEntries.length) {
     return (
       <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed #cbd5e1', borderRadius: '20px', color: '#64748b', fontWeight: '700' }}>
@@ -504,12 +555,36 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
         </div>
       </div>
 
-      <div style={{ maxHeight: '520px', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', padding: '0.85rem 1.1rem', borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.74rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <Layers size={14} color="#2563eb" />
+          Identidad por proyecto
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#2563eb', background: '#eff6ff', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
+            {validEntries.length} proyectos visibles
+          </span>
+          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#f59e0b', background: '#fff7ed', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
+            Línea roja = hoy
+          </span>
+        </div>
+      </div>
+
+      <div style={{ maxHeight: '520px', overflowY: 'auto', position: 'relative' }}>
+        {todayOffset >= 0 && todayOffset <= 100 && (
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: `calc(240px + ${todayOffset}%)`, width: '2px', background: 'rgba(239,68,68,0.9)', zIndex: 8, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: '8px', left: '-5px', width: '12px', height: '12px', borderRadius: '999px', background: '#ef4444', boxShadow: '0 0 0 4px rgba(239,68,68,0.14)' }} />
+          </div>
+        )}
         {validEntries.map((entry, index) => {
           const offset = getOffset(entry.start);
           const width = Math.max(4, getOffset(entry.end) - offset);
           const selected = selectedProjectId === entry.project.id;
           const progress = entry.project.progresoGeneral ?? entry.project.progreso ?? 0;
+          const palette = getProjectTimelineColor(entry.project);
+          const statusConf = getProjectStatusConf(entry.project.estado);
+          const miembros = entry.project.miembros || [];
+          const previewMiembros = miembros.slice(0, 3);
 
           return (
             <button
@@ -525,24 +600,76 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
                 background: selected ? '#eff6ff' : '#fff',
                 cursor: 'pointer',
                 textAlign: 'left',
+                position: 'relative',
               }}
             >
-              <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid #e2e8f0' }}>
-                <div style={{ fontWeight: '900', color: '#0f172a', marginBottom: '0.25rem' }}>{entry.project.nombre}</div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700' }}>
-                  {entry.project.estado || 'ACTIVO'} - {progress}% - {entry.project._count?.tareas || 0} tareas
+              <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid #e2e8f0', position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: palette.solid }} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.35rem' }}>
+                  <div style={{ fontWeight: '900', color: '#0f172a', lineHeight: 1.2 }}>{entry.project.nombre}</div>
+                  <span style={{ flexShrink: 0, width: '11px', height: '11px', borderRadius: '999px', background: palette.solid, boxShadow: `0 0 0 5px ${palette.soft}` }} />
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.55rem' }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: statusConf.color, background: statusConf.bg, padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
+                    {statusConf.label}
+                  </span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: palette.solid, background: palette.soft, padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
+                    {progress}%
+                  </span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#475569', background: '#f8fafc', padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
+                    {entry.project._count?.tareas || 0} tareas
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.28rem' }}>
+                    {previewMiembros.length > 0 ? previewMiembros.map((miembro) => (
+                      <div
+                        key={miembro.id}
+                        title={miembro.nombre}
+                        style={{
+                          width: '26px',
+                          height: '26px',
+                          borderRadius: '999px',
+                          background: '#fff',
+                          border: `2px solid ${palette.soft}`,
+                          color: palette.solid,
+                          fontSize: '0.68rem',
+                          fontWeight: '900',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: '-6px',
+                          boxShadow: '0 2px 8px rgba(15,23,42,0.06)',
+                        }}
+                      >
+                        {String(miembro.nombre || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )) : (
+                      <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94a3b8' }}>Sin integrantes</div>
+                    )}
+                    {miembros.length > 3 && (
+                      <span style={{ marginLeft: '0.45rem', fontSize: '0.68rem', fontWeight: '900', color: '#64748b' }}>+{miembros.length - 3}</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b' }}>
+                    {miembros.length} miembro{miembros.length === 1 ? '' : 's'}
+                  </div>
                 </div>
               </div>
 
               <div style={{ flex: 1, position: 'relative', minHeight: '72px', padding: '1rem 0.75rem' }}>
-                <div style={{ position: 'absolute', left: `${offset}%`, width: `${width}%`, top: '50%', transform: 'translateY(-50%)', height: '18px', borderRadius: '999px', background: selected ? '#1d4ed8' : '#2563eb', boxShadow: selected ? '0 8px 20px rgba(37,99,235,0.28)' : '0 6px 16px rgba(37,99,235,0.18)' }}>
-                  <div style={{ width: `${progress}%`, maxWidth: '100%', height: '100%', borderRadius: '999px', background: '#93c5fd' }} />
+                <div style={{ position: 'absolute', left: `${offset}%`, width: `${width}%`, top: '50%', transform: 'translateY(-50%)', height: '22px', borderRadius: '999px', background: selected ? palette.solid : `${palette.solid}dd`, boxShadow: selected ? `0 12px 24px ${palette.soft}` : `0 8px 18px ${palette.soft}`, overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 50%)' }} />
+                  <div style={{ width: `${progress}%`, maxWidth: '100%', height: '100%', borderRadius: '999px', background: palette.accent, opacity: 0.92 }} />
                 </div>
-                <div style={{ position: 'absolute', left: `${offset}%`, top: 'calc(50% + 16px)', fontSize: '0.66rem', fontWeight: '800', color: '#64748b' }}>
+                <div style={{ position: 'absolute', left: `${offset}%`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: '#64748b' }}>
                   {new Date(entry.start).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
                 </div>
-                <div style={{ position: 'absolute', left: `calc(${offset + width}% - 44px)`, top: 'calc(50% + 16px)', fontSize: '0.66rem', fontWeight: '800', color: '#64748b' }}>
+                <div style={{ position: 'absolute', left: `calc(${offset + width}% - 44px)`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: '#64748b' }}>
                   {new Date(entry.end).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
+                </div>
+                <div style={{ position: 'absolute', left: `calc(${offset}% + 10px)`, top: 'calc(50% - 22px)', fontSize: '0.65rem', fontWeight: '900', color: palette.solid, background: '#fff', border: `1px solid ${palette.soft}`, padding: '0.2rem 0.45rem', borderRadius: '999px' }}>
+                  {progress}% avance
                 </div>
               </div>
             </button>
@@ -688,7 +815,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
   const selectedMember = useMemo(() => localMiembros.find(m => m.id === selectedId), [localMiembros, selectedId]);
 
   const projectFilterOptions = useMemo(() => {
-    const byId = new Map();
+    const byName = new Map();
     const sources = [
       ...(selectedMember?.ocupacionCalendario || []),
       ...(selectedMember?.todasConFecha || []),
@@ -696,14 +823,25 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
 
     sources.forEach((item) => {
       const projectId = getItemProjectId(item);
-      const projectName = item?.proyecto?.nombre || (item?.tipo === 'proyecto' ? String(item.titulo || '').replace(/^Proyecto:\s*/i, '') : null);
-      if (projectId && projectName && !byId.has(String(projectId))) {
-        byId.set(String(projectId), { id: String(projectId), nombre: projectName });
+      const projectName = getItemProjectName(item);
+      const key = normalizeProjectName(projectName);
+      if (!key || !projectName) return;
+
+      const existing = byName.get(key);
+      if (!existing) {
+        byName.set(key, { id: key, key, nombre: projectName, ids: projectId ? [String(projectId)] : [] });
+      } else if (projectId && !existing.ids.includes(String(projectId))) {
+        byName.set(key, { ...existing, ids: [...existing.ids, String(projectId)] });
       }
     });
 
-    return [...byId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return [...byName.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [selectedMember]);
+
+  const selectedProjectOption = useMemo(
+    () => projectFilterOptions.find((project) => project.id === selectedProjectFilter) || null,
+    [projectFilterOptions, selectedProjectFilter]
+  );
 
   useEffect(() => {
     if (selectedProjectFilter !== 'todos' && !projectFilterOptions.some((project) => project.id === selectedProjectFilter)) {
@@ -721,11 +859,11 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
     }
 
     if ((calendarFilter === 'proyecto' || calendarFilter === 'tarea') && selectedProjectFilter !== 'todos') {
-      return String(getItemProjectId(item) || '') === selectedProjectFilter;
+      return itemMatchesProjectFilter(item, selectedProjectOption);
     }
 
     return true;
-  }, [calendarFilter, selectedProjectFilter]);
+  }, [calendarFilter, selectedProjectFilter, selectedProjectOption]);
 
   const getDayModalItems = useCallback((day) => {
     const occupancyFromApi = (selectedMember?.ocupacionCalendario || [])
@@ -910,57 +1048,133 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.25rem' }}>
-        {[
-          { id: 'todo', label: 'Todo' },
-          { id: 'proyecto', label: 'Proyectos' },
-          { id: 'tarea', label: 'Tareas' },
-          { id: 'evento', label: 'Eventos' },
-          { id: 'reunion', label: 'Reuniones' },
-        ].map((filter) => (
-          <button
-            key={filter.id}
-            type="button"
-            onClick={() => setCalendarFilter(filter.id)}
-            style={{
-              border: '1px solid',
-              borderColor: calendarFilter === filter.id ? '#2563eb' : '#dbe3ef',
-              background: calendarFilter === filter.id ? '#2563eb' : '#fff',
-              color: calendarFilter === filter.id ? '#fff' : '#475569',
-              borderRadius: '999px',
-              padding: '0.55rem 0.9rem',
-              fontSize: '0.72rem',
-              fontWeight: '900',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              cursor: 'pointer',
-            }}
-          >
-            {filter.label}
-          </button>
-        ))}
+      <div style={{ border: '1px solid #e2e8f0', borderRadius: '22px', padding: '1rem', marginBottom: '1.25rem', background: '#fff', boxShadow: '0 16px 38px rgba(15,23,42,0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>
+              Filtros del calendario
+            </div>
+            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', marginTop: '0.18rem' }}>
+              {selectedProjectFilter === 'todos'
+                ? 'Mostrando los elementos disponibles del miembro.'
+                : `Contexto: ${selectedProjectOption?.nombre || 'proyecto seleccionado'}`}
+            </div>
+          </div>
 
-        {(calendarFilter === 'proyecto' || calendarFilter === 'tarea') && (
-          <select
-            value={selectedProjectFilter}
-            onChange={(event) => setSelectedProjectFilter(event.target.value)}
-            style={{
-              border: '1px solid #dbe3ef',
-              background: '#fff',
-              color: '#0f172a',
-              borderRadius: '999px',
-              padding: '0.55rem 0.9rem',
-              fontSize: '0.72rem',
-              fontWeight: '900',
-              outline: 'none',
-              maxWidth: '260px',
-            }}
-          >
-            <option value="todos">Todos los proyectos</option>
-            {projectFilterOptions.map((project) => (
-              <option key={project.id} value={project.id}>{project.nombre}</option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+            {CALENDAR_FILTERS.map((filter) => {
+              const active = calendarFilter === filter.id;
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setCalendarFilter(filter.id)}
+                  style={{
+                    border: '1px solid',
+                    borderColor: active ? filter.color : '#dbe3ef',
+                    background: active ? filter.color : filter.bg,
+                    color: active ? '#fff' : filter.color,
+                    borderRadius: '999px',
+                    padding: '0.55rem 0.85rem',
+                    fontSize: '0.7rem',
+                    fontWeight: '900',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    boxShadow: active ? `0 10px 22px ${filter.color}22` : 'none',
+                  }}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {(calendarFilter === 'proyecto' || calendarFilter === 'tarea' || selectedProjectFilter !== 'todos') && (
+          <div style={{ marginTop: '0.9rem', paddingTop: '0.9rem', borderTop: '1px solid #eef2f7' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              <div>
+                <div style={{ fontSize: '0.66rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>
+                  Proyecto
+                </div>
+                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginTop: '0.12rem' }}>
+                  {calendarFilter === 'proyecto'
+                    ? 'Escoge un proyecto para ver solo su rango.'
+                    : calendarFilter === 'tarea'
+                      ? 'Escoge un proyecto para ver solo sus tareas.'
+                      : 'Este proyecto queda como contexto para los filtros.'}
+                </div>
+              </div>
+              {selectedProjectFilter !== 'todos' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedProjectFilter('todos')}
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    background: '#fff',
+                    color: '#64748b',
+                    borderRadius: '999px',
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.66rem',
+                    fontWeight: '900',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Limpiar proyecto
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.55rem', overflowX: 'auto', paddingBottom: '0.2rem' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedProjectFilter('todos')}
+                style={{
+                  flexShrink: 0,
+                  border: '1px solid',
+                  borderColor: selectedProjectFilter === 'todos' ? '#0f172a' : '#dbe3ef',
+                  background: selectedProjectFilter === 'todos' ? '#0f172a' : '#fff',
+                  color: selectedProjectFilter === 'todos' ? '#fff' : '#475569',
+                  borderRadius: '999px',
+                  padding: '0.55rem 0.85rem',
+                  fontSize: '0.7rem',
+                  fontWeight: '900',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Todos los proyectos
+              </button>
+              {projectFilterOptions.map((project) => {
+                const active = selectedProjectFilter === project.id;
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => setSelectedProjectFilter(project.id)}
+                    style={{
+                      flexShrink: 0,
+                      border: '1px solid',
+                      borderColor: active ? '#2563eb' : '#dbe3ef',
+                      background: active ? '#eff6ff' : '#fff',
+                      color: active ? '#2563eb' : '#475569',
+                      borderRadius: '999px',
+                      padding: '0.55rem 0.85rem',
+                      fontSize: '0.7rem',
+                      fontWeight: '900',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      boxShadow: active ? '0 10px 22px rgba(37,99,235,0.12)' : 'none',
+                    }}
+                  >
+                    {project.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 

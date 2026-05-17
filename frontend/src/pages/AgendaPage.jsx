@@ -50,6 +50,14 @@ const VISTAS = [
   { id: 'DIA', label: 'Dia', icon: <List size={16} /> },
 ];
 
+const FILTROS_AGENDA = [
+  { id: 'todo', label: 'Todo', color: '#0f172a', bg: '#f8fafc' },
+  { id: 'proyecto', label: 'Proyectos', color: '#2563eb', bg: '#eff6ff' },
+  { id: 'tarea', label: 'Tareas', color: '#16a34a', bg: '#f0fdf4' },
+  { id: 'evento', label: 'Eventos', color: '#7c3aed', bg: '#f5f3ff' },
+  { id: 'reunion', label: 'Reuniones', color: '#db2777', bg: '#fdf2f8' },
+];
+
 const DIAS_SEMANA = [
   'Lunes',
   'Martes',
@@ -175,12 +183,45 @@ const esBloqueProyecto = (evento) =>
   typeof evento?.titulo === 'string' &&
   evento.titulo.trim().startsWith('Proyecto:');
 
+const getTipoAgenda = (evento) => {
+  if (evento?.tipo === 'tarea') return 'tarea';
+  if (evento?.tipo === 'reunion') return 'reunion';
+  if (evento?.tipo === 'proyecto' || esBloqueProyecto(evento)) return 'proyecto';
+  return 'evento';
+};
+
+const getProyectoIdAgenda = (evento) => {
+  const id = evento?.proyecto?.id || evento?.proyectoId || (getTipoAgenda(evento) === 'proyecto' ? evento?.origenId : null);
+  return id ? String(id) : null;
+};
+
+const getProyectoNombreAgenda = (evento) => {
+  if (evento?.proyecto?.nombre) return evento.proyecto.nombre;
+  if (getTipoAgenda(evento) === 'proyecto') return String(evento?.titulo || '').replace(/^Proyecto:\s*/i, '').trim();
+  return null;
+};
+
+const normalizarNombreProyecto = (nombre) => String(nombre || '').trim().toLowerCase();
+
+const agendaItemPerteneceAProyecto = (evento, proyectoSeleccionado) => {
+  if (!proyectoSeleccionado) return true;
+  const itemProjectId = getProyectoIdAgenda(evento);
+  const itemProjectName = normalizarNombreProyecto(getProyectoNombreAgenda(evento));
+
+  return (
+    (itemProjectId && proyectoSeleccionado.ids?.includes(itemProjectId)) ||
+    (itemProjectName && itemProjectName === proyectoSeleccionado.key)
+  );
+};
+
 const tareaOcurreEnFecha = (tarea, date, configLaboral, diasEspeciales) => {
   if (!eventoOcurreEnFecha(tarea, date)) return false;
 
   const fin = aFechaComparacion(tarea.fechaFin || tarea.fechaInicio);
+  const inicio = aFechaComparacion(tarea.fechaInicio);
   const objetivo = aFechaComparacion(date);
   if (!fin || !objetivo) return false;
+  if (inicio && getDateKey(inicio) === getDateKey(objetivo)) return true;
   if (getDateKey(fin) === getDateKey(objetivo)) return true;
 
   return getEstadoLaboral(objetivo, configLaboral, diasEspeciales).esLaboral;
@@ -304,8 +345,7 @@ const getTaskNumericId = (taskLike) => {
 
 const getEventNumericId = (eventLike) => {
   const rawId = eventLike?.esOcurrencia ? eventLike?.eventoBaseId : eventLike?.id;
-  const numeric = Number(rawId);
-  return Number.isFinite(numeric) ? numeric : null;
+  return rawId ? String(rawId) : null;
 };
 
 const getDayDiff = (from, to) => {
@@ -381,11 +421,57 @@ const AgendaPage = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [prefillData, setPrefillData] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [agendaFilterType, setAgendaFilterType] = useState('todo');
+  const [agendaProjectFilter, setAgendaProjectFilter] = useState('todos');
   const ocultarBloquesProyecto = usuario?.rol === 'ADMIN';
-  const eventosVisibles = useMemo(
-    () => (ocultarBloquesProyecto ? eventos.filter((evento) => !esBloqueProyecto(evento)) : eventos),
-    [eventos, ocultarBloquesProyecto]
+  const agendaProjectOptions = useMemo(() => {
+    const projects = new Map();
+
+    eventos.forEach((evento) => {
+      const tipo = getTipoAgenda(evento);
+      if (tipo !== 'proyecto' && tipo !== 'tarea' && !evento?.proyecto?.id) return;
+
+      const id = getProyectoIdAgenda(evento);
+      const nombre = getProyectoNombreAgenda(evento);
+      const key = normalizarNombreProyecto(nombre);
+      if (!key || !nombre) return;
+
+      const existente = projects.get(key);
+      if (!existente) {
+        projects.set(key, { id: key, key, nombre, ids: id ? [id] : [] });
+      } else if (id && !existente.ids.includes(id)) {
+        projects.set(key, { ...existente, ids: [...existente.ids, id] });
+      }
+    });
+
+    return [...projects.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [eventos]);
+  const selectedAgendaProject = useMemo(
+    () => agendaProjectOptions.find((project) => project.id === agendaProjectFilter) || null,
+    [agendaProjectFilter, agendaProjectOptions]
   );
+
+  const eventosVisibles = useMemo(
+    () => eventos.filter((evento) => {
+      const tipo = getTipoAgenda(evento);
+      if (ocultarBloquesProyecto && tipo === 'proyecto') return false;
+      if (agendaFilterType !== 'todo' && tipo !== agendaFilterType) return false;
+      if (agendaProjectFilter !== 'todos') {
+        return agendaItemPerteneceAProyecto(evento, selectedAgendaProject);
+      }
+      return true;
+    }),
+    [agendaFilterType, agendaProjectFilter, eventos, ocultarBloquesProyecto, selectedAgendaProject]
+  );
+
+  useEffect(() => {
+    if (
+      agendaProjectFilter !== 'todos' &&
+      !agendaProjectOptions.some((project) => project.id === agendaProjectFilter)
+    ) {
+      setAgendaProjectFilter('todos');
+    }
+  }, [agendaProjectFilter, agendaProjectOptions]);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 1024);
@@ -800,12 +886,12 @@ const AgendaPage = () => {
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: isMobile ? '1.75rem' : '3rem',
-          flexWrap: 'wrap',
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
           gap: '1rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '2rem', flexWrap: 'wrap' }}>
-          <h1 style={{ fontSize: isMobile ? '1.5rem' : '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '2rem', flexWrap: isMobile ? 'wrap' : 'nowrap', flexShrink: 0 }}>
+          <h1 style={{ fontSize: isMobile ? '1.5rem' : '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0, width: isMobile ? 'auto' : '380px', whiteSpace: 'nowrap' }}>
             {view === 'MES' ? formatMesAnio(currentDate).toUpperCase() : formatFechaLarga(currentDate)}
           </h1>
           <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
@@ -822,7 +908,7 @@ const AgendaPage = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap', justifyContent: 'flex-end', flexShrink: 0 }}>
           <button
             type="button"
             onClick={googleCalendar.connected ? handleDisconnectGoogle : handleConnectGoogle}
@@ -943,6 +1029,145 @@ const AgendaPage = () => {
           </div>
         </div>
       )}
+
+      <div
+        className="card"
+        style={{
+          padding: isMobile ? '0.9rem' : '1.1rem 1.25rem',
+          marginBottom: '1.25rem',
+          borderRadius: '1.35rem',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 16px 38px rgba(15,23,42,0.05)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '0.72rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>
+              Filtros del calendario
+            </div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', marginTop: '0.2rem' }}>
+              {agendaProjectFilter === 'todos'
+                ? 'Primero elige que tipo de elementos quieres ver.'
+                : `Contexto: ${agendaProjectOptions.find((project) => project.id === agendaProjectFilter)?.nombre || 'proyecto seleccionado'}`}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
+            {FILTROS_AGENDA.map((filter) => {
+              const active = agendaFilterType === filter.id;
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setAgendaFilterType(filter.id)}
+                  style={{
+                    border: '1px solid',
+                    borderColor: active ? filter.color : '#dbe3ef',
+                    background: active ? filter.color : filter.bg,
+                    color: active ? '#fff' : filter.color,
+                    borderRadius: '999px',
+                    padding: '0.55rem 0.85rem',
+                    fontSize: '0.7rem',
+                    fontWeight: 900,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    boxShadow: active ? `0 10px 22px ${filter.color}22` : 'none',
+                  }}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {(agendaFilterType === 'proyecto' || agendaFilterType === 'tarea' || agendaProjectFilter !== 'todos') && (
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eef2f7' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              <div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>
+                  Proyecto
+                </div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', marginTop: '0.12rem' }}>
+                  {agendaFilterType === 'proyecto'
+                    ? 'Escoge un proyecto para ver solo su rango en el calendario.'
+                    : agendaFilterType === 'tarea'
+                      ? 'Escoge un proyecto para ver solo sus tareas.'
+                      : 'Este proyecto queda como contexto para los filtros.'}
+                </div>
+              </div>
+              {agendaProjectFilter !== 'todos' && (
+                <button
+                  type="button"
+                  onClick={() => setAgendaProjectFilter('todos')}
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    background: '#fff',
+                    color: '#64748b',
+                    borderRadius: '999px',
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.68rem',
+                    fontWeight: 900,
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Limpiar proyecto
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.55rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+              <button
+                type="button"
+                onClick={() => setAgendaProjectFilter('todos')}
+                style={{
+                  flexShrink: 0,
+                  border: '1px solid',
+                  borderColor: agendaProjectFilter === 'todos' ? '#0f172a' : '#dbe3ef',
+                  background: agendaProjectFilter === 'todos' ? '#0f172a' : '#fff',
+                  color: agendaProjectFilter === 'todos' ? '#fff' : '#475569',
+                  borderRadius: '999px',
+                  padding: '0.55rem 0.85rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Todos los proyectos
+              </button>
+              {agendaProjectOptions.map((project) => {
+                const active = agendaProjectFilter === project.id;
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => setAgendaProjectFilter(project.id)}
+                    style={{
+                      flexShrink: 0,
+                      border: '1px solid',
+                      borderColor: active ? '#2563eb' : '#dbe3ef',
+                      background: active ? '#eff6ff' : '#fff',
+                      color: active ? '#2563eb' : '#475569',
+                      borderRadius: '999px',
+                      padding: '0.55rem 0.85rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 900,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      boxShadow: active ? '0 10px 22px rgba(37,99,235,0.12)' : 'none',
+                    }}
+                  >
+                    {project.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="card" style={{ padding: view === 'MES' ? (isMobile ? '1rem' : '1.5rem') : '0', borderRadius: isMobile ? '1.2rem' : '2rem', overflow: view === 'MES' ? 'visible' : 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
         {view === 'MES' && (
@@ -1185,6 +1410,12 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
           ...eventosModal,
           ...reunionesModal,
         ] : [];
+        const itemsPorGrupo = {
+          'proyecto-group': proyectosModal,
+          'tarea-group': tareasModal,
+          'evento-group': eventosModal,
+          'reunion-group': reunionesModal,
+        };
 
         return (
           <div
@@ -1283,7 +1514,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             onClick={(ev) => {
                               ev.stopPropagation();
                               setActiveTaskMenu(null);
-                              setExpandedDay({ date: dObj, items: itemsParaModal });
+                              setExpandedDay({ date: dObj, items: itemsPorGrupo[item.type] || [] });
                             }}
                             style={{ 
                               display: 'flex',

@@ -1,144 +1,228 @@
-import { useState, useCallback, useMemo } from 'react';
-import { 
-  User, 
-  Flag, 
-  Circle, 
-  BarChart3, 
+import { useMemo, useState } from 'react';
+import {
+  AlertTriangle,
   CalendarRange,
-  Clock
+  CheckCircle2,
+  Circle,
+  Clock3,
+  Flag,
+  Layers3,
+  Sparkles,
+  User,
 } from 'lucide-react';
 
-// ── Configuración de colores (Material Palette) ──────────────────────────────
 const AREA_COLORS = {
-  DESARROLLO:     { bar: '#00a2ff', text: '#fff' },
-  ADMINISTRACION: { bar: '#ff9100', text: '#fff' },
-  COMUNICACION:   { bar: '#d500f9', text: '#fff' },
-  MARKETING:      { bar: '#db2777', text: '#fff' },
-  DEFAULT:        { bar: '#6c757d', text: '#fff' },
+  DESARROLLO: { solid: '#2563eb', soft: 'rgba(37,99,235,0.14)' },
+  ADMINISTRACION: { solid: '#f59e0b', soft: 'rgba(245,158,11,0.16)' },
+  COMUNICACION: { solid: '#db2777', soft: 'rgba(219,39,119,0.14)' },
+  MARKETING: { solid: '#8b5cf6', soft: 'rgba(139,92,246,0.14)' },
+  DEFAULT: { solid: '#64748b', soft: 'rgba(100,116,139,0.14)' },
 };
 
-const ESTADO_LABELS = {
-  PENDIENTE:   'Por hacer',
-  EN_PROGRESO: 'En progreso',
-  HECHO:       'Hecho',
+const STATUS_CONF = {
+  PENDIENTE: {
+    label: 'Por hacer',
+    solid: '#94a3b8',
+    soft: 'rgba(148,163,184,0.18)',
+    glow: 'rgba(148,163,184,0.24)',
+    icon: <Clock3 size={12} />,
+  },
+  EN_PROGRESO: {
+    label: 'En progreso',
+    solid: '#2563eb',
+    soft: 'rgba(37,99,235,0.16)',
+    glow: 'rgba(37,99,235,0.28)',
+    icon: <Sparkles size={12} />,
+  },
+  HECHO: {
+    label: 'Hecho',
+    solid: '#16a34a',
+    soft: 'rgba(22,163,74,0.16)',
+    glow: 'rgba(22,163,74,0.24)',
+    icon: <CheckCircle2 size={12} />,
+  },
 };
 
-// ── Utilidades ──────────────────────────────────────────────────────────────
-const formatFecha = (d) => new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
-const formatMes   = (d) => new Date(d).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+const PRIORITY_CONF = {
+  BAJA: { label: 'Baja', solid: '#22c55e', soft: 'rgba(34,197,94,0.14)' },
+  MEDIA: { label: 'Media', solid: '#f59e0b', soft: 'rgba(245,158,11,0.14)' },
+  ALTA: { label: 'Alta', solid: '#ef4444', soft: 'rgba(239,68,68,0.14)' },
+};
 
-// ── Tooltip Component ───────────────────────────────────────────────────────
+const formatFecha = (value) =>
+  value ? new Date(value).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
+
+const formatMes = (value) =>
+  new Date(value).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+
+const startOfDay = (value) => {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const diffDays = (from, to) =>
+  Math.max(1, Math.round((startOfDay(to).getTime() - startOfDay(from).getTime()) / 86400000) + 1);
+
+const getTaskDates = (tarea) => {
+  const start = new Date(tarea.fechaInicio || tarea.creadoEn);
+  const end = new Date(tarea.venceEn || tarea.fechaInicio || tarea.creadoEn);
+  return { start, end };
+};
+
+const getStatusConf = (estado) => STATUS_CONF[estado] || STATUS_CONF.PENDIENTE;
+const getPriorityConf = (prioridad) => PRIORITY_CONF[prioridad] || PRIORITY_CONF.MEDIA;
+const getAreaConf = (area) => AREA_COLORS[area] || AREA_COLORS.DEFAULT;
+
 const Tooltip = ({ tarea, rect }) => {
   if (!tarea || !rect) return null;
-  
+
+  const status = getStatusConf(tarea.estado);
+  const priority = getPriorityConf(tarea.prioridad);
+  const area = getAreaConf(tarea.asignado?.area);
+  const { start, end } = getTaskDates(tarea);
+  const overdue = tarea.estado !== 'HECHO' && tarea.venceEn && startOfDay(tarea.venceEn) < startOfDay(new Date());
+
   return (
-    <div style={{
-      position: 'fixed',
-      top: rect.top - 110,
-      left: rect.left + rect.width / 2 - 100,
-      zIndex: 1000,
-      background: 'rgba(15, 23, 42, 0.95)',
-      backdropFilter: 'blur(8px)',
-      border: '1px solid rgba(255,255,255,0.1)',
-      borderRadius: '0.75rem',
-      padding: '0.75rem 1rem',
-      width: '220px',
-      boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
-      pointerEvents: 'none',
-      fontSize: '0.8rem',
-      color: '#f1f5f9',
-    }}>
-      <div style={{ fontWeight: '800', marginBottom: '0.4rem', color: '#fff' }}>{tarea.titulo}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', opacity: 0.85 }}>
+    <div
+      style={{
+        position: 'fixed',
+        top: Math.max(16, rect.top - 156),
+        left: Math.max(16, rect.left + rect.width / 2 - 130),
+        zIndex: 1000,
+        width: '260px',
+        background: 'rgba(15,23,42,0.96)',
+        border: '1px solid rgba(148,163,184,0.16)',
+        borderRadius: '1rem',
+        padding: '0.95rem 1rem',
+        boxShadow: '0 18px 48px rgba(15,23,42,0.36)',
+        pointerEvents: 'none',
+        color: '#e2e8f0',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.55rem' }}>
+        <div style={{ fontWeight: '900', color: '#fff', lineHeight: 1.25 }}>{tarea.titulo}</div>
+        <span style={{ flexShrink: 0, padding: '0.22rem 0.5rem', borderRadius: '999px', background: priority.soft, color: priority.solid, fontSize: '0.68rem', fontWeight: '900' }}>
+          {priority.label}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gap: '0.45rem', fontSize: '0.77rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <User size={12} /> {tarea.asignado?.nombre || 'Sin asignar'}
+          <User size={12} color={area.solid} />
+          {tarea.asignado?.nombre || 'Sin asignar'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Flag size={12} /> Límite: {tarea.venceEn ? new Date(tarea.venceEn).toLocaleDateString() : '—'}
+          <CalendarRange size={12} color="#60a5fa" />
+          {formatFecha(start)} → {formatFecha(end)}
         </div>
-        <div style={{ 
-          display: 'flex', alignItems: 'center', gap: '0.5rem',
-          color: tarea.estado === 'HECHO' ? '#34d399' : '#fbbf24',
-          fontWeight: '700'
-        }}>
-          <Circle size={8} fill="currentColor" /> {ESTADO_LABELS[tarea.estado]}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Flag size={12} color={priority.solid} />
+          Duración: {diffDays(start, end)} día{diffDays(start, end) === 1 ? '' : 's'}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: status.solid, fontWeight: '800' }}>
+          {status.icon}
+          {status.label}
+        </div>
+        {overdue && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fca5a5', fontWeight: '800' }}>
+            <AlertTriangle size={12} />
+            Vencida
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// ── Main Gantt Component ─────────────────────────────────────────────────────
 const GanttView = ({ proyecto, tareas }) => {
   const [hoveredTask, setHoveredTask] = useState(null);
 
-  // 1. Calcular rango de fechas (Inicio - Fin)
+  const preparedTasks = useMemo(() => (
+    tareas.map((tarea) => {
+      const { start, end } = getTaskDates(tarea);
+      const overdue = tarea.estado !== 'HECHO' && tarea.venceEn && startOfDay(tarea.venceEn) < startOfDay(new Date());
+      return {
+        ...tarea,
+        start,
+        end,
+        overdue,
+        durationDays: diffDays(start, end),
+      };
+    }).sort((a, b) => a.start - b.start)
+  ), [tareas]);
+
   const range = useMemo(() => {
-    let start = new Date(proyecto.creadoEn);
-    let end   = new Date(start);
-    end.setDate(end.getDate() + 30); // Mínimo 30 días
+    let start = new Date(proyecto.fechaInicio || proyecto.creadoEn || new Date());
+    let end = new Date(proyecto.fechaFin || start);
 
-    tareas.forEach(t => {
-      const tStart = new Date(t.fechaInicio || t.creadoEn);
-      if (tStart < start) start = tStart;
-      if (t.venceEn) {
-        const tEnd = new Date(t.venceEn);
-        if (tEnd > end) end = tEnd;
-      }
-    });
+    if (preparedTasks.length > 0) {
+      preparedTasks.forEach((tarea) => {
+        if (tarea.start < start) start = tarea.start;
+        if (tarea.end > end) end = tarea.end;
+      });
+    }
 
-    // Padding lateral
-    start = new Date(start); start.setDate(start.getDate() - 2);
-    end   = new Date(end);   end.setDate(end.getDate() + 5);
+    if (end <= start) end = new Date(start.getTime() + (14 * 86400000));
+
+    start = new Date(start);
+    end = new Date(end);
+    start.setDate(start.getDate() - 3);
+    end.setDate(end.getDate() + 5);
 
     return { start, end };
-  }, [proyecto, tareas]);
+  }, [preparedTasks, proyecto]);
 
-  const totalDays = Math.ceil((range.end - range.start) / (1000 * 60 * 60 * 24));
-  
-  // 2. Generar Marcadores (Días y Meses)
   const days = useMemo(() => {
     const arr = [];
-    const curr = new Date(range.start);
-    while (curr <= range.end) {
-      arr.push(new Date(curr));
-      curr.setDate(curr.getDate() + 1);
+    const cursor = new Date(range.start);
+    while (cursor <= range.end) {
+      arr.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
     }
     return arr;
   }, [range]);
 
+  const totalDays = Math.max(1, days.length - 1);
+
   const months = useMemo(() => {
-    const arr = [];
-    days.forEach(d => {
-      const label = formatMes(d);
-      if (arr.length === 0 || arr[arr.length - 1].label !== label) {
-        arr.push({ label, startIndex: days.indexOf(d), count: 0 });
+    const result = [];
+    days.forEach((day, index) => {
+      const label = formatMes(day);
+      const last = result[result.length - 1];
+      if (!last || last.label !== label) {
+        result.push({ label, startIndex: index, count: 1 });
+      } else {
+        last.count += 1;
       }
-      arr[arr.length - 1].count++;
     });
-    return arr;
+    return result;
   }, [days]);
 
-  // 3. Posicionamiento de barras
+  const metrics = useMemo(() => {
+    const total = preparedTasks.length;
+    const hechas = preparedTasks.filter((t) => t.estado === 'HECHO').length;
+    const enProgreso = preparedTasks.filter((t) => t.estado === 'EN_PROGRESO').length;
+    const vencidas = preparedTasks.filter((t) => t.overdue).length;
+    const sinAsignar = preparedTasks.filter((t) => !t.asignado?.nombre).length;
+    return { total, hechas, enProgreso, vencidas, sinAsignar };
+  }, [preparedTasks]);
+
   const getPosition = (date) => {
-    const d = new Date(date);
-    const diff = (d - range.start) / (1000 * 60 * 60 * 24);
+    const target = startOfDay(date).getTime();
+    const diff = (target - startOfDay(range.start).getTime()) / 86400000;
     return (diff / totalDays) * 100;
   };
 
-  const getTaskColor = (tarea) => {
-    const area = tarea.asignado?.area || 'DEFAULT';
-    return AREA_COLORS[area] || AREA_COLORS.DEFAULT;
-  };
+  const todayPct = getPosition(new Date());
+  const DAY_WIDTH = 42;
+  const NAME_WIDTH = 300;
 
-  const DAY_WIDTH = 40; // Ancho mínimo por día en px
-  const NAME_WIDTH = 220; // Ancho columna de nombres
-
-  if (tareas.length === 0) {
+  if (preparedTasks.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '4rem', background: 'var(--color-surface-2)', borderRadius: '1rem', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+      <div style={{ textAlign: 'center', padding: '4rem', background: 'var(--color-surface-2)', borderRadius: '1.25rem', color: 'var(--color-text-muted)', display: 'grid', placeItems: 'center', gap: '1rem' }}>
         <div style={{ color: 'var(--color-text-dim)' }}><CalendarRange size={48} /></div>
-        <p>No hay tareas programadas para visualizar el diagrama.</p>
+        <p>No hay tareas programadas para visualizar el Gantt.</p>
       </div>
     );
   }
@@ -147,132 +231,283 @@ const GanttView = ({ proyecto, tareas }) => {
     <div style={{ position: 'relative', width: '100%' }}>
       {hoveredTask && <Tooltip tarea={hoveredTask.tarea} rect={hoveredTask.rect} />}
 
-      <div style={{
-        background: 'var(--color-surface-2)',
-        borderRadius: '1.25rem',
-        border: '1px solid var(--color-border)',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-lg)'
-      }}>
-        
-        {/* Leyenda Superior */}
-        <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--color-border)', display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--color-primary)' }}>DIAGRAMA DE GANTT</div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            {Object.entries(AREA_COLORS).map(([key, val]) => (
-              key !== 'DEFAULT' && (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: val.bar }} />
-                  <span style={{ opacity: 0.7 }}>{key}</span>
-                </div>
-              )
+      <div
+        style={{
+          background: 'linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(255,255,255,1) 18%)',
+          borderRadius: '1.5rem',
+          border: '1px solid #e2e8f0',
+          overflow: 'hidden',
+          boxShadow: '0 18px 40px rgba(15,23,42,0.08)',
+        }}
+      >
+        <div style={{ padding: '1.1rem 1.3rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: '900', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#2563eb', marginBottom: '0.25rem' }}>
+              Lectura visual
+            </div>
+            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#0f172a' }}>
+              Línea de tiempo con estado, prioridad y riesgo
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {[
+              { label: 'Total', value: metrics.total, color: '#0f172a', bg: '#f8fafc' },
+              { label: 'En progreso', value: metrics.enProgreso, color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
+              { label: 'Hechas', value: metrics.hechas, color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
+              { label: 'Vencidas', value: metrics.vencidas, color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+            ].map((item) => (
+              <div key={item.label} style={{ minWidth: '92px', padding: '0.55rem 0.75rem', borderRadius: '0.95rem', background: item.bg, color: item.color }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.82 }}>{item.label}</div>
+                <div style={{ fontSize: '1rem', fontWeight: '900' }}>{item.value}</div>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Scrollable Area */}
+        <div style={{ padding: '0.9rem 1.3rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.76rem', fontWeight: '800', color: '#475569' }}>
+            <Layers3 size={14} color="#2563eb" />
+            Estado de barra
+          </div>
+          {Object.entries(STATUS_CONF).map(([key, conf]) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: '#64748b', fontWeight: '800' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '999px', background: conf.solid, boxShadow: `0 0 0 4px ${conf.soft}` }} />
+              {conf.label}
+            </div>
+          ))}
+          <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }} />
+          {Object.entries(PRIORITY_CONF).map(([key, conf]) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: '#64748b', fontWeight: '800' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: conf.solid }} />
+              Prioridad {conf.label.toLowerCase()}
+            </div>
+          ))}
+        </div>
+
         <div style={{ overflowX: 'auto', width: '100%' }}>
-          <div style={{ 
-            minWidth: `${NAME_WIDTH + (totalDays * DAY_WIDTH)}px`,
-            position: 'relative'
-          }}>
-            
-            {/* ── HEADER ────────────────────────────────────────────────── */}
+          <div style={{ minWidth: `${NAME_WIDTH + (days.length * DAY_WIDTH)}px`, position: 'relative' }}>
             <div className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-20">
-              <div className="w-[180px] lg:w-[220px] shrink-0 p-4 border-r border-slate-200 font-black text-[10px] text-slate-400 uppercase tracking-widest sticky left-0 bg-slate-50 z-30">
-                Tareas
+              <div
+                style={{
+                  width: `${NAME_WIDTH}px`,
+                  padding: '1rem 1.2rem',
+                  borderRight: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 30,
+                }}
+              >
+                <div style={{ fontSize: '0.68rem', fontWeight: '900', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#94a3b8' }}>
+                  Tareas del proyecto
+                </div>
+                <div style={{ marginTop: '0.3rem', fontSize: '0.92rem', fontWeight: '900', color: '#0f172a' }}>{proyecto?.nombre}</div>
               </div>
+
               <div className="flex-1">
-                {/* Meses */}
                 <div className="flex border-b border-slate-100">
-                  {months.map((m, i) => (
-                    <div key={i} className="p-2 text-[10px] font-black uppercase tracking-widest text-blue-600 text-center border-r border-slate-100" style={{ width: `${(m.count / totalDays) * 100}%` }}>
-                      {m.label}
+                  {months.map((month) => (
+                    <div
+                      key={`${month.label}-${month.startIndex}`}
+                      style={{
+                        width: `${(month.count / days.length) * 100}%`,
+                        padding: '0.6rem 0.5rem',
+                        textAlign: 'left',
+                        fontSize: '0.76rem',
+                        fontWeight: '900',
+                        color: '#2563eb',
+                        textTransform: 'uppercase',
+                        borderRight: '1px solid #e2e8f0',
+                      }}
+                    >
+                      {month.label}
                     </div>
                   ))}
                 </div>
-                {/* Días */}
+
                 <div className="flex">
-                  {days.map((d, i) => (
-                    <div key={i} className={`flex-1 text-center py-2 text-[9px] font-bold border-r border-slate-50 ${d.getDay() === 0 || d.getDay() === 6 ? 'text-red-400 bg-red-50/30' : 'text-slate-400'}`}>
-                      {d.getDate()}
-                    </div>
-                  ))}
+                  {days.map((day) => {
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                    const isToday = startOfDay(day).getTime() === startOfDay(new Date()).getTime();
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem 0',
+                          textAlign: 'center',
+                          fontSize: '0.68rem',
+                          fontWeight: '800',
+                          color: isToday ? '#2563eb' : isWeekend ? '#ef4444' : '#94a3b8',
+                          background: isToday ? 'rgba(37,99,235,0.06)' : isWeekend ? 'rgba(239,68,68,0.04)' : 'transparent',
+                          borderRight: '1px solid rgba(226,232,240,0.55)',
+                        }}
+                      >
+                        {day.getDate()}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
-            {/* ── FILAS ─────────────────────────────────────────────────── */}
             <div style={{ position: 'relative' }}>
-              {/* Líneas de cuadrícula de fondo */}
               <div style={{ position: 'absolute', inset: 0, display: 'flex', pointerEvents: 'none' }}>
-                <div style={{ width: NAME_WIDTH }} />
-                {days.map((d, i) => (
-                  <div key={i} style={{ 
-                    flex: 1, borderRight: '1px solid var(--color-border-light)',
-                    background: d.getDay() === 0 || d.getDay() === 6 ? 'rgba(255,255,255,0.01)' : 'transparent'
-                  }} />
+                <div style={{ width: `${NAME_WIDTH}px` }} />
+                {days.map((day) => (
+                  <div
+                    key={`grid-${day.toISOString()}`}
+                    style={{
+                      flex: 1,
+                      borderRight: '1px solid rgba(226,232,240,0.55)',
+                      background: day.getDay() === 0 || day.getDay() === 6 ? 'rgba(248,250,252,0.8)' : 'transparent',
+                    }}
+                  />
                 ))}
               </div>
 
-              {/* Contenido Real */}
-              {tareas.map((tarea, idx) => {
-                const color = getTaskColor(tarea);
-                const startPct = getPosition(tarea.fechaInicio || tarea.creadoEn);
-                const endPct   = tarea.venceEn ? getPosition(tarea.venceEn) : (startPct + 5);
-                const widthPct = Math.max(2, endPct - startPct);
-                
+              {preparedTasks.map((tarea, index) => {
+                const status = getStatusConf(tarea.estado);
+                const priority = getPriorityConf(tarea.prioridad);
+                const area = getAreaConf(tarea.asignado?.area);
+                const startPct = getPosition(tarea.start);
+                const endPct = getPosition(tarea.end);
+                const widthPct = Math.max(2.6, endPct - startPct + (100 / totalDays));
+
                 return (
-                  <div key={tarea.id} className={`flex border-b border-slate-50 transition-colors hover:bg-slate-50/50 ${idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/20'}`}>
-                    {/* Nombre Tarea (Sticky) */}
-                    <div className="w-[180px] lg:w-[220px] shrink-0 p-4 border-r border-slate-100 text-xs font-bold text-slate-700 truncate sticky left-0 bg-white lg:bg-transparent z-10">
-                      <span className={tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}>
-                        {tarea.titulo}
-                      </span>
+                  <div
+                    key={tarea.id}
+                    style={{
+                      display: 'flex',
+                      borderBottom: '1px solid rgba(226,232,240,0.65)',
+                      background: index % 2 === 0 ? 'rgba(255,255,255,0.7)' : 'rgba(248,250,252,0.7)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${NAME_WIDTH}px`,
+                        padding: '0.95rem 1.2rem',
+                        borderRight: '1px solid #e2e8f0',
+                        background: 'rgba(255,255,255,0.94)',
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.2, textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none', opacity: tarea.estado === 'HECHO' ? 0.62 : 1 }}>
+                            {tarea.titulo}
+                          </div>
+                          <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: status.soft, color: status.solid, fontSize: '0.68rem', fontWeight: '900' }}>
+                              {status.icon}
+                              {status.label}
+                            </span>
+                            <span style={{ padding: '0.22rem 0.45rem', borderRadius: '999px', background: priority.soft, color: priority.solid, fontSize: '0.68rem', fontWeight: '900' }}>
+                              {priority.label}
+                            </span>
+                            {tarea.overdue && (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', fontSize: '0.68rem', fontWeight: '900' }}>
+                                <AlertTriangle size={11} />
+                                Vencida
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ width: '10px', height: '10px', borderRadius: '999px', background: area.solid, boxShadow: `0 0 0 5px ${area.soft}`, marginTop: '0.25rem', flexShrink: 0 }} />
+                      </div>
+
+                      <div style={{ marginTop: '0.7rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.45rem 0.75rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '800' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
+                          <User size={12} color={area.solid} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.asignado?.nombre || 'Sin asignar'}</span>
+                        </span>
+                        <span>{tarea.durationDays} día{tarea.durationDays === 1 ? '' : 's'}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Flag size={12} color={priority.solid} />
+                          {formatFecha(tarea.end)}
+                        </span>
+                        <span>{tarea.asignado?.area || 'Área general'}</span>
+                      </div>
                     </div>
 
-                    {/* Timeline Cell */}
-                    <div className="flex-1 relative h-14">
-                      <div 
+                    <div className="flex-1 relative" style={{ minHeight: '86px' }}>
+                      <div
                         onMouseEnter={(e) => setHoveredTask({ tarea, rect: e.currentTarget.getBoundingClientRect() })}
                         onMouseLeave={() => setHoveredTask(null)}
-                        className="absolute top-1/2 -translate-y-1/2 h-7 rounded-full shadow-lg cursor-pointer z-0 border-2 border-white/20 transition-transform hover:scale-[1.02]"
                         style={{
+                          position: 'absolute',
                           left: `${startPct}%`,
                           width: `${widthPct}%`,
-                          background: color.bar,
-                          boxShadow: `0 4px 12px ${color.bar}44`,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '28px',
+                          borderRadius: '999px',
+                          background: `linear-gradient(90deg, ${status.solid} 0%, ${status.solid} 72%, ${priority.solid} 100%)`,
+                          boxShadow: `0 10px 22px ${status.glow}`,
+                          border: '1px solid rgba(255,255,255,0.55)',
+                          cursor: 'pointer',
+                          overflow: 'hidden',
                         }}
-                      />
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 46%)',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: '10px',
+                            background: area.solid,
+                            opacity: 0.9,
+                          }}
+                        />
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.55rem', padding: '0 0.8rem 0 1rem', color: '#fff', fontSize: '0.72rem', fontWeight: '900' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {tarea.durationDays}d
+                          </span>
+                          <span>{formatFecha(tarea.start)}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Marcador de "Hoy" */}
-            <div style={{
-              position: 'absolute',
-              top: 0, bottom: 0,
-              left: `${NAME_WIDTH + (getPosition(new Date()) * (1 - NAME_WIDTH/totalDays))}%`, // Ajuste manual simple o similar
-              // En realidad es más fácil si el marcador es relativo al flex-1 del header
-              width: '2px',
-              background: 'var(--color-error)',
-              zIndex: 5,
-              pointerEvents: 'none'
-            }}>
-              <div style={{
-                position: 'absolute', top: 0, left: '-4px', 
-                width: '10px', height: '10px', borderRadius: '50%', background: 'var(--color-error)'
-              }} />
-            </div>
-
+            {todayPct >= 0 && todayPct <= 100 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  left: `${NAME_WIDTH + ((days.length * DAY_WIDTH) * todayPct / 100)}px`,
+                  width: '2px',
+                  background: 'rgba(239,68,68,0.9)',
+                  zIndex: 15,
+                  pointerEvents: 'none',
+                  boxShadow: '0 0 0 1px rgba(255,255,255,0.5)',
+                }}
+              >
+                <div style={{ position: 'absolute', top: '10px', left: '-5px', width: '12px', height: '12px', borderRadius: '999px', background: '#ef4444', boxShadow: '0 0 0 4px rgba(239,68,68,0.14)' }} />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <div style={{ marginTop: '1rem', textAlign: 'right', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-        Mostrando {tareas.length} tareas en un rango de {totalDays} días.
+      <div style={{ marginTop: '0.9rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', fontSize: '0.76rem', color: '#64748b', fontWeight: '800' }}>
+        <span>Mostrando {preparedTasks.length} tarea{preparedTasks.length === 1 ? '' : 's'} en un rango de {days.length} días.</span>
+        <span>{metrics.sinAsignar} sin asignar · {metrics.vencidas} vencida{metrics.vencidas === 1 ? '' : 's'}</span>
       </div>
     </div>
   );
