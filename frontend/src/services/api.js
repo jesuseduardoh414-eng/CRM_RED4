@@ -416,6 +416,13 @@ export const statsService = {
       cache: 'no-store',
     });
     return handleResponse(res);
+  },
+  getMemberStats: async () => {
+    const res = await fetch(`${API_URL}/stats/member?t=${Date.now()}`, {
+      headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },
+      cache: 'no-store',
+    });
+    return handleResponse(res);
   }
 };
 

@@ -94,6 +94,10 @@ const resumenOcupacionEvento = (evento) => ({
   proyecto: evento.proyecto || null,
 });
 
+const buildProjectScopeWhere = (scopeProyecto) => (
+  scopeProyecto ? { proyecto: scopeProyecto } : {}
+);
+
 const getTopUsuariosProductividad = async (usuario) => {
   const hoy = new Date();
   const inicioSemanaActual = inicioDeSemana(hoy);
@@ -149,6 +153,8 @@ const getTopUsuariosProductividad = async (usuario) => {
 const getActividadMiembros = async (usuario) => {
   const ahora = new Date();
   const hoyFin = finDelDia(ahora);
+  const hoyInicio = new Date(ahora);
+  hoyInicio.setHours(0, 0, 0, 0);
   const semanaFin = finDeSemana(ahora);
   const calendarioInicio = new Date(ahora);
   calendarioInicio.setMonth(calendarioInicio.getMonth() - 6);
@@ -158,6 +164,7 @@ const getActividadMiembros = async (usuario) => {
   calendarioFin.setHours(23, 59, 59, 999);
   const filtroAreaUsuarios = esAdminDeArea(usuario) ? { area: usuario.area } : {};
   const scopeProyecto = buildScopeProyectoParaAdmin(usuario);
+  const projectScopeWhere = buildProjectScopeWhere(scopeProyecto);
 
   const miembros = await prisma.usuario.findMany({
     where: { rol: 'MIEMBRO', ...filtroAreaUsuarios },
@@ -165,99 +172,137 @@ const getActividadMiembros = async (usuario) => {
     select: { id: true, nombre: true, area: true }
   });
 
-  return Promise.all(miembros.map(async (miembro) => {
-    const tareasDelUsuario = {
-      OR: [
-        { asignadoId: miembro.id },
-        { creadorId: miembro.id }
-      ]
-    };
+  if (!miembros.length) return [];
 
-    const hoyInicio = new Date(ahora);
-    hoyInicio.setHours(0,0,0,0);
+  const memberIds = miembros.map((miembro) => miembro.id);
 
-    const [hechas, hechasHoy, enProgreso, faltanHoy, faltanSemana, todasConFecha, proyectosActivos, eventosAgenda] = await Promise.all([
-      prisma.tarea.findMany({
-        where: { ...tareasDelUsuario, estado: 'HECHO', ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
-        select: tareaResumenSelect
-      }),
-      prisma.tarea.findMany({
-        where: { ...tareasDelUsuario, estado: 'HECHO', completadoEn: { gte: hoyInicio }, ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
-        select: tareaResumenSelect
-      }),
-      prisma.tarea.findMany({
-        where: { ...tareasDelUsuario, estado: 'EN_PROGRESO', ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
-        select: tareaResumenSelect
-      }),
-      prisma.tarea.findMany({
-        where: { ...tareasDelUsuario, estado: 'PENDIENTE', ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
-        select: tareaResumenSelect
-      }),
-      prisma.tarea.findMany({
-        where: {
-          ...tareasDelUsuario,
-          estado: { not: 'HECHO' },
-          venceEn: { gt: hoyFin, lte: semanaFin },
-          ...(scopeProyecto ? { proyecto: scopeProyecto } : {})
+  const [todasLasTareas, proyectosActivos, eventosAgenda] = await Promise.all([
+    prisma.tarea.findMany({
+      where: {
+        OR: [
+          { asignadoId: { in: memberIds } },
+          { creadorId: { in: memberIds } },
+        ],
+        ...projectScopeWhere,
+      },
+      select: tareaResumenSelect,
+    }),
+    prisma.proyecto.findMany({
+      where: {
+        estado: { not: 'CERRADO' },
+        OR: [
+          { miembros: { some: { id: { in: memberIds } } } },
+          { creadorId: { in: memberIds } },
+        ],
+        ...(scopeProyecto || {}),
+      },
+      select: {
+        id: true,
+        nombre: true,
+        estado: true,
+        creadoEn: true,
+        fechaInicio: true,
+        fechaFin: true,
+        creadorId: true,
+        miembros: { select: { id: true } },
+      },
+    }),
+    prisma.evento.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { usuarioId: { in: memberIds } },
+              { creadoPorId: { in: memberIds } },
+              { invitados: { some: { usuarioId: { in: memberIds }, estado: 'aceptado' } } },
+            ],
+          },
+          { fechaInicio: { lte: calendarioFin } },
+          {
+            OR: [
+              { fechaFin: { gte: calendarioInicio } },
+              { fechaFin: null, fechaInicio: { gte: calendarioInicio } },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        titulo: true,
+        tipo: true,
+        fechaInicio: true,
+        fechaFin: true,
+        usuarioId: true,
+        creadoPorId: true,
+        invitados: {
+          where: { estado: 'aceptado', usuarioId: { in: memberIds } },
+          select: { usuarioId: true },
         },
-        select: tareaResumenSelect
-      }),
-      prisma.tarea.findMany({
-        where: { ...tareasDelUsuario, ...(scopeProyecto ? { proyecto: scopeProyecto } : {}) },
-        select: tareaResumenSelect
-      }),
-      prisma.proyecto.findMany({
-        where: {
-          estado: { not: 'CERRADO' },
-          OR: [
-            { miembros: { some: { id: miembro.id } } },
-            { creadorId: miembro.id }
-          ],
-          ...(scopeProyecto || {})
-        },
-        select: {
-          id: true,
-          nombre: true,
-          estado: true,
-          creadoEn: true,
-          fechaInicio: true,
-          fechaFin: true
-        }
-      }),
-      prisma.evento.findMany({
-        where: {
-          AND: [
-            {
-              OR: [
-                { usuarioId: miembro.id },
-                { creadoPorId: miembro.id },
-                { invitados: { some: { usuarioId: miembro.id, estado: 'aceptado' } } },
-              ],
-            },
-            { fechaInicio: { lte: calendarioFin } },
-            {
-              OR: [
-                { fechaFin: { gte: calendarioInicio } },
-                { fechaFin: null, fechaInicio: { gte: calendarioInicio } },
-              ],
-            },
-          ],
-        },
-        select: {
-          id: true,
-          titulo: true,
-          tipo: true,
-          fechaInicio: true,
-          fechaFin: true,
-          proyecto: { select: { id: true, nombre: true } },
-        },
-      })
+        proyecto: { select: { id: true, nombre: true } },
+      },
+    }),
+  ]);
+
+  const tareasPorMiembro = new Map(memberIds.map((id) => [id, []]));
+  todasLasTareas.forEach((tarea) => {
+    if (tarea.asignadoId && tareasPorMiembro.has(tarea.asignadoId)) {
+      tareasPorMiembro.get(tarea.asignadoId).push(tarea);
+    }
+    if (
+      tarea.creadorId
+      && tarea.creadorId !== tarea.asignadoId
+      && tareasPorMiembro.has(tarea.creadorId)
+    ) {
+      tareasPorMiembro.get(tarea.creadorId).push(tarea);
+    }
+  });
+
+  const proyectosPorMiembro = new Map(memberIds.map((id) => [id, []]));
+  proyectosActivos.forEach((proyecto) => {
+    const relacionados = new Set([
+      proyecto.creadorId,
+      ...proyecto.miembros.map((miembro) => miembro.id),
     ]);
+    relacionados.forEach((memberId) => {
+      if (proyectosPorMiembro.has(memberId)) {
+        proyectosPorMiembro.get(memberId).push(proyecto);
+      }
+    });
+  });
+
+  const eventosPorMiembro = new Map(memberIds.map((id) => [id, []]));
+  eventosAgenda.forEach((evento) => {
+    const relacionados = new Set([
+      evento.usuarioId,
+      evento.creadoPorId,
+      ...evento.invitados.map((invitado) => invitado.usuarioId),
+    ]);
+    relacionados.forEach((memberId) => {
+      if (eventosPorMiembro.has(memberId)) {
+        eventosPorMiembro.get(memberId).push(evento);
+      }
+    });
+  });
+
+  return miembros.map((miembro) => {
+    const tareasDelMiembro = tareasPorMiembro.get(miembro.id) || [];
+    const hechas = tareasDelMiembro.filter((tarea) => tarea.estado === 'HECHO');
+    const hechasHoy = hechas.filter((tarea) => tarea.completadoEn && tarea.completadoEn >= hoyInicio);
+    const enProgreso = tareasDelMiembro.filter((tarea) => tarea.estado === 'EN_PROGRESO');
+    const faltanHoy = tareasDelMiembro.filter((tarea) => tarea.estado === 'PENDIENTE');
+    const faltanSemana = tareasDelMiembro.filter((tarea) =>
+      tarea.estado !== 'HECHO'
+      && tarea.venceEn
+      && tarea.venceEn > hoyFin
+      && tarea.venceEn <= semanaFin
+    );
+    const proyectosDelMiembro = proyectosPorMiembro.get(miembro.id) || [];
+    const eventosDelMiembro = eventosPorMiembro.get(miembro.id) || [];
 
     const ocupacionCalendario = [
-      ...proyectosActivos.map((proyecto) => resumenOcupacionProyecto(proyecto, miembro.id)),
-      ...todasConFecha.map(resumenOcupacionTarea),
-      ...eventosAgenda.map(resumenOcupacionEvento),
+      ...proyectosDelMiembro.map((proyecto) => resumenOcupacionProyecto(proyecto, miembro.id)),
+      ...tareasDelMiembro.map(resumenOcupacionTarea),
+      ...eventosDelMiembro.map(resumenOcupacionEvento),
     ].filter((item) => item.fechaInicio && item.fechaFin);
 
     return {
@@ -268,17 +313,83 @@ const getActividadMiembros = async (usuario) => {
       enProgreso: sortTareas(enProgreso).map(resumenTarea),
       faltanHoy: sortTareas(faltanHoy).map(resumenTarea),
       faltanSemana: sortTareas(faltanSemana).map(resumenTarea),
-      todasConFecha: todasConFecha.map(resumenTarea),
+      todasConFecha: tareasDelMiembro.map(resumenTarea),
       ocupacionCalendario,
       totales: {
         hechasHoy: hechasHoy.length,
         enProgreso: enProgreso.length,
         faltanHoy: faltanHoy.length,
         faltanSemana: faltanSemana.length,
-        totalHechas: hechas.length
-      }
+        totalHechas: hechas.length,
+      },
     };
-  }));
+  });
+};
+
+const getMemberStats = async (req, res) => {
+  try {
+    const proyectos = await prisma.proyecto.findMany({
+      where: {
+        OR: [
+          { miembros: { some: { id: req.usuario.id } } },
+          { creadorId: req.usuario.id },
+          { tareas: { some: { asignadoId: req.usuario.id } } },
+          { tareas: { some: { creadorId: req.usuario.id } } },
+        ],
+      },
+      orderBy: { creadoEn: 'desc' },
+      include: {
+        creador: { select: { id: true, nombre: true, area: true } },
+        miembros: { select: { id: true, nombre: true, email: true, area: true, rol: true } },
+        _count: { select: { tareas: true } },
+        tareas: {
+          select: { estado: true, asignadoId: true },
+        },
+      },
+    });
+
+    const proyectosConProgreso = proyectos.map((proyecto) => {
+      const total = proyecto.tareas.length;
+      const hechas = proyecto.tareas.filter((tarea) => tarea.estado === 'HECHO').length;
+      const tareasMiembro = proyecto.tareas.filter((tarea) => tarea.asignadoId === req.usuario.id);
+      const hechasMiembro = tareasMiembro.filter((tarea) => tarea.estado === 'HECHO').length;
+      const { tareas, ...resto } = proyecto;
+
+      return {
+        ...resto,
+        progreso: total > 0 ? Math.round((hechas / total) * 100) : 0,
+        progresoGeneral: total > 0 ? Math.round((hechas / total) * 100) : 0,
+        progresoMiembro: tareasMiembro.length > 0
+          ? Math.round((hechasMiembro / tareasMiembro.length) * 100)
+          : 0,
+        tareasMiembro: tareasMiembro.length,
+      };
+    });
+
+    const tareas = await prisma.tarea.findMany({
+      where: {
+        proyectoId: { in: proyectos.map((proyecto) => proyecto.id) },
+        OR: [
+          { asignadoId: req.usuario.id },
+          { creadorId: req.usuario.id },
+        ],
+      },
+      orderBy: { creadoEn: 'asc' },
+      include: {
+        asignado: { select: { id: true, nombre: true, email: true, area: true } },
+        creador: { select: { id: true, nombre: true, email: true, area: true } },
+        proyecto: { select: { id: true, nombre: true } },
+      },
+    });
+
+    return res.json({
+      proyectos: proyectosConProgreso,
+      tareas: sortTareas(tareas),
+    });
+  } catch (error) {
+    console.error('[stats.getMemberStats]', error);
+    return res.status(500).json({ error: 'Error al generar estadisticas del miembro' });
+  }
 };
 
 const getAdminStats = async (req, res) => {
@@ -363,4 +474,4 @@ const getAdminStats = async (req, res) => {
   }
 };
 
-module.exports = { getAdminStats };
+module.exports = { getAdminStats, getMemberStats };

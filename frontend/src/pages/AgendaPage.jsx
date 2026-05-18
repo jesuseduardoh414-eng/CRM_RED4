@@ -1254,6 +1254,11 @@ const AgendaPage = () => {
             cargarDatos();
           }}
           showToast={showToast}
+          initialData={{
+            config: configLaboral,
+            diasEspeciales,
+            googleCalendar,
+          }}
         />
       )}
     </div>

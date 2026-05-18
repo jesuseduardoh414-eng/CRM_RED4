@@ -1,59 +1,73 @@
-// App.jsx — Router principal de la aplicación
-// Define todas las rutas y envuelve con el contexto de autenticación
+// App.jsx - Router principal de la aplicacion
+// Define todas las rutas y envuelve con el contexto de autenticacion
 
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import RutaProtegida  from './components/RutaProtegida';
-import Layout         from './components/Layout';
-import LoginPage      from './pages/LoginPage';
-import InvitationPage from './pages/InvitationPage';
-import DashboardPage  from './pages/DashboardPage';
-import ProyectosPage         from './pages/ProyectosPage';
-import ProyectoDetallePage   from './pages/ProyectoDetallePage';
-import EquipoPage            from './pages/EquipoPage';
-import UsuariosPage          from './pages/UsuariosPage';
-import ForgotPasswordPage    from './pages/ForgotPasswordPage';
-import ResetPasswordPage     from './pages/ResetPasswordPage';
-import VerifyAccountPage     from './pages/VerifyAccountPage';
-import AgendaPage            from './pages/AgendaPage';
-import { AuthSkeleton } from './components/Skeleton';
+import RutaProtegida from './components/RutaProtegida';
+import Layout from './components/Layout';
+import LoginPage from './pages/LoginPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyAccountPage from './pages/VerifyAccountPage';
+import { AuthSkeleton, PageSkeleton } from './components/Skeleton';
 
-// Redirige al dashboard si ya hay sesión activa (evita volver al login)
+const InvitationPage = lazy(() => import('./pages/InvitationPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProyectosPage = lazy(() => import('./pages/ProyectosPage'));
+const ProyectoDetallePage = lazy(() => import('./pages/ProyectoDetallePage'));
+const EquipoPage = lazy(() => import('./pages/EquipoPage'));
+const UsuariosPage = lazy(() => import('./pages/UsuariosPage'));
+const AgendaPage = lazy(() => import('./pages/AgendaPage'));
+
+// Redirige al dashboard si ya hay sesion activa (evita volver al login)
 const RutaPublica = ({ children }) => {
   const { usuario, cargando } = useAuth();
   if (cargando) return <AuthSkeleton compact />;
   return usuario ? <Navigate to="/dashboard" replace /> : children;
 };
 
+const RoutePageFallback = () => <PageSkeleton cards={4} />;
+
+const PublicLazyRoute = ({ children, compact = false }) => (
+  <Suspense fallback={<AuthSkeleton compact={compact} />}>
+    {children}
+  </Suspense>
+);
+
+const PrivateLazyRoute = ({ children }) => (
+  <Suspense fallback={<RoutePageFallback />}>
+    {children}
+  </Suspense>
+);
+
 // Wrapper que aplica el Layout a las rutas privadas
 const RutaConLayout = ({ children }) => (
   <RutaProtegida>
-    <Layout>{children}</Layout>
+    <Layout>
+      <PrivateLazyRoute>{children}</PrivateLazyRoute>
+    </Layout>
   </RutaProtegida>
 );
 
 const AppRoutes = () => (
   <Routes>
-    {/* Ruta raíz → dashboard (si hay sesión) o login */}
     <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-    {/* Rutas públicas */}
-    <Route path="/login"    element={<RutaPublica><LoginPage /></RutaPublica>} />
-    <Route path="/invitacion/:token" element={<InvitationPage />} />
+    <Route path="/login" element={<RutaPublica><LoginPage /></RutaPublica>} />
+    <Route path="/invitacion/:token" element={<PublicLazyRoute><InvitationPage /></PublicLazyRoute>} />
     <Route path="/forgot-password" element={<RutaPublica><ForgotPasswordPage /></RutaPublica>} />
     <Route path="/reset-password/:token" element={<RutaPublica><ResetPasswordPage /></RutaPublica>} />
     <Route path="/verify/:token" element={<VerifyAccountPage />} />
 
-    {/* Rutas protegidas con Layout (sidebar) */}
     <Route path="/dashboard" element={<RutaConLayout><DashboardPage /></RutaConLayout>} />
-    <Route path="/proyectos"    element={<RutaConLayout><ProyectosPage /></RutaConLayout>} />
+    <Route path="/proyectos" element={<RutaConLayout><ProyectosPage /></RutaConLayout>} />
     <Route path="/proyectos/:id" element={<RutaConLayout><ProyectoDetallePage /></RutaConLayout>} />
-    <Route path="/equipo"    element={<RutaConLayout><EquipoPage /></RutaConLayout>} />
-    <Route path="/usuarios"  element={<RutaConLayout><UsuariosPage /></RutaConLayout>} />
-    <Route path="/agenda"    element={<RutaConLayout><AgendaPage /></RutaConLayout>} />
+    <Route path="/equipo" element={<RutaConLayout><EquipoPage /></RutaConLayout>} />
+    <Route path="/usuarios" element={<RutaConLayout><UsuariosPage /></RutaConLayout>} />
+    <Route path="/agenda" element={<RutaConLayout><AgendaPage /></RutaConLayout>} />
 
-    {/* Fallback */}
     <Route path="*" element={<Navigate to="/dashboard" replace />} />
   </Routes>
 );

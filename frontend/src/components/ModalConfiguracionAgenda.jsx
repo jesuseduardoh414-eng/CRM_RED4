@@ -59,7 +59,7 @@ const cargarGoogleIdentityScript = () => {
   return googleScriptPromise;
 };
 
-const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
+const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) => {
   const [tab, setTab] = useState('HORARIO');
   const [cargando, setCargando] = useState(false);
   const [cargandoInicial, setCargandoInicial] = useState(true);
@@ -80,6 +80,18 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
     descripcion: '',
   });
 
+  const hydrateState = useCallback((data) => {
+    setConfig(normalizarConfig(data?.config || null));
+    setDiasEspeciales(data?.diasEspeciales || []);
+    setGoogleCalendar({
+      configured: !!data?.googleCalendar?.configured,
+      connected: !!data?.googleCalendar?.connected,
+      email: data?.googleCalendar?.email || null,
+      clientId: data?.googleCalendar?.clientId || null,
+      scope: data?.googleCalendar?.scope || '',
+    });
+  }, []);
+
   const cargarDatos = useCallback(async () => {
     try {
       setCargandoInicial(true);
@@ -89,25 +101,26 @@ const ModalConfiguracionAgenda = ({ onClose, showToast }) => {
         agendaService.getGoogleCalendarStatus(),
       ]);
 
-      setConfig(normalizarConfig(resConfig.config));
-      setDiasEspeciales(resDias.dias || []);
-      setGoogleCalendar({
-        configured: !!resGoogle.configured,
-        connected: !!resGoogle.connected,
-        email: resGoogle.email || null,
-        clientId: resGoogle.clientId || null,
-        scope: resGoogle.scope || '',
+      hydrateState({
+        config: resConfig.config,
+        diasEspeciales: resDias.dias || [],
+        googleCalendar: resGoogle,
       });
     } catch (err) {
       showToast(err.message || 'Error al cargar la configuración', 'error');
     } finally {
       setCargandoInicial(false);
     }
-  }, [showToast]);
+  }, [hydrateState, showToast]);
 
   useEffect(() => {
+    if (initialData) {
+      hydrateState(initialData);
+      setCargandoInicial(false);
+      return;
+    }
     cargarDatos();
-  }, [cargarDatos]);
+  }, [cargarDatos, hydrateState, initialData]);
 
   const handleSaveConfig = async () => {
     setCargando(true);

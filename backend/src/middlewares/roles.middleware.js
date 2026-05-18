@@ -6,10 +6,19 @@ const { esAdmin } = require('../utils/permissions.utils');
 const soloAdmin = (req, res, next) => {
   if (!esAdmin(req.usuario)) {
     return res.status(403).json({
-      error: 'Acceso denegado: solo los administradores pueden realizar esta acción',
+      error: 'Acceso denegado: solo los administradores pueden realizar esta accion',
     });
   }
   next();
 };
 
-module.exports = { soloAdmin };
+const soloMiembro = (req, res, next) => {
+  if (esAdmin(req.usuario)) {
+    return res.status(403).json({
+      error: 'Acceso denegado: esta accion es solo para miembros',
+    });
+  }
+  next();
+};
+
+module.exports = { soloAdmin, soloMiembro };

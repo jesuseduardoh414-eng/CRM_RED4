@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { proyectosService, tareasService, statsService } from '../services/api';
+import { proyectosService, statsService } from '../services/api';
 import { PageSkeleton } from '../components/Skeleton';
 import {
   Layers,
@@ -690,10 +690,9 @@ const DashboardMiembro = ({ usuario }) => {
   useEffect(() => {
     const cargar = async () => {
       try {
-        const dataProy = await proyectosService.listar();
-        setProyectos(dataProy.proyectos);
-        const tareasArr = await Promise.all(dataProy.proyectos.map((p) => tareasService.listar(p.id).then((d) => d.tareas)));
-        setTodas(tareasArr.flat());
+        const data = await statsService.getMemberStats();
+        setProyectos(data.proyectos || []);
+        setTodas(data.tareas || []);
       } catch (e) {
         console.error(e);
       } finally {
