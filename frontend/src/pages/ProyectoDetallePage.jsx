@@ -56,6 +56,26 @@ const formatFecha = (iso) => {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
 };
 
+const inicioDiaLocal = (value) => {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getHoyMediodiaIso = () => {
+  const hoy = new Date();
+  hoy.setHours(12, 0, 0, 0);
+  return hoy.toISOString();
+};
+
+const getVenceEnOptimista = (tarea, nuevoEstado) => {
+  if (!tarea?.venceEn) return tarea?.venceEn;
+  if (nuevoEstado === 'HECHO') return getHoyMediodiaIso();
+  return inicioDiaLocal(tarea.venceEn) < inicioDiaLocal(new Date())
+    ? getHoyMediodiaIso()
+    : tarea.venceEn;
+};
+
 // ── Tarjeta de Tarea (List View) ─────────────────────────────────────────────
 const TareaCard = ({ tarea, onClick, onEliminar, onCambiarEstado }) => {
   const prio = getPrioridad(tarea.prioridad);
@@ -247,12 +267,13 @@ const ProyectoDetallePage = () => {
       ...tareaAnterior,
       estado: est,
       completadoEn: completadoEnOptimista,
+      venceEn: getVenceEnOptimista(tareaAnterior, est),
     };
 
     setTareas(prev => sortTareas(prev.map(x => x.id === id ? tareaOptimista : x)));
 
     if (tareaEditando?.id === id) {
-      setTareaEditando(prev => prev ? { ...prev, estado: est } : prev);
+      setTareaEditando(prev => prev ? { ...prev, estado: est, completadoEn: completadoEnOptimista, venceEn: getVenceEnOptimista(prev, est) } : prev);
     }
 
     try {

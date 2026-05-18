@@ -67,6 +67,37 @@ const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
 // €€ GET /api/proyectos/:id/tareas €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 // ADMIN → ve todas las tareas del proyecto
 // MIEMBRO → ve todas las tareas de los proyectos donde es miembro
+const getHoyMexico = () => {
+  const OFFSET_MEXICO_MS = 6 * 60 * 60 * 1000;
+  const ahoraMexico = new Date(Date.now() - OFFSET_MEXICO_MS);
+  const year = ahoraMexico.getUTCFullYear();
+  const month = ahoraMexico.getUTCMonth();
+  const day = ahoraMexico.getUTCDate();
+
+  return {
+    inicio: new Date(Date.UTC(year, month, day, 6, 0, 0, 0)),
+    mediodia: new Date(Date.UTC(year, month, day, 18, 0, 0, 0)),
+  };
+};
+
+const normalizarVenceEnPorEstado = async (tarea) => {
+  if (!tarea?.venceEn) return tarea;
+
+  const { inicio, mediodia } = getHoyMexico();
+  const debeMoverAFechaActual =
+    tarea.estado === 'HECHO' ||
+    (['PENDIENTE', 'EN_PROGRESO'].includes(tarea.estado) && tarea.venceEn < inicio);
+
+  if (!debeMoverAFechaActual) return tarea;
+
+  await prisma.tarea.update({
+    where: { id: tarea.id },
+    data: { venceEn: mediodia },
+  });
+
+  return { ...tarea, venceEn: mediodia };
+};
+
 const listar = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
   if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
@@ -74,19 +105,18 @@ const listar = async (req, res) => {
   try {
     // 0. Reprogramación automática (Rollover) de tareas vencidas del usuario
     if (req.usuario.rol !== 'ADMIN') {
-      const hoyUTC = new Date(Date.now() - 6 * 60 * 60 * 1000); 
-      hoyUTC.setUTCHours(0, 0, 0, 0); // Inicio del día actual para el usuario
+      const hoyMexico = getHoyMexico();
 
       await prisma.tarea.updateMany({
         where: {
           proyectoId,
           asignadoId: req.usuario.id,
           estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
-          venceEn: { lt: hoyUTC },
+          venceEn: { lt: hoyMexico.inicio },
           NOT: { venceEn: null }
         },
         data: {
-          venceEn: new Date() // Se mueve a hoy (el ajuste a mediodía se hace luego)
+          venceEn: hoyMexico.mediodia
         }
       });
     }
@@ -362,7 +392,7 @@ const editar = async (req, res) => {
 
     const estadoFinal = estado !== undefined ? estado : existente.estado;
 
-    const tarea = await prisma.tarea.update({
+    let tarea = await prisma.tarea.update({
       where: { id },
       data: {
         ...(titulo       !== undefined && { titulo: titulo.trim() }),
@@ -383,18 +413,7 @@ const editar = async (req, res) => {
       include: INCLUDE_ASIGNADO,
     });
 
-    // Ajuste proactivo de fecha si se completó antes de tiempo
-    if (tarea.estado === 'HECHO' && tarea.venceEn) {
-      const hoy = new Date(Date.now() - 6 * 60 * 60 * 1000); 
-      hoy.setUTCHours(12, 0, 0, 0);
-      if (tarea.venceEn > hoy) {
-        await prisma.tarea.update({
-          where: { id: tarea.id },
-          data: { venceEn: hoy }
-        });
-        tarea.venceEn = hoy;
-      }
-    }
+    tarea = await normalizarVenceEnPorEstado(tarea);
 
     // Notificar cambios al asignado si no es quien edita
     if (tarea.asignadoId && tarea.asignadoId !== req.usuario.id) {
@@ -496,7 +515,7 @@ const actualizarEstado = async (req, res) => {
       }
     }
 
-    const tarea = await prisma.tarea.update({
+    let tarea = await prisma.tarea.update({
       where: { id },
       data:  {
         estado,
@@ -505,18 +524,7 @@ const actualizarEstado = async (req, res) => {
       include: INCLUDE_ASIGNADO,
     });
 
-    // Ajuste proactivo de fecha si se completó antes de tiempo
-    if (tarea.estado === 'HECHO' && tarea.venceEn) {
-      const hoy = new Date(Date.now() - 6 * 60 * 60 * 1000); 
-      hoy.setUTCHours(12, 0, 0, 0);
-      if (tarea.venceEn > hoy) {
-        await prisma.tarea.update({
-          where: { id: tarea.id },
-          data: { venceEn: hoy }
-        });
-        tarea.venceEn = hoy;
-      }
-    }
+    tarea = await normalizarVenceEnPorEstado(tarea);
     // Notificar cambio de estado al asignado
     if (tarea.asignadoId && tarea.asignadoId !== req.usuario.id) {
       await crearNotificacion(

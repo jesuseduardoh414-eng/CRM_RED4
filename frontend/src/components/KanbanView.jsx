@@ -57,6 +57,12 @@ const formatFecha = (iso) => {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
 };
 
+const getDateKeyLocal = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
 const esVencida = (fechaStr) => {
   if (!fechaStr) return false;
   const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -328,13 +334,13 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
     dragId.current = null;
   };
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = getDateKeyLocal(new Date());
   const tareasFiltradas = soloHoy 
     ? tareas.filter(t => {
         if (t.estado === 'HECHO') {
-          return t.completadoEn && t.completadoEn.slice(0, 10) === hoy;
+          return t.completadoEn && getDateKeyLocal(t.completadoEn) === hoy;
         }
-        return (t.fechaInicio && t.fechaInicio.slice(0, 10) === hoy) || (t.venceEn && t.venceEn.slice(0, 10) === hoy);
+        return (t.fechaInicio && getDateKeyLocal(t.fechaInicio) === hoy) || (t.venceEn && getDateKeyLocal(t.venceEn) === hoy);
       })
     : tareas;
 
