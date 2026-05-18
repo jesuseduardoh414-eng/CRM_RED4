@@ -39,7 +39,14 @@ const Layout = ({ children }) => {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('crm_sidebar_collapsed') === 'true');
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
   const [, setRecordatoriosCount] = useState(0);
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     if (!usuario) return;
@@ -116,10 +123,19 @@ const Layout = ({ children }) => {
         className={`
           fixed lg:sticky top-0 h-screen z-[100] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
           bg-[var(--color-sidebar)] flex flex-col
-          ${collapsed ? 'lg:w-[92px]' : 'lg:w-[280px]'}
-          w-[280px]
-          ${open ? 'left-0' : '-left-[280px] lg:left-0'}
         `}
+        style={{
+          left: isDesktop ? 0 : (open ? 0 : 'calc(-1 * min(84vw, 320px))'),
+          width: isDesktop
+            ? (collapsed ? '92px' : 'clamp(240px, 18vw, 280px)')
+            : 'min(84vw, 320px)',
+          minWidth: isDesktop
+            ? (collapsed ? '92px' : 'clamp(240px, 18vw, 280px)')
+            : 'min(84vw, 320px)',
+          maxWidth: isDesktop
+            ? (collapsed ? '92px' : '280px')
+            : '320px',
+        }}
       >
         <div className={`relative flex w-full flex-col items-center ${collapsed ? 'gap-5 px-3 pt-6 pb-6' : 'gap-4 px-4 pt-12 pb-6'}`}>
           <img
@@ -230,7 +246,7 @@ const Layout = ({ children }) => {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 flex flex-col h-screen bg-[var(--color-bg-base)]">
+      <main className="flex-1 min-w-0 flex flex-col h-screen bg-[var(--color-bg-base)] overflow-hidden">
         <header className="h-16 lg:h-[70px] bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center px-4 lg:px-10 gap-4 lg:gap-8 sticky top-0 z-[90]">
           <button
             onClick={() => setOpen(true)}
@@ -260,7 +276,7 @@ const Layout = ({ children }) => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-12 max-w-[1600px] w-full mx-auto">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 xl:p-12 max-w-[1600px] w-full mx-auto">
           {children}
         </div>
       </main>
