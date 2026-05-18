@@ -278,9 +278,19 @@ const ProyectoDetallePage = () => {
 
     try {
       const { tarea } = await tareasService.actualizarEstado(id, est);
-      setTareas(prev => sortTareas(prev.map(x => x.id === id ? tarea : x)));
+      const tareaConfirmada = {
+        ...tareaAnterior,
+        ...tarea,
+        estado: est,
+        completadoEn: est === 'HECHO'
+          ? (tarea.completadoEn || completadoEnOptimista)
+          : null,
+        venceEn: getVenceEnOptimista(tarea, est),
+      };
+
+      setTareas(prev => sortTareas(prev.map(x => x.id === id ? tareaConfirmada : x)));
       if (tareaEditando?.id === id) {
-        setTareaEditando(tarea);
+        setTareaEditando(tareaConfirmada);
       }
     } catch (err) {
       setTareas(prev => sortTareas(prev.map(x => x.id === id ? tareaAnterior : x)));
