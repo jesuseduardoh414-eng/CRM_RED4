@@ -62,6 +62,10 @@ const inicioDiaLocal = (value) => {
   return date;
 };
 
+const esFechaVencida = (value) => (
+  Boolean(value) && inicioDiaLocal(value) < inicioDiaLocal(new Date())
+);
+
 const getHoyMediodiaIso = () => {
   const hoy = new Date();
   hoy.setHours(12, 0, 0, 0);
@@ -71,7 +75,7 @@ const getHoyMediodiaIso = () => {
 const getVenceEnOptimista = (tarea, nuevoEstado) => {
   if (!tarea?.venceEn) return tarea?.venceEn;
   if (nuevoEstado === 'HECHO') return getHoyMediodiaIso();
-  return inicioDiaLocal(tarea.venceEn) < inicioDiaLocal(new Date())
+  return esFechaVencida(tarea.venceEn)
     ? getHoyMediodiaIso()
     : tarea.venceEn;
 };
@@ -82,7 +86,7 @@ const TareaCard = ({ tarea, onClick, onEliminar, onCambiarEstado }) => {
   const estado = getEstadoConf(tarea.estado);
   const CICLO = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
   const sigEstado = CICLO[(CICLO.indexOf(tarea.estado) + 1) % CICLO.length];
-  const vencido = tarea.venceEn && new Date(tarea.venceEn) < new Date() && tarea.estado !== 'HECHO';
+  const vencido = esFechaVencida(tarea.venceEn) && tarea.estado !== 'HECHO';
 
   return (
     <div 

@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   ListTodo, 
@@ -281,12 +281,45 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
 // ── View Principal ───────────────────────────────────────────────────────────
 const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea }) => {
   const [actualizando, setActualizando] = useState(null);
+  const [optimisticMoves, setOptimisticMoves] = useState({});
   const [soloHoy, setSoloHoy] = useState(true);
   const [limites, setLimites] = useState({ PENDIENTE: 10, EN_PROGRESO: 10, HECHO: 10 });
   const dragId = useRef(null);
   const columnasRef = useRef({});
   const scrollRestoreRef = useRef(null);
   const scrollFocusRef = useRef(null);
+
+  const tareasConEstadoLocal = useMemo(() => (
+    tareas.map((tarea) => {
+      const movimiento = optimisticMoves[tarea.id];
+      if (!movimiento) return tarea;
+      return {
+        ...tarea,
+        estado: movimiento.estado,
+        completadoEn: movimiento.completadoEn,
+      };
+    })
+  ), [tareas, optimisticMoves]);
+
+  useEffect(() => {
+    setOptimisticMoves((prev) => {
+      const entries = Object.entries(prev);
+      if (entries.length === 0) return prev;
+
+      let changed = false;
+      const next = { ...prev };
+
+      entries.forEach(([taskId, movimiento]) => {
+        const tareaReal = tareas.find((item) => item.id === Number(taskId));
+        if (!tareaReal || tareaReal.estado === movimiento.estado || tareaReal.estado === movimiento.previousEstado) {
+          delete next[taskId];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [tareas]);
 
   const handleDragStart = (e, id) => {
     dragId.current = id;
@@ -301,7 +334,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
       if (!el) return;
       snapshot[columna] = getScrollSnapshot(
         el,
-        tareas.filter(t => t.estado === columna).length
+        tareasConEstadoLocal.filter(t => t.estado === columna).length
       );
     });
 
@@ -309,7 +342,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
   };
 
   const handleCambiarEstadoKanban = async (id, nuevoEstado) => {
-    const tareaActual = tareas.find(x => x.id === Number(id));
+    const tareaActual = tareasConEstadoLocal.find(x => x.id === Number(id));
     if (!tareaActual || tareaActual.estado === nuevoEstado) return;
 
     registrarSnapshotScroll(tareaActual.estado, nuevoEstado);
@@ -322,9 +355,21 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
   const handleDrop = async (e, colKey) => {
     const id = dragId.current;
     if (!id) return;
-    const t = tareas.find(x => x.id === Number(id));
+    const t = tareasConEstadoLocal.find(x => x.id === Number(id));
     if (t && t.estado !== colKey) {
-      setActualizando(id);
+      setOptimisticMoves((prev) => ({
+        ...prev,
+        [Number(id)]: {
+          previousEstado: t.estado,
+          estado: colKey,
+          completadoEn: colKey === 'HECHO' ? new Date().toISOString() : null,
+        },
+      }));
+      setLimites((prev) => ({
+        ...prev,
+        [colKey]: Math.max(prev[colKey], (tareasConEstadoLocal.filter((item) => item.estado === colKey).length || 0) + 1),
+      }));
+      setActualizando(Number(id));
       try {
         await handleCambiarEstadoKanban(Number(id), colKey);
       } finally {
@@ -336,13 +381,14 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
 
   const hoy = getDateKeyLocal(new Date());
   const tareasFiltradas = soloHoy 
-    ? tareas.filter(t => {
+    ? tareasConEstadoLocal.filter(t => {
+        if (optimisticMoves[t.id]) return true;
         if (t.estado === 'HECHO') {
           return t.completadoEn && getDateKeyLocal(t.completadoEn) === hoy;
         }
         return (t.fechaInicio && getDateKeyLocal(t.fechaInicio) === hoy) || (t.venceEn && getDateKeyLocal(t.venceEn) === hoy);
       })
-    : tareas;
+    : tareasConEstadoLocal;
 
   const tareasPorColumna = useMemo(() => ({
     PENDIENTE: tareasFiltradas.filter(t => t.estado === 'PENDIENTE'),

@@ -10,6 +10,9 @@ const { registrarActividad } = require('../utils/logger');
 const { sortTareas } = require('../utils/sort.utils');
 const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
 
+const OFFSET_MEXICO_MS = 6 * 60 * 60 * 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 // Selector común para incluir datos del asignado sin exponer password
 const INCLUDE_ASIGNADO = {
   asignado: {
@@ -68,7 +71,6 @@ const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
 // ADMIN → ve todas las tareas del proyecto
 // MIEMBRO → ve todas las tareas de los proyectos donde es miembro
 const getHoyMexico = () => {
-  const OFFSET_MEXICO_MS = 6 * 60 * 60 * 1000;
   const ahoraMexico = new Date(Date.now() - OFFSET_MEXICO_MS);
   const year = ahoraMexico.getUTCFullYear();
   const month = ahoraMexico.getUTCMonth();
@@ -77,25 +79,64 @@ const getHoyMexico = () => {
   return {
     inicio: new Date(Date.UTC(year, month, day, 6, 0, 0, 0)),
     mediodia: new Date(Date.UTC(year, month, day, 18, 0, 0, 0)),
+    indice: Math.floor(Date.UTC(year, month, day) / ONE_DAY_MS),
   };
+};
+
+const getPartesFechaMexico = (value = new Date()) => {
+  const fechaMexico = new Date(new Date(value).getTime() - OFFSET_MEXICO_MS);
+  return {
+    year: fechaMexico.getUTCFullYear(),
+    month: fechaMexico.getUTCMonth(),
+    day: fechaMexico.getUTCDate(),
+  };
+};
+
+const crearFechaMexico = ({ year, month, day }, hour = 12) =>
+  new Date(Date.UTC(year, month, day, hour + 6, 0, 0, 0));
+
+const getIndiceDiaMexico = (value) => {
+  const { year, month, day } = getPartesFechaMexico(value);
+  return Math.floor(Date.UTC(year, month, day) / ONE_DAY_MS);
+};
+
+const moverFechaAlDiaActual = (value, dias) => {
+  if (!value || dias <= 0) return value;
+  const siguiente = new Date(value);
+  siguiente.setUTCDate(siguiente.getUTCDate() + dias);
+  return crearFechaMexico(getPartesFechaMexico(siguiente), 12);
 };
 
 const normalizarVenceEnPorEstado = async (tarea) => {
   if (!tarea?.venceEn) return tarea;
 
-  const { inicio, mediodia } = getHoyMexico();
-  const debeMoverAFechaActual =
-    tarea.estado === 'HECHO' ||
-    (['PENDIENTE', 'EN_PROGRESO'].includes(tarea.estado) && tarea.venceEn < inicio);
+  const { indice } = getHoyMexico();
+  const cambios = {};
 
-  if (!debeMoverAFechaActual) return tarea;
+  if (tarea.estado === 'HECHO') {
+    const fechaCompletado = tarea.completadoEn || new Date();
+    const venceNormalizado = crearFechaMexico(getPartesFechaMexico(fechaCompletado), 12);
+    if (new Date(tarea.venceEn).getTime() !== venceNormalizado.getTime()) {
+      cambios.venceEn = venceNormalizado;
+    }
+  } else if (['PENDIENTE', 'EN_PROGRESO'].includes(tarea.estado)) {
+    const diasDeDesfase = indice - getIndiceDiaMexico(tarea.venceEn);
+    if (diasDeDesfase > 0) {
+      cambios.venceEn = moverFechaAlDiaActual(tarea.venceEn, diasDeDesfase);
+      if (tarea.fechaInicio) {
+        cambios.fechaInicio = moverFechaAlDiaActual(tarea.fechaInicio, diasDeDesfase);
+      }
+    }
+  }
+
+  if (Object.keys(cambios).length === 0) return tarea;
 
   await prisma.tarea.update({
     where: { id: tarea.id },
-    data: { venceEn: mediodia },
+    data: cambios,
   });
 
-  return { ...tarea, venceEn: mediodia };
+  return { ...tarea, ...cambios };
 };
 
 const listar = async (req, res) => {
@@ -104,23 +145,6 @@ const listar = async (req, res) => {
 
   try {
     // 0. Reprogramación automática (Rollover) de tareas vencidas del usuario
-    if (req.usuario.rol !== 'ADMIN') {
-      const hoyMexico = getHoyMexico();
-
-      await prisma.tarea.updateMany({
-        where: {
-          proyectoId,
-          asignadoId: req.usuario.id,
-          estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
-          venceEn: { lt: hoyMexico.inicio },
-          NOT: { venceEn: null }
-        },
-        data: {
-          venceEn: hoyMexico.mediodia
-        }
-      });
-    }
-
     // Verificar que el proyecto existe
     const proyecto = await prisma.proyecto.findUnique({
       where: { id: proyectoId },
@@ -164,7 +188,8 @@ const listar = async (req, res) => {
     });
 
     // Ajustar fechas para evitar desfases de zona horaria (poner a mediodía)
-    const tareasAjustadas = tareas.map(t => {
+    const tareasNormalizadas = await Promise.all(tareas.map(normalizarVenceEnPorEstado));
+    const tareasAjustadas = tareasNormalizadas.map(t => {
       if (t.venceEn) {
         const d = new Date(t.venceEn);
         if (d.getUTCHours() === 0) d.setUTCHours(12);
