@@ -18,6 +18,9 @@ const INCLUDE_ASIGNADO = {
   asignado: {
     select: { id: true, nombre: true, area: true },
   },
+  asignados: {
+    select: { id: true, nombre: true, area: true },
+  },
   creador: {
     select: { id: true, nombre: true, area: true },
   },
@@ -27,18 +30,46 @@ const visibilidadTareasPara = (usuarioId) => ({
   OR: [
     { asignadoId: null },
     { asignadoId: usuarioId },
+    { asignados: { some: { id: usuarioId } } },
     { creadorId: usuarioId },
   ],
 });
 
 const puedeAccederTarea = (tarea, usuarioId) => (
-  !tarea.asignadoId || tarea.asignadoId === usuarioId || tarea.creadorId === usuarioId
+  !tarea.asignadoId
+  || tarea.asignadoId === usuarioId
+  || tarea.creadorId === usuarioId
+  || tarea.asignados?.some((asignado) => asignado.id === usuarioId)
 );
 
-const normalizarAsignadoId = (asignadoId) => {
-  if (!asignadoId) return null;
-  const id = parseInt(asignadoId);
-  return Number.isNaN(id) ? null : id;
+const parseArrayValue = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [value];
+    } catch {
+      return value.split(',').map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  return [value];
+};
+
+const normalizarAsignadoIds = (asignadoIds, asignadoIdFallback = undefined) => {
+  if (asignadoIds === undefined) {
+    if (asignadoIdFallback === undefined) return undefined;
+    if (!asignadoIdFallback) return [];
+    const id = parseInt(asignadoIdFallback, 10);
+    return Number.isNaN(id) ? [] : [id];
+  }
+
+  return [...new Set(
+    parseArrayValue(asignadoIds)
+      .map((value) => parseInt(value, 10))
+      .filter((value) => !Number.isNaN(value))
+  )];
 };
 
 const normalizarNumeroActividad = (numeroActividad) => {
@@ -48,10 +79,9 @@ const normalizarNumeroActividad = (numeroActividad) => {
   return Number.isNaN(numero) || numero <= 0 ? null : numero;
 };
 
-const asignadoPerteneceAProyecto = (proyecto, asignadoId) => {
-  if (!asignadoId) return true;
-  return proyecto.miembros.some(m => m.id === asignadoId);
-};
+const asignadosPertenecenAProyecto = (proyecto, asignadoIds = []) => (
+  asignadoIds.every((asignadoId) => proyecto.miembros.some((m) => m.id === asignadoId))
+);
 
 // Helper para crear notificaciones
 const crearNotificacion = async (
@@ -75,6 +105,14 @@ const crearNotificacion = async (
   } catch (error) {
     console.error('[crearNotificacion]', error);
   }
+};
+
+const crearNotificacionesAsignacion = async ({ asignadoIds = [], actorId, mensaje, tipo, tareaId }) => {
+  await Promise.all(
+    asignadoIds
+      .filter((usuarioId) => usuarioId && usuarioId !== actorId)
+      .map((usuarioId) => crearNotificacion(usuarioId, mensaje, tipo, { tareaId }))
+  );
 };
 
 // €€ GET /api/proyectos/:id/tareas €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
@@ -177,6 +215,7 @@ const listar = async (req, res) => {
           proyectoId,
           OR: [
             { asignadoId: req.usuario.id },
+            { asignados: { some: { id: req.usuario.id } } },
             { creadorId: req.usuario.id },
           ],
         },
@@ -218,10 +257,13 @@ const listar = async (req, res) => {
 
     const todasLasTareas = await prisma.tarea.findMany({
       where: { proyectoId },
-      select: { estado: true, asignadoId: true },
+      select: { estado: true, asignadoId: true, asignados: { select: { id: true } } },
     });
     
-    const tareasMiembro = todasLasTareas.filter(t => t.asignadoId === req.usuario.id);
+    const tareasMiembro = todasLasTareas.filter((t) =>
+      t.asignadoId === req.usuario.id
+      || t.asignados.some((asignado) => asignado.id === req.usuario.id)
+    );
     
     // Stats Generales (Todo el proyecto)
     const totalGeneral = todasLasTareas.length;
@@ -267,7 +309,7 @@ const crear = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
   if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
-  const { titulo, descripcion, numeroActividad, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId, primerComentario } = req.body;
+  const { titulo, descripcion, numeroActividad, asignadoId, asignadoIds, prioridad, estado, fechaInicio, venceEn, dependeDeId, primerComentario } = req.body;
   const archivos = req.files;
 
   if (!titulo || titulo.trim() === '') {
@@ -281,7 +323,8 @@ const crear = async (req, res) => {
       include: { miembros: { select: { id: true } } }
     });
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
-    const asignadoIdNormalizado = normalizarAsignadoId(asignadoId);
+    const asignadoIdsNormalizados = normalizarAsignadoIds(asignadoIds, asignadoId);
+    const asignadoPrincipalId = asignadoIdsNormalizados?.[0] ?? null;
 
     // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
     if (esAdmin(req.usuario)) {
@@ -300,7 +343,7 @@ const crear = async (req, res) => {
       }
     }
 
-    if (!asignadoPerteneceAProyecto(proyecto, asignadoIdNormalizado)) {
+    if (!asignadosPertenecenAProyecto(proyecto, asignadoIdsNormalizados || [])) {
       return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
 
@@ -326,7 +369,10 @@ const crear = async (req, res) => {
         fechaInicio: dInicio,
         venceEn:     dVence,
         proyectoId,
-        asignadoId:  asignadoIdNormalizado,
+        asignadoId:  asignadoPrincipalId,
+        asignados:   {
+          connect: (asignadoIdsNormalizados || []).map((idAsignado) => ({ id: idAsignado })),
+        },
         creadorId:   req.usuario.id,
         dependeDeId: dependeDeId ? parseInt(dependeDeId) : null,
       },
@@ -361,16 +407,13 @@ const crear = async (req, res) => {
     }
 
     // Notificar al asignado si no es quien la crea
-    if (tarea.asignadoId && tarea.asignadoId !== req.usuario.id) {
-      await crearNotificacion(
-        tarea.asignadoId,
-        `Te han asignado una nueva tarea: "${tarea.titulo}"`,
-        'ASIGNACION',
-        {
-          tareaId: tarea.id,
-        }
-      );
-    }
+    await crearNotificacionesAsignacion({
+      asignadoIds: asignadoIdsNormalizados || [],
+      actorId: req.usuario.id,
+      mensaje: `Te han asignado una nueva tarea: "${tarea.titulo}"`,
+      tipo: 'ASIGNACION',
+      tareaId: tarea.id,
+    });
 
     // Registrar en el Log de Actividad
     await registrarActividad(
@@ -393,15 +436,19 @@ const editar = async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
 
-  const { titulo, descripcion, numeroActividad, asignadoId, prioridad, estado, fechaInicio, venceEn, dependeDeId } = req.body;
+  const { titulo, descripcion, numeroActividad, asignadoId, asignadoIds, prioridad, estado, fechaInicio, venceEn, dependeDeId } = req.body;
 
   try {
     const existente = await prisma.tarea.findUnique({ 
       where: { id },
-      include: { proyecto: { include: { miembros: { select: { id: true } } } } }
+      include: {
+        proyecto: { include: { miembros: { select: { id: true } } } },
+        asignados: { select: { id: true } },
+      }
     });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
-    const asignadoIdNormalizado = asignadoId !== undefined ? normalizarAsignadoId(asignadoId) : undefined;
+    const asignadoIdsNormalizados = normalizarAsignadoIds(asignadoIds, asignadoId);
+    const asignadoPrincipalId = asignadoIdsNormalizados?.[0] ?? null;
 
     // Verificar permisos: ADMIN o miembro con visibilidad sobre esta tarea
     if (esAdmin(req.usuario)) {
@@ -415,7 +462,7 @@ const editar = async (req, res) => {
       }
     }
 
-    if (asignadoIdNormalizado !== undefined && !asignadoPerteneceAProyecto(existente.proyecto, asignadoIdNormalizado)) {
+    if (asignadoIdsNormalizados !== undefined && !asignadosPertenecenAProyecto(existente.proyecto, asignadoIdsNormalizados)) {
       return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
 
@@ -442,7 +489,12 @@ const editar = async (req, res) => {
             ? (existente.estado === 'HECHO' ? existente.completadoEn || new Date() : new Date())
             : null
         }),
-        ...(asignadoId   !== undefined && { asignadoId: asignadoIdNormalizado }),
+        ...(asignadoIdsNormalizados !== undefined && { asignadoId: asignadoPrincipalId }),
+        ...(asignadoIdsNormalizados !== undefined && {
+          asignados: {
+            set: asignadoIdsNormalizados.map((idAsignado) => ({ id: idAsignado })),
+          },
+        }),
         ...(dInicio      !== undefined && { fechaInicio: dInicio }),
         ...(dVence       !== undefined && { venceEn: dVence }),
         ...(dependeDeId  !== undefined && { dependeDeId: dependeDeId ? parseInt(dependeDeId) : null }),
@@ -492,7 +544,10 @@ const eliminar = async (req, res) => {
   try {
     const existente = await prisma.tarea.findUnique({ 
       where: { id },
-      include: { proyecto: { include: { miembros: { select: { id: true } } } } }
+      include: {
+        proyecto: { include: { miembros: { select: { id: true } } } },
+        asignados: { select: { id: true } },
+      }
     });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 
@@ -538,7 +593,10 @@ const actualizarEstado = async (req, res) => {
   try {
     const existente = await prisma.tarea.findUnique({ 
       where: { id },
-      include: { proyecto: { include: { miembros: { select: { id: true } } } } }
+      include: {
+        proyecto: { include: { miembros: { select: { id: true } } } },
+        asignados: { select: { id: true } },
+      }
     });
     if (!existente) return res.status(404).json({ error: 'Tarea no encontrada' });
 

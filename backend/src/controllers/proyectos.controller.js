@@ -86,10 +86,6 @@ const validarRangoProyecto = ({ inicio, fin }) => {
   return null;
 };
 
-const getFinTareaParaDisponibilidad = (tarea) => (
-  tarea.venceEn ? tarea.venceEn : new Date(tarea.fechaInicio.getTime() + ONE_DAY_MS)
-);
-
 const validarMiembrosPorArea = async (ids) => {
   if (ids.length === 0) return { usuarios: [], invalidos: [] };
   const usuarios = await prisma.usuario.findMany({
@@ -101,63 +97,6 @@ const validarMiembrosPorArea = async (ids) => {
     usuarios,
     invalidos: ids.filter(id => !idsValidos.has(id)),
   };
-};
-
-const consultarOcupados = async ({ ids, inicio, fin, proyectoId = null }) => {
-  if (ids.length === 0) return [];
-  const admins = await prisma.usuario.findMany({
-    where: { id: { in: ids }, rol: 'ADMIN' },
-    select: { id: true }
-  });
-  const adminIds = new Set(admins.map(u => u.id));
-  const idsRevisar = ids.filter(id => !adminIds.has(id));
-  if (idsRevisar.length === 0) return [];
-
-  const [eventos, tareas] = await Promise.all([
-    prisma.evento.findMany({
-      where: {
-        proyectoId: null,
-        OR: [
-          { usuarioId: { in: idsRevisar } },
-          { invitados: { some: { usuarioId: { in: idsRevisar }, estado: 'aceptado' } } }
-        ],
-        fechaInicio: { lt: fin },
-        fechaFin: { gt: inicio }
-      },
-      select: { titulo: true, usuarioId: true }
-    }),
-    prisma.tarea.findMany({
-      where: {
-        proyectoId: proyectoId ? { not: proyectoId } : undefined,
-        asignadoId: { in: idsRevisar },
-        estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
-        // Cruce de rangos: periodo del proyecto contra periodo real de cada tarea.
-        fechaInicio: { lt: fin },
-        OR: [
-          { venceEn: { gt: inicio } },
-          { venceEn: null, fechaInicio: { gte: inicio } }
-        ]
-      },
-      select: {
-        titulo: true,
-        asignadoId: true,
-        fechaInicio: true,
-        venceEn: true,
-        proyecto: { select: { nombre: true } }
-      }
-    })
-  ]);
-
-  return [
-    ...eventos.map(e => ({ usuarioId: e.usuarioId, titulo: e.titulo })),
-    ...tareas.map(t => ({
-      usuarioId: t.asignadoId,
-      titulo: `Tarea: ${t.titulo}`,
-      proyecto: t.proyecto?.nombre || null,
-      fechaInicio: t.fechaInicio,
-      fechaFin: getFinTareaParaDisponibilidad(t),
-    })),
-  ];
 };
 
 const sincronizarCalendarioProyecto = async ({ proyecto, ids }) => {
@@ -470,17 +409,6 @@ const crear = async (req, res) => {
     const errorFechas = validarRangoProyecto({ inicio, fin });
     if (errorFechas) return res.status(400).json({ error: errorFechas });
 
-    const ocupados = await consultarOcupados({ ids, inicio, fin });
-    if (ocupados.length > 0) {
-      const usuariosOcupados = await prisma.usuario.findMany({
-        where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },
-        select: { nombre: true }
-      });
-      return res.status(400).json({
-        error: `No se puede asignar el proyecto: ${usuariosOcupados.map(u => u.nombre).join(', ')} tiene agenda ocupada`
-      });
-    }
-
     const plantillaIdNum = plantillaId ? parseInt(plantillaId) : null;
     const plantilla = plantillaIdNum
       ? await prisma.plantillaProyecto.findUnique({
@@ -613,16 +541,6 @@ const editar = async (req, res) => {
       const errorFechas = validarRangoProyecto({ inicio, fin });
       if (errorFechas) return res.status(400).json({ error: errorFechas });
 
-      const ocupados = await consultarOcupados({ ids: idsNuevos, inicio, fin, proyectoId: id });
-      if (ocupados.length > 0) {
-        const usuariosOcupados = await prisma.usuario.findMany({
-          where: { id: { in: [...new Set(ocupados.map(o => o.usuarioId))] } },
-          select: { nombre: true }
-        });
-        return res.status(400).json({
-          error: `No se puede asignar el proyecto: ${usuariosOcupados.map(u => u.nombre).join(', ')} tiene agenda ocupada`
-        });
-      }
       dataUpdate.miembros = {
         set: idsProyecto.map(mid => ({ id: Number(mid) }))
       };

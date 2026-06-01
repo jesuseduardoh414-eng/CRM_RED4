@@ -1,3 +1,4 @@
+
 ALTER TABLE "usuarios"
 ADD COLUMN "telefono" TEXT,
 ADD COLUMN "puesto" TEXT,

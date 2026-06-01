@@ -45,6 +45,7 @@ model Usuario {
   plantillasCreadas        PlantillaProyecto[] @relation("CreadorPlantillaProyecto")
   tareasCreadas            Tarea[]        @relation("CreadorTarea")
   tareasAsignadas          Tarea[]        @relation("AsignadoTarea")
+  tareasCompartidas        Tarea[]        @relation("AsignadosMultiplesTarea")
   proyectosMiembro         Proyecto[]     @relation("ProyectoMiembro")
   invitacionesEnviadas     Invitacion[]   @relation("CreadorInvitacion")
 
@@ -141,6 +142,7 @@ model Tarea {
   comentarios Comentario[]
   actividades LogActividad[]
   asignado    Usuario?     @relation("AsignadoTarea", fields: [asignadoId], references: [id])
+  asignados   Usuario[]    @relation("AsignadosMultiplesTarea")
   creador     Usuario?     @relation("CreadorTarea", fields: [creadorId], references: [id])
   dependeDe   Tarea?       @relation("Dependencia", fields: [dependeDeId], references: [id])
   bloqueaA    Tarea[]      @relation("Dependencia")

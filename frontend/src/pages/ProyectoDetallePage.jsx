@@ -110,6 +110,20 @@ const tareaCoincideConRango = (tarea, rango) => {
   return true;
 };
 
+const getTaskAssignees = (tarea) => {
+  if (Array.isArray(tarea?.asignados) && tarea.asignados.length > 0) return tarea.asignados;
+  return tarea?.asignado ? [tarea.asignado] : [];
+};
+
+const isTaskAssignedToUser = (tarea, usuarioId) => (
+  getTaskAssignees(tarea).some((asignado) => asignado.id === usuarioId)
+);
+
+const getTaskAssigneeNames = (tarea, fallback) => {
+  const nombres = getTaskAssignees(tarea).map((asignado) => asignado.nombre).filter(Boolean);
+  return nombres.length > 0 ? nombres.join(', ') : fallback;
+};
+
 // ── Tarjeta de Tarea (List View) ─────────────────────────────────────────────
 const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado }) => {
   const { t } = usePreferences();
@@ -118,14 +132,15 @@ const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado 
   const CICLO = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
   const sigEstado = CICLO[(CICLO.indexOf(tarea.estado) + 1) % CICLO.length];
   const vencido = esFechaVencida(tarea.venceEn) && tarea.estado !== 'HECHO';
+  const asignados = getTaskAssignees(tarea);
   const creadorEsUsuarioActual = tarea.creador?.id === usuarioActual?.id
-    || (!tarea.creador?.id && (!tarea.asignado?.id || tarea.asignado?.id === usuarioActual?.id));
+    || (!tarea.creador?.id && (asignados.length === 0 || isTaskAssignedToUser(tarea, usuarioActual?.id)));
   const asignadorLabel = creadorEsUsuarioActual
     ? t('taskCreatedByYou')
     : `${t('taskAssignedBy')} ${tarea.creador?.nombre || t('taskCreatedBySystem')}`;
-  const responsableLabel = tarea.asignado?.id === usuarioActual?.id
+  const responsableLabel = isTaskAssignedToUser(tarea, usuarioActual?.id)
     ? t('taskAssignedToYou')
-    : `${t('projectResponsible')}: ${tarea.asignado?.nombre || t('taskUnassigned')}`;
+    : `${t('projectResponsible')}: ${getTaskAssigneeNames(tarea, t('taskUnassigned'))}`;
 
   return (
     <div 
@@ -284,7 +299,7 @@ const ProyectoDetallePage = () => {
     const total = tareas.length;
     const pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
 
-    const tareasMiembro = tareas.filter(t => t.asignado?.id === usuario?.id);
+    const tareasMiembro = tareas.filter((t) => isTaskAssignedToUser(t, usuario?.id));
     const hechasMiembro = tareasMiembro.filter(t => t.estado === 'HECHO').length;
     const pctMiembro = tareasMiembro.length > 0 ? Math.round((hechasMiembro / tareasMiembro.length) * 100) : 0;
 
@@ -317,9 +332,9 @@ const ProyectoDetallePage = () => {
   const responsablesFiltro = useMemo(() => {
     const mapa = new Map();
     tareas.forEach((tarea) => {
-      if (tarea.asignado?.id) {
-        mapa.set(String(tarea.asignado.id), tarea.asignado);
-      }
+      getTaskAssignees(tarea).forEach((asignado) => {
+        mapa.set(String(asignado.id), asignado);
+      });
     });
     return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [tareas]);
@@ -330,8 +345,8 @@ const ProyectoDetallePage = () => {
 
       if (filtroResponsable !== 'todos') {
         if (filtroResponsable === 'sin_asignar') {
-          if (tarea.asignado?.id) return false;
-        } else if (String(tarea.asignado?.id || '') !== filtroResponsable) {
+          if (getTaskAssignees(tarea).length > 0) return false;
+        } else if (!getTaskAssignees(tarea).some((asignado) => String(asignado.id) === filtroResponsable)) {
           return false;
         }
       }
@@ -682,12 +697,12 @@ const ProyectoDetallePage = () => {
 const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGuardar, onEliminar }) => {
   const { t } = usePreferences();
   const creadorEsUsuarioActual = tarea?.creador?.id === usuarioActual?.id
-    || (!tarea?.creador?.id && (!tarea?.asignado?.id || tarea?.asignado?.id === usuarioActual?.id));
+    || (!tarea?.creador?.id && (getTaskAssignees(tarea).length === 0 || isTaskAssignedToUser(tarea, usuarioActual?.id)));
   const [form, setForm] = useState({
     titulo: tarea?.titulo || '',
     descripcion: tarea?.descripcion || '',
     numeroActividad: tarea?.numeroActividad || '',
-    asignadoId: tarea?.asignado?.id || '',
+    asignadoIds: getTaskAssignees(tarea).map((asignado) => asignado.id),
     prioridad: tarea?.prioridad || 'MEDIA',
     estado: tarea?.estado || 'PENDIENTE',
     fechaInicio: tarea?.fechaInicio ? tarea.fechaInicio.slice(0,10) : new Date().toISOString().slice(0,10),
@@ -704,7 +719,13 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
         await tareasService.editar(tarea.id, form);
       } else {
         const fd = new FormData();
-        Object.entries(form).forEach(([k,v]) => fd.append(k,v));
+        Object.entries(form).forEach(([k,v]) => {
+          if (k === 'asignadoIds') {
+            fd.append(k, JSON.stringify(v));
+            return;
+          }
+          fd.append(k,v);
+        });
         archivos.forEach((file) => fd.append('archivos', file));
         await tareasService.crear(proyectoId, fd);
       }
@@ -766,10 +787,33 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskAssignedTo').toUpperCase()}</label>
-                <select className="form-input form-select" value={form.asignadoId} onChange={e => setForm({...form, asignadoId: e.target.value})}>
-                  <option value="">{t('taskUnassigned')}</option>
-                  {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                </select>
+                <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+                  <div className="flex flex-wrap gap-2">
+                    {usuarios.map((u) => {
+                      const isSelected = form.asignadoIds.includes(u.id);
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => setForm((prev) => ({
+                            ...prev,
+                            asignadoIds: isSelected
+                              ? prev.asignadoIds.filter((idAsignado) => idAsignado !== u.id)
+                              : [...prev.asignadoIds, u.id],
+                          }))}
+                          className={`px-3 py-2 rounded-xl text-xs font-black transition-all border ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20' : 'bg-white text-[var(--color-text-dim)] border-[var(--color-border)] hover:bg-[var(--color-surface-3)]'}`}
+                        >
+                          {u.nombre}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-[11px] font-semibold text-[var(--color-text-muted)]">
+                    {form.asignadoIds.length > 0
+                      ? `${form.asignadoIds.length} ${form.asignadoIds.length === 1 ? 'responsable seleccionado' : 'responsables seleccionados'}`
+                      : t('taskUnassigned')}
+                  </p>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskStatus').toUpperCase()}</label>

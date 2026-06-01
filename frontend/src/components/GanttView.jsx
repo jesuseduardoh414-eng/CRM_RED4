@@ -76,12 +76,24 @@ const getStatusConf = (estado) => STATUS_CONF[estado] || STATUS_CONF.PENDIENTE;
 const getPriorityConf = (prioridad) => PRIORITY_CONF[prioridad] || PRIORITY_CONF.MEDIA;
 const getAreaConf = (area) => AREA_COLORS[area] || AREA_COLORS.DEFAULT;
 
+const getTaskAssignees = (tarea) => {
+  if (Array.isArray(tarea?.asignados) && tarea.asignados.length > 0) return tarea.asignados;
+  return tarea?.asignado ? [tarea.asignado] : [];
+};
+
+const getPrimaryAssignee = (tarea) => getTaskAssignees(tarea)[0] || null;
+
+const getTaskAssigneeLabel = (tarea, fallback) => {
+  const nombres = getTaskAssignees(tarea).map((asignado) => asignado.nombre).filter(Boolean);
+  return nombres.length > 0 ? nombres.join(', ') : fallback;
+};
+
 const Tooltip = ({ tarea, rect }) => {
   if (!tarea || !rect) return null;
 
   const status = getStatusConf(tarea.estado);
   const priority = getPriorityConf(tarea.prioridad);
-  const area = getAreaConf(tarea.asignado?.area);
+  const area = getAreaConf(getPrimaryAssignee(tarea)?.area);
   const { start, end } = getTaskDates(tarea);
   const overdue = tarea.estado !== 'HECHO' && tarea.venceEn && startOfDay(tarea.venceEn) < startOfDay(new Date());
 
@@ -112,7 +124,7 @@ const Tooltip = ({ tarea, rect }) => {
       <div style={{ display: 'grid', gap: '0.45rem', fontSize: '0.77rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <User size={12} color={area.solid} />
-          {tarea.asignado?.nombre || 'Sin asignar'}
+          {getTaskAssigneeLabel(tarea, 'Sin asignar')}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <CalendarRange size={12} color="#60a5fa" />
@@ -373,7 +385,7 @@ const GanttView = ({ proyecto, tareas }) => {
               {preparedTasks.map((tarea, index) => {
                 const status = getStatusConf(tarea.estado);
                 const priority = getPriorityConf(tarea.prioridad);
-                const area = getAreaConf(tarea.asignado?.area);
+                const area = getAreaConf(getPrimaryAssignee(tarea)?.area);
                 const startPct = getPosition(tarea.start);
                 const endPct = getPosition(tarea.end);
                 const widthPct = Math.max(2.6, endPct - startPct + (100 / totalDays));
@@ -426,14 +438,14 @@ const GanttView = ({ proyecto, tareas }) => {
                       <div style={{ marginTop: '0.7rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.45rem 0.75rem', fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
                           <User size={12} color={area.solid} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.asignado?.nombre || t('ganttUnassigned')}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getTaskAssigneeLabel(tarea, t('ganttUnassigned'))}</span>
                         </span>
                         <span>{tarea.durationDays} día{tarea.durationDays === 1 ? '' : 's'}</span>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                           <Flag size={12} color={priority.solid} />
                           {formatFecha(tarea.end)}
                         </span>
-                        <span>{tarea.asignado?.area || t('ganttGeneralArea')}</span>
+                        <span>{getPrimaryAssignee(tarea)?.area || t('ganttGeneralArea')}</span>
                       </div>
                     </div>
 

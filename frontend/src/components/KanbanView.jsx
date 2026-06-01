@@ -49,6 +49,11 @@ const PRIORIDAD_CONFIG = {
   BAJA:  { color: 'var(--color-accent-blue)',  bg: 'rgba(0,162,255,0.1)',  labelKey: 'priorityNormal' },
 };
 
+const getTaskAssignees = (tarea) => {
+  if (Array.isArray(tarea?.asignados) && tarea.asignados.length > 0) return tarea.asignados;
+  return tarea?.asignado ? [tarea.asignado] : [];
+};
+
 const CICLO_ESTADOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 
 // ── Utilidades ──────────────────────────────────────────────────────────────
@@ -170,10 +175,10 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
             width: '24px', height: '24px', borderRadius: '50%', background: 'var(--color-surface-3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '700', color: 'var(--color-primary-light)'
           }}>
-            {tarea.asignado?.nombre?.charAt(0) || '?'}
+            {getTaskAssignees(tarea)[0]?.nombre?.charAt(0) || '?'}
           </div>
           <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--color-text-muted)' }}>
-            {tarea.asignado?.nombre?.split(' ')[0] || 'S/A'}
+            {getTaskAssignees(tarea).map((asignado) => asignado.nombre?.split(' ')[0]).filter(Boolean).join(', ') || 'S/A'}
           </span>
         </div>
         {tarea.venceEn && (
