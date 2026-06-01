@@ -20,7 +20,22 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // Middlewares globales
-app.use(helmet()); // Seguridad de headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      fontSrc: ["'self'", 'https:', 'data:'],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      imgSrc: ["'self'", 'https:', 'data:', 'blob:'],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+      upgradeInsecureRequests: [],
+    },
+  },
+})); // Seguridad de headers
 app.use(cors({
   origin: true,
   credentials: true,
