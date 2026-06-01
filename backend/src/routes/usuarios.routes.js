@@ -3,7 +3,7 @@ const express = require('express');
 const { listar, listarParaProyectos, obtenerPerfil, actualizarPerfil, crear, editar, eliminar, toggleEstado, actividad } = require('../controllers/usuarios.controller');
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin }      = require('../middlewares/roles.middleware');
-const upload = require('../middlewares/upload.middleware');
+const uploadProfile = require('../middlewares/uploadProfile.middleware');
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.use(verificarToken);
 router.get('/', listar);
 router.get('/catalogo/proyectos', listarParaProyectos);
 router.get('/perfil', obtenerPerfil);
-router.put('/perfil', upload.single('fotoPerfil'), actualizarPerfil);
+router.put('/perfil', uploadProfile.single('fotoPerfil'), actualizarPerfil);
 
 // Operaciones de gestión (solo para administradores)
 router.post('/',           soloAdmin, crear);

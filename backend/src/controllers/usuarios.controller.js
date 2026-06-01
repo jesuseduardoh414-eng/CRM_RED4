@@ -262,6 +262,17 @@ const obtenerActividadUsuario = async (usuarioId) => {
 
 // Cache simple en memoria para acelerar la respuesta de la lista de usuarios
 let cacheUsuarios = null;
+
+const construirFotoPerfilUrl = (file) => {
+  if (!file) return undefined;
+  if (file.buffer && file.mimetype) {
+    return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+  }
+  if (file.filename) {
+    return `/uploads/${file.filename}`;
+  }
+  return undefined;
+};
 let ultimaActualizacion = 0;
 const CACHE_TTL = 30000; // 30 segundos
 
@@ -462,8 +473,9 @@ const actualizarPerfil = async (req, res) => {
         data.fotoPerfilUrl = null;
       }
 
-      if (req.file?.filename) {
-        data.fotoPerfilUrl = `/uploads/${req.file.filename}`;
+      const fotoPerfilUrl = construirFotoPerfilUrl(req.file);
+      if (fotoPerfilUrl) {
+        data.fotoPerfilUrl = fotoPerfilUrl;
       }
     } catch (_error) {
       // Compatibilidad temporal mientras el cliente Prisma y la BD no tengan los nuevos campos.
@@ -480,9 +492,7 @@ const actualizarPerfil = async (req, res) => {
       });
       fotoPerfilObjetivo = usuario.fotoPerfilUrl ?? null;
     } catch (_error) {
-      const fotoPerfilUrl = req.file?.filename
-        ? `/uploads/${req.file.filename}`
-        : (removeFoto === 'true' ? null : undefined);
+      const fotoPerfilUrl = construirFotoPerfilUrl(req.file) ?? (removeFoto === 'true' ? null : undefined);
       fotoPerfilObjetivo = fotoPerfilUrl;
 
       usuario = await prisma.usuario.update({

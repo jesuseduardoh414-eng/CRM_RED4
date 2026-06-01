@@ -38,6 +38,7 @@ const emitScheduleSync = (detail = {}) => {
 
 export const getPublicAssetUrl = (value) => {
   if (!value) return '';
+  if (/^data:/i.test(value)) return value;
   if (/^https?:\/\//i.test(value)) return value;
   return `${PUBLIC_BASE_URL}${value}`;
 };

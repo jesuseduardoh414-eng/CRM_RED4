@@ -9,7 +9,7 @@ const datos = [
     titulo: "Implementar autenticación biométrica",
     descripcion: "Añadir soporte para FaceID y Huella dactilar en la app móvil",
     estado: "PENDIENTE",
-    prioridad: "ALTA",
+    prioridad: "ALTAs",
     fechaInicio: "2026-06-01",
     venceEn: "2026-06-15",
     asignadoEmail: "admin@test.com"
