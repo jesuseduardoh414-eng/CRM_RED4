@@ -4,6 +4,7 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { PreferencesProvider } from './context/PreferencesContext';
 import { ToastProvider } from './context/ToastContext';
 import RutaProtegida from './components/RutaProtegida';
 import Layout from './components/Layout';
@@ -20,6 +21,7 @@ const ProyectoDetallePage = lazy(() => import('./pages/ProyectoDetallePage'));
 const EquipoPage = lazy(() => import('./pages/EquipoPage'));
 const UsuariosPage = lazy(() => import('./pages/UsuariosPage'));
 const AgendaPage = lazy(() => import('./pages/AgendaPage'));
+const PerfilPage = lazy(() => import('./pages/PerfilPage'));
 
 // Redirige al dashboard si ya hay sesion activa (evita volver al login)
 const RutaPublica = ({ children }) => {
@@ -67,6 +69,7 @@ const AppRoutes = () => (
     <Route path="/equipo" element={<RutaConLayout><EquipoPage /></RutaConLayout>} />
     <Route path="/usuarios" element={<RutaConLayout><UsuariosPage /></RutaConLayout>} />
     <Route path="/agenda" element={<RutaConLayout><AgendaPage /></RutaConLayout>} />
+    <Route path="/perfil" element={<RutaConLayout><PerfilPage /></RutaConLayout>} />
 
     <Route path="*" element={<Navigate to="/dashboard" replace />} />
   </Routes>
@@ -74,11 +77,13 @@ const AppRoutes = () => (
 
 const App = () => (
   <BrowserRouter>
-    <AuthProvider>
-      <ToastProvider>
-        <AppRoutes />
-      </ToastProvider>
-    </AuthProvider>
+    <PreferencesProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
+      </AuthProvider>
+    </PreferencesProvider>
   </BrowserRouter>
 );
 

@@ -7,6 +7,52 @@ const { sendResetEmail, sendVerificationEmail } = require('../services/email.ser
 const { enviarInvitacion } = require('../services/correo');
 const { buildScopeProyectoParaAdmin, puedeGestionarArea, esAdminDeArea } = require('../utils/permissions.utils');
 
+const usuarioAuthSelect = {
+  id: true,
+  nombre: true,
+  email: true,
+  telefono: true,
+  puesto: true,
+  biografia: true,
+  fotoPerfilUrl: true,
+  area: true,
+  rol: true,
+  creadoEn: true,
+};
+
+const usuarioAuthSelectBasico = {
+  id: true,
+  nombre: true,
+  email: true,
+  area: true,
+  rol: true,
+  creadoEn: true,
+};
+
+const completarUsuarioAuth = (usuario) => ({
+  ...usuario,
+  telefono: usuario.telefono ?? null,
+  puesto: usuario.puesto ?? null,
+  biografia: usuario.biografia ?? null,
+  fotoPerfilUrl: usuario.fotoPerfilUrl ?? null,
+});
+
+const obtenerUsuarioAuthSeguro = async (usuarioId) => {
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: usuarioAuthSelect,
+    });
+    return usuario ? completarUsuarioAuth(usuario) : null;
+  } catch (_error) {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: usuarioAuthSelectBasico,
+    });
+    return usuario ? completarUsuarioAuth(usuario) : null;
+  }
+};
+
 // POST /api/auth/register - DESHABILITADO (Solo por invitación)
 const register = async (req, res) => {
   return res.status(403).json({ error: 'El registro público está deshabilitado. Solicita una invitación al administrador.' });
@@ -83,7 +129,17 @@ const login = async (req, res) => {
     return res.json({
       mensaje: 'Login exitoso',
       token,
-      usuario: { id: usuario.id, nombre: usuario.nombre, email: usuario.email, area: usuario.area, rol: usuario.rol },
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        telefono: usuario.telefono,
+        puesto: usuario.puesto,
+        biografia: usuario.biografia,
+        fotoPerfilUrl: usuario.fotoPerfilUrl,
+        area: usuario.area,
+        rol: usuario.rol,
+      },
     });
   } catch (error) {
     console.error('[login]', error);
@@ -173,10 +229,7 @@ const resetPassword = async (req, res) => {
 
 const me = async (req, res) => {
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: req.usuario.id },
-      select: { id: true, nombre: true, email: true, area: true, rol: true, creadoEn: true },
-    });
+    const usuario = await obtenerUsuarioAuthSeguro(req.usuario.id);
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
     return res.json({ usuario });
   } catch (error) {
@@ -339,7 +392,17 @@ const aceptarInvitacion = async (req, res) => {
     return res.json({
       mensaje: 'Cuenta activada correctamente',
       token: jwtToken,
-      usuario: { id: nuevoUsuario.id, nombre: nuevoUsuario.nombre, email: nuevoUsuario.email, area: nuevoUsuario.area, rol: nuevoUsuario.rol }
+      usuario: {
+        id: nuevoUsuario.id,
+        nombre: nuevoUsuario.nombre,
+        email: nuevoUsuario.email,
+        telefono: nuevoUsuario.telefono,
+        puesto: nuevoUsuario.puesto,
+        biografia: nuevoUsuario.biografia,
+        fotoPerfilUrl: nuevoUsuario.fotoPerfilUrl,
+        area: nuevoUsuario.area,
+        rol: nuevoUsuario.rol
+      }
     });
   } catch (error) {
     console.error('[aceptarInvitacion]', error);

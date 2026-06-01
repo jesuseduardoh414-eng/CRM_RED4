@@ -11,7 +11,7 @@ const { esAdmin, buildScopeProyectoParaAdmin, puedeAdministrarProyecto, puedeGes
 // Campos comunes del include
 const INCLUDE_PROYECTO = {
   creador: { select: { id: true, nombre: true, area: true } },
-  miembros: { select: { id: true, nombre: true, email: true, area: true, rol: true } },
+  miembros: { select: { id: true, nombre: true, email: true, area: true, rol: true, fotoPerfilUrl: true } },
   _count:  { select: { tareas: true } },
 };
 
@@ -400,10 +400,10 @@ const equipo = async (req, res) => {
     const proyecto = await prisma.proyecto.findUnique({
       where: { id },
       include: { 
-        creador: { select: { id: true, nombre: true, area: true, rol: true, email: true } },
+        creador: { select: { id: true, nombre: true, area: true, rol: true, email: true, fotoPerfilUrl: true } },
         miembros: {
           select: {
-            id: true, nombre: true, email: true, area: true, rol: true,
+            id: true, nombre: true, email: true, area: true, rol: true, fotoPerfilUrl: true,
             // Contar sus tareas en este proyecto por estado
             tareasAsignadas: {
               where: { proyectoId: id },
@@ -426,6 +426,7 @@ const equipo = async (req, res) => {
       email:     m.email,
       area:      m.area,
       rol:       m.rol,
+      fotoPerfilUrl: m.fotoPerfilUrl ?? null,
       tareas: {
         total:      m.tareasAsignadas.length,
         pendientes: m.tareasAsignadas.filter(t => t.estado === 'PENDIENTE').length,

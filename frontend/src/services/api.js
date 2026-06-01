@@ -2,6 +2,7 @@
 // Centraliza la URL base y el manejo del JWT en cada petición
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+const PUBLIC_BASE_URL = API_URL.startsWith('http') ? API_URL.replace(/\/api\/?$/, '') : '';
 
 // ── Helpers internos ──────────────────────────────────────────────────────
 
@@ -33,6 +34,12 @@ const handleResponse = async (res) => {
 const emitScheduleSync = (detail = {}) => {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('crm:schedule-changed', { detail }));
+};
+
+export const getPublicAssetUrl = (value) => {
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${PUBLIC_BASE_URL}${value}`;
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────
@@ -270,6 +277,18 @@ export const usuariosService = {
     const res = await fetch(`${API_URL}/usuarios/catalogo/proyectos`, { headers: getHeaders() });
     return handleResponse(res);
   },
+  perfil: async () => {
+    const res = await fetch(`${API_URL}/usuarios/perfil`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  actualizarPerfil: async (datos) => {
+    const res = await fetch(`${API_URL}/usuarios/perfil`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: datos,
+    });
+    return handleResponse(res);
+  },
   actividad: async (id) => {
     const res = await fetch(`${API_URL}/usuarios/${id}/actividad?t=${Date.now()}`, {
       headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },
@@ -387,7 +406,15 @@ export const adjuntosService = {
     const res = await fetch(`${API_URL}/${type}/${parentId}/adjuntos`, { headers: getHeaders() });
     return handleResponse(res);
   },
-  subir: async (parentId, formData, type = 'tareas') => {
+  subir: async (parentId, payload, type = 'tareas') => {
+    const formData = payload instanceof FormData
+      ? payload
+      : (() => {
+          const fd = new FormData();
+          const files = Array.isArray(payload) ? payload : Array.from(payload || []);
+          files.forEach((file) => fd.append('archivos', file));
+          return fd;
+        })();
     const res = await fetch(`${API_URL}/${type}/${parentId}/adjuntos`, {
       method: 'POST',
       headers: getHeaders(true), // Multipart
@@ -402,6 +429,9 @@ export const adjuntosService = {
     });
     return handleResponse(res);
   },
+  getPreviewUrl: (filename) => (
+    `${API_URL}/tareas/adjuntos/ver/${filename}?token=${localStorage.getItem('crm_token')}`
+  ),
   descargar: (filename) => {
     // Abrir en nueva pestaña para descargar
     window.open(`${API_URL}/tareas/adjuntos/descargar/${filename}?token=${localStorage.getItem('crm_token')}`, '_blank');

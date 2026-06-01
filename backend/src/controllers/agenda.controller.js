@@ -389,7 +389,7 @@ const editar = async (req, res) => {
 };
 
 // Notificar a invitados (Interno)
-async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento, esGlobal = false) {
+async function crearNotificacionesInvitados(eventoId, creadorId, invitadosIds, tituloEvento, esGlobal = false, proyectoId = null) {
   try {
     if (!prisma) return;
     const cid = parseInt(creadorId);
@@ -521,7 +521,7 @@ const crear = async (req, res) => {
     // Crear notificaciones de forma síncrona para asegurar el envío
     if (es_global || listadoInvitados.length > 1) {
       const idsFinales = listadoInvitados.map(i => i.usuarioId);
-      await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo, !!es_global);
+      await crearNotificacionesInvitados(evento.id, usuarioId, idsFinales, titulo, !!es_global, proyectoId || null);
     }
 
     await syncEventoBestEffort(evento.id);

@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { proyectosService, tareasService, usuariosService, statsService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
 import { 
   Pencil, 
@@ -85,12 +86,13 @@ const actividadDesdeTareas = (usuarioId, tareas) => {
   return actividad;
 };
 
+const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
 const TaskMini = ({ tarea }) => (
   <div className="py-2 border-b border-slate-100 last:border-0">
     <div className="text-xs font-black text-slate-800 leading-snug">{tarea.titulo}</div>
     <div className="mt-1 flex items-center justify-between gap-2 text-[10px] font-bold text-slate-400">
-      <span className="truncate">{tarea.proyecto?.nombre || 'Sin proyecto'}</span>
-      {tarea.venceEn && <span className="shrink-0">{new Date(tarea.venceEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</span>}
+      <span className="truncate">{tarea.proyecto?.nombre || ''}</span>
+      {tarea.venceEn && <span className="shrink-0">{new Date(tarea.venceEn).toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' })}</span>}
     </div>
   </div>
 );
@@ -113,17 +115,18 @@ const ActivityColumn = ({ title, count, icon, color, items, empty }) => (
 );
 
 const ProjectSummary = ({ proyectos }) => {
+  const { t } = usePreferences();
   if (!proyectos?.length) return null;
 
   return (
-    <div className="lg:col-span-4 bg-white rounded-xl border border-slate-100 p-3">
-      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Por proyecto</div>
+    <div className="lg:col-span-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-3">
+      <div className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)] mb-2">{t('usersActivityByProject')}</div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         {proyectos.map(p => (
-          <div key={p.id} className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
-            <div className="text-xs font-black text-slate-900 truncate">{p.nombre}</div>
-            <div className="mt-1 text-[10px] font-bold text-slate-500">
-              {p.total} total · {p.hechas} hechas · {p.enProgreso} curso · {p.pendientes} faltan
+          <div key={p.id} className="rounded-lg bg-[var(--color-surface-3)] border border-[var(--color-border)] px-3 py-2">
+            <div className="text-xs font-black text-[var(--color-text)] truncate">{p.nombre}</div>
+            <div className="mt-1 text-[10px] font-bold text-[var(--color-text-muted)]">
+              {p.total} · {p.hechas} {t('usersActivityDone').toLowerCase()} · {p.enProgreso} {t('projectInProgress').toLowerCase()} · {p.pendientes}
             </div>
           </div>
         ))}
@@ -133,50 +136,52 @@ const ProjectSummary = ({ proyectos }) => {
 };
 
 const UserActivityPanel = ({ actividad }) => {
+  const { t } = usePreferences();
   if (!actividad) {
-    return <div className="text-xs font-bold text-slate-400">Sin datos de actividad.</div>;
+    return <div className="text-xs font-bold text-[var(--color-text-muted)]">{t('usersNoActivityData')}</div>;
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
       <ProjectSummary proyectos={actividad.porProyecto} />
       <ActivityColumn
-        title="Hechas"
+        title={t('usersActivityDone')}
         count={actividad.totales?.hechasHoy || 0}
         color="#16a34a"
         icon={<CheckCircle2 size={13} />}
         items={actividad.hechasHoy}
-        empty="Sin completadas"
+        empty={t('usersActivityNoDone')}
       />
       <ActivityColumn
-        title="Haciendo"
+        title={t('usersActivityDoing')}
         count={actividad.totales?.enProgreso || 0}
         color="#2563eb"
         icon={<PlayCircle size={13} />}
         items={actividad.enProgreso}
-        empty="Sin tareas en curso"
+        empty={t('usersActivityNoCurrent')}
       />
       <ActivityColumn
-        title="Faltan"
+        title={t('usersActivityDueToday')}
         count={actividad.totales?.faltanHoy || 0}
         color="#dc2626"
         icon={<Clock size={13} />}
         items={actividad.faltanHoy}
-        empty="Sin pendientes"
+        empty={t('usersActivityNoDue')}
       />
       <ActivityColumn
-        title="Faltan semana"
+        title={t('usersActivityDueWeek')}
         count={actividad.totales?.faltanSemana || 0}
         color="#f59e0b"
         icon={<CalendarDays size={13} />}
         items={actividad.faltanSemana}
-        empty="Sin pendientes próximos"
+        empty={t('usersActivityNoDueWeek')}
       />
     </div>
   );
 };
 
 const UsuariosPage = () => {
+  const { t } = usePreferences();
   const { usuario: usuarioActual } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState('activos');
@@ -279,15 +284,15 @@ const UsuariosPage = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
         <div>
-          <h1 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">Gestión de Usuarios</h1>
-          <p className="text-sm text-slate-500 mt-1">Administra el acceso y las invitaciones del equipo.</p>
+          <h1 className="text-2xl md:text-4xl font-black text-[var(--color-text)] tracking-tight">{t('usersManageTitle')}</h1>
+          <p className="text-sm text-[var(--color-text-muted)] mt-1">{t('usersManageSubtitle')}</p>
         </div>
         <button 
           onClick={() => setModalInvitar(true)}
           className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl md:rounded-2xl font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
         >
           <UserPlus size={18} />
-          <span className="text-sm">+ Invitar usuario</span>
+          <span className="text-sm">{t('usersInvite')}</span>
         </button>
       </div>
 
@@ -297,13 +302,13 @@ const UsuariosPage = () => {
           onClick={() => setTab('activos')}
           className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${tab === 'activos' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          Miembros activos
+          {t('usersActiveMembers')}
         </button>
         <button 
           onClick={() => setTab('invitaciones')}
           className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${tab === 'invitaciones' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          Invitaciones
+          {t('usersInvitationsTab')}
         </button>
       </div>
 
@@ -350,6 +355,7 @@ const UsuariosPage = () => {
 };
 
 const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivity, actividadInicialId, onActividadInicialConsumida }) => {
+  const { t } = usePreferences();
   const [actividadAbierta, setActividadAbierta] = useState(null);
 
   useEffect(() => {
@@ -366,7 +372,7 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
     abrir();
   }, [actividadInicialId, actividadAbierta, usuarios, onLoadActivity, onActividadInicialConsumida]);
 
-  if (usuarios.length === 0) return <div className="p-12 text-center text-slate-400">No hay miembros activos.</div>;
+  if (usuarios.length === 0) return <div className="p-12 text-center text-[var(--color-text-muted)]">{t('usersNoActiveMembers')}</div>;
 
   return (
     <div className="overflow-x-auto">
@@ -374,12 +380,12 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
       <table className="hidden md:table w-full">
         <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Miembro</th>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Área</th>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Rol</th>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Registro</th>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Estado</th>
-            <th className="px-6 py-4 text-right text-xs font-black text-slate-400 uppercase tracking-wider">Acciones</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableMember')}</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableArea')}</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableRole')}</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableRegister')}</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableStatus')}</th>
+            <th className="px-6 py-4 text-right text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableActions')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -415,7 +421,7 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
               <td className="px-6 py-4">
                 <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${u.estado === 'activo' ? 'text-emerald-600' : 'text-slate-400'}`}>
                   <div className={`w-1.5 h-1.5 rounded-full ${u.estado === 'activo' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                  {u.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                  {u.estado === 'activo' ? t('usersStatusActive') : t('usersStatusInactive')}
                 </span>
               </td>
               <td className="px-6 py-4 text-right">
@@ -456,12 +462,12 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
               <tr key={`${u.id}-actividad`} className="bg-slate-50/70">
                 <td colSpan={6} className="px-6 py-5">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="text-xs font-black text-slate-500 uppercase tracking-widest">Actividad de {u.nombre}</div>
+                    <div className="text-xs font-black text-slate-500 uppercase tracking-widest">{t('usersActivityOf', { name: u.nombre })}</div>
                     <button
                       onClick={() => setActividadAbierta(null)}
                       className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-slate-700"
                     >
-                      Cerrar <ChevronDown size={13} className="rotate-180" />
+                      {t('close')} <ChevronDown size={13} className="rotate-180" />
                     </button>
                   </div>
                   <UserActivityPanel actividad={u.actividad} />
@@ -496,11 +502,11 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
             
             <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-200/50">
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Área</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('usersTableArea')}</span>
                 <span className="text-xs font-bold text-slate-700">{u.area}</span>
               </div>
               <div className="flex flex-col gap-1 text-right">
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('usersTableStatus')}</span>
                 <span className={`text-xs font-black uppercase ${u.estado === 'activo' ? 'text-emerald-600' : 'text-slate-400'}`}>
                   {u.estado}
                 </span>
@@ -509,7 +515,7 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
 
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] text-slate-400 font-medium italic">
-                Reg: {new Date(u.creadoEn).toLocaleDateString()}
+                {t('usersRegShort')} {new Date(u.creadoEn).toLocaleDateString(getLocale())}
               </div>
               <div className="flex gap-2">
                 <button 
@@ -534,7 +540,7 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
             </div>
             <div className="pt-3 border-t border-slate-200/50">
               <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                <Activity size={13} /> Actividad
+                <Activity size={13} /> {t('usersActivity')}
               </div>
               <UserActivityPanel actividad={u.actividad} />
             </div>
@@ -546,7 +552,8 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
 };
 
 const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
-  if (invitaciones.length === 0) return <div className="p-12 text-center text-slate-400">No hay invitaciones enviadas.</div>;
+  const { t } = usePreferences();
+  if (invitaciones.length === 0) return <div className="p-12 text-center text-[var(--color-text-muted)]">{t('usersNoResults')}</div>;
 
   return (
     <div className="overflow-x-auto">
@@ -554,11 +561,11 @@ const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
       <table className="hidden md:table w-full">
         <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Invitado</th>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Área / Rol</th>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Estado</th>
-            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Envío / Expira</th>
-            <th className="px-6 py-4 text-right text-xs font-black text-slate-400 uppercase tracking-wider">Acciones</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableMember')}</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableArea')} / {t('usersTableRole')}</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableStatus')}</th>
+            <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableRegister')}</th>
+            <th className="px-6 py-4 text-right text-xs font-black text-slate-400 uppercase tracking-wider">{t('usersTableActions')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -584,12 +591,12 @@ const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
               <td className="px-6 py-4">
                 {inv.estado === 'pendiente' && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100">
-                    <Clock size={12} /> Pendiente
+                    <Clock size={12} /> {t('usersStatusPending')}
                   </span>
                 )}
                 {inv.estado === 'aceptada' && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-100">
-                    <CheckCircle2 size={12} /> Aceptada
+                    <CheckCircle2 size={12} /> {t('usersStatusAccepted')}
                   </span>
                 )}
                 {inv.estado === 'expirada' && (
@@ -667,7 +674,7 @@ const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
                   onClick={() => onDelete(inv)}
                   className="w-full flex items-center justify-center gap-2 text-xs font-black text-red-600 bg-red-50 hover:bg-red-100 py-3 rounded-xl transition-all border border-red-100"
                 >
-                  <Ban size={14} /> Cancelar invitación
+                  <Ban size={14} /> {t('usersCancelInvitation')}
                 </button>
               </div>
             )}
@@ -679,6 +686,7 @@ const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
 };
 
 const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
+  const { t } = usePreferences();
   const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
   const areasDisponibles = esAdminArea ? [usuarioActual.area] : AREAS;
   const [form, setForm] = useState({ nombre: '', email: '', area: areasDisponibles[0] || 'DESARROLLO', rol: 'MIEMBRO' });
@@ -704,40 +712,40 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
       onClick={(e) => e.target === e.currentTarget && onClose()}
       className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
-      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
+      <div className="bg-[var(--color-surface)] rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-[var(--color-border)]">
         <div className="p-8 pb-0">
           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4">
             <Mail size={20} />
           </div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">Invitar Usuario</h2>
-          <p className="text-slate-500 text-xs mt-1">Se enviará un correo con el enlace de registro.</p>
+          <h2 className="text-xl font-black text-[var(--color-text)] tracking-tight">{t('usersInviteTitle')}</h2>
+          <p className="text-[var(--color-text-muted)] text-xs mt-1">{t('usersInviteSubtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre del usuario</label>
-            <input 
+            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('usersInviteNameLabel')}</label>
+            <input
               required
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              className="form-input"
               value={form.nombre}
               onChange={e => setForm({...form, nombre: e.target.value})}
-              placeholder="Ej. Juan Pérez"
+              placeholder={t('usersInviteNamePlaceholder')}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Correo electrónico</label>
-            <input 
+            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('usersInviteEmailLabel')}</label>
+            <input
               required
               type="email"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              className="form-input"
               value={form.email}
               onChange={e => setForm({...form, email: e.target.value})}
-              placeholder="juan@empresa.com"
+              placeholder={t('usersInviteEmailPlaceholder')}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldArea')}</label>
               <select 
                 disabled={areasDisponibles.length === 1}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -748,30 +756,30 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rol</label>
-              <select 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldRole')}</label>
+              <select
+                className="form-input form-select"
                 value={form.rol}
                 onChange={e => setForm({...form, rol: e.target.value})}
               >
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{t(r === 'ADMIN' ? 'roleAdmin' : 'roleMember')}</option>)}
               </select>
             </div>
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all"
+              className="flex-1 px-6 py-3 rounded-xl font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-3)] transition-all"
             >
-              Cancelar
+              {t('cancel')}
             </button>
-            <button 
+            <button
               disabled={cargando}
               className="flex-1.5 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95 disabled:bg-slate-200"
             >
-              {cargando ? 'Enviando...' : <><Send size={18} /> Enviar invitación</>}
+              {cargando ? t('usersInviteSending') : <><Send size={18} /> {t('usersInviteSend')}</>}
             </button>
           </div>
         </form>
@@ -781,6 +789,7 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
 };
 
 const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
+  const { t } = usePreferences();
   const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
   const areasDisponibles = esAdminArea ? [usuarioActual.area] : AREAS;
   const [form, setForm] = useState({
@@ -811,38 +820,38 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
       onClick={(e) => e.target === e.currentTarget && onClose()}
       className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
-      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
+      <div className="bg-[var(--color-surface)] rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-[var(--color-border)]">
         <div className="p-8 pb-0">
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">Editar Miembro</h2>
-          <p className="text-slate-500 text-xs mt-1">Actualiza la información del usuario.</p>
+          <h2 className="text-xl font-black text-[var(--color-text)] tracking-tight">{t('usersEditTitle')}</h2>
+          <p className="text-[var(--color-text-muted)] text-xs mt-1">{t('usersEditSubtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre</label>
-            <input 
+            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldName')}</label>
+            <input
               required
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              className="form-input"
               value={form.nombre}
               onChange={e => setForm({...form, nombre: e.target.value})}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</label>
-            <input 
+            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldEmail')}</label>
+            <input
               required
               type="email"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              className="form-input"
               value={form.email}
               onChange={e => setForm({...form, email: e.target.value})}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área</label>
-              <select 
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldArea')}</label>
+              <select
                 disabled={areasDisponibles.length === 1}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                className="form-input form-select"
                 value={form.area}
                 onChange={e => setForm({...form, area: e.target.value})}
               >
@@ -850,21 +859,21 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rol</label>
-              <select 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldRole')}</label>
+              <select
+                className="form-input form-select"
                 value={form.rol}
                 onChange={e => setForm({...form, rol: e.target.value})}
               >
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{t(r === 'ADMIN' ? 'roleAdmin' : 'roleMember')}</option>)}
               </select>
             </div>
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">Cancelar</button>
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-3 rounded-xl font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-3)] transition-all">{t('cancel')}</button>
             <button disabled={cargando} className="flex-1.5 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all active:scale-95 disabled:bg-slate-200">
-              {cargando ? 'Guardando...' : 'Guardar cambios'}
+              {cargando ? t('saving') : t('save')}
             </button>
           </div>
         </form>

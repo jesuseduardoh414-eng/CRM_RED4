@@ -3,15 +3,17 @@
 // Vistas: Lista | Kanban | Gantt | Muro
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { proyectosService, tareasService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { useToast } from '../context/ToastContext';
 import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
 import { PageSkeleton } from '../components/Skeleton';
 import ModalImportar from '../components/ModalImportar';
 import RangeDatePicker from '../components/RangeDatePicker';
+import TaskAttachments from '../components/TaskAttachments';
 import { sortTareas, sortTareasLista } from '../utils/sorters';
 import { 
   Target, 
@@ -31,29 +33,38 @@ import {
   CalendarRange,
   ChevronLeft,
   AlertTriangle,
-  Search
+  Search,
+  User2,
+  SlidersHorizontal
 } from 'lucide-react';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
 const PRIORIDADES = [
-  { value: 'BAJA',  label: 'Baja',  color: '#00a2ff', bg: 'rgba(0,162,255,0.1)' },
-  { value: 'MEDIA', label: 'Media', color: '#ff9100', bg: 'rgba(255,145,0,0.1)' },
-  { value: 'ALTA',  label: 'Alta',  color: '#ff0055', bg: 'rgba(255,0,85,0.1)' },
+  { value: 'BAJA',  labelKey: 'priorityLow',    color: '#00a2ff', bg: 'rgba(0,162,255,0.1)' },
+  { value: 'MEDIA', labelKey: 'priorityMedium', color: '#ff9100', bg: 'rgba(255,145,0,0.1)' },
+  { value: 'ALTA',  labelKey: 'priorityHigh',   color: '#ff0055', bg: 'rgba(255,0,85,0.1)' },
 ];
 
 const ESTADOS_TAREA = [
-  { value: 'PENDIENTE',   label: 'Por hacer',   color: '#6c757d' },
-  { value: 'EN_PROGRESO', label: 'En progreso', color: '#00a2ff' },
-  { value: 'HECHO',       label: 'Hecho',       color: '#00d166'  },
+  { value: 'PENDIENTE',   labelKey: 'statusTodo',       color: '#6c757d' },
+  { value: 'EN_PROGRESO', labelKey: 'statusInProgress', color: '#00a2ff' },
+  { value: 'HECHO',       labelKey: 'statusDone',       color: '#00d166' },
 ];
 
 const getPrioridad  = (v) => PRIORIDADES.find(p => p.value === v) || PRIORIDADES[1];
 const getEstadoConf = (v) => ESTADOS_TAREA.find(e => e.value === v) || ESTADOS_TAREA[0];
 
+const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
 const formatFecha = (iso) => {
   if (!iso) return null;
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+  return new Date(iso).toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' });
+};
+
+const getDateAtNoon = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  date.setHours(12, 0, 0, 0);
+  return date;
 };
 
 const inicioDiaLocal = (value) => {
@@ -80,18 +91,46 @@ const getVenceEnOptimista = (tarea, nuevoEstado) => {
     : tarea.venceEn;
 };
 
+const tareaCoincideConRango = (tarea, rango) => {
+  if (!rango?.from && !rango?.to) return true;
+
+  const fechaInicio = getDateAtNoon(tarea.fechaInicio);
+  const fechaFin = getDateAtNoon(tarea.venceEn || tarea.fechaInicio);
+
+  if (!fechaInicio && !fechaFin) return false;
+
+  const inicio = fechaInicio || fechaFin;
+  const fin = fechaFin || fechaInicio;
+  const from = getDateAtNoon(rango.from);
+  const to = getDateAtNoon(rango.to || rango.from);
+
+  if (from && fin < from) return false;
+  if (to && inicio > to) return false;
+
+  return true;
+};
+
 // ── Tarjeta de Tarea (List View) ─────────────────────────────────────────────
-const TareaCard = ({ tarea, onClick, onEliminar, onCambiarEstado }) => {
+const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado }) => {
+  const { t } = usePreferences();
   const prio = getPrioridad(tarea.prioridad);
   const estado = getEstadoConf(tarea.estado);
   const CICLO = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
   const sigEstado = CICLO[(CICLO.indexOf(tarea.estado) + 1) % CICLO.length];
   const vencido = esFechaVencida(tarea.venceEn) && tarea.estado !== 'HECHO';
+  const creadorEsUsuarioActual = tarea.creador?.id === usuarioActual?.id
+    || (!tarea.creador?.id && (!tarea.asignado?.id || tarea.asignado?.id === usuarioActual?.id));
+  const asignadorLabel = creadorEsUsuarioActual
+    ? t('taskCreatedByYou')
+    : `${t('taskAssignedBy')} ${tarea.creador?.nombre || t('taskCreatedBySystem')}`;
+  const responsableLabel = tarea.asignado?.id === usuarioActual?.id
+    ? t('taskAssignedToYou')
+    : `${t('projectResponsible')}: ${tarea.asignado?.nombre || t('taskUnassigned')}`;
 
   return (
     <div 
       onClick={() => onClick(tarea)}
-      className="bg-white border border-slate-100 p-4 lg:p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 hover:translate-x-1 transition-all cursor-pointer shadow-sm hover:shadow-md"
+      className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 lg:p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 hover:translate-x-1 transition-all cursor-pointer shadow-sm hover:shadow-md"
     >
       {/* Icono de Estado y Título */}
       <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -100,44 +139,44 @@ const TareaCard = ({ tarea, onClick, onEliminar, onCambiarEstado }) => {
         />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h4 className={`text-sm lg:text-base font-bold text-slate-900 truncate ${tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}`}>
+            <h4 className={`text-sm lg:text-base font-bold text-[var(--color-text)] truncate ${tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}`}>
               {tarea.titulo}
             </h4>
             <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md" style={{ background: prio.bg, color: prio.color }}>
-              {prio.label}
+              {t(prio.labelKey)}
             </span>
           </div>
-          <p className="text-xs text-slate-400 truncate font-medium">
-            {tarea.descripcion || 'Sin descripción'}
+          <p className="text-xs text-[var(--color-text-muted)] truncate font-medium">
+            {tarea.descripcion || t('taskNoDescription')}
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-[var(--color-text-muted)]">
+            <span className="inline-flex items-center gap-1">
+              <User2 size={12} />
+              {responsableLabel}
+            </span>
+            <span className="hidden text-[var(--color-border)] lg:inline">•</span>
+            <span className="inline-flex items-center gap-1 text-[var(--color-text-dim)]">
+              {asignadorLabel}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between lg:justify-end gap-4 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-50">
-        {/* Asignado */}
-        <div className="flex items-center gap-2 lg:w-32 shrink-0">
-          <div className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500">
-            {tarea.asignado?.nombre?.charAt(0) || '?'}
-          </div>
-          <div className="text-xs font-bold text-slate-600 hidden lg:block">
-            {tarea.asignado?.nombre?.split(' ')[0] || 'S/A'}
-          </div>
-        </div>
-
+      <div className="flex items-center justify-between lg:justify-end gap-4 border-t lg:border-t-0 pt-3 lg:pt-0 border-[var(--color-border-light)]">
         {/* Fecha */}
-        <div className={`text-[10px] lg:text-xs font-black shrink-0 flex items-center gap-1 ${vencido ? 'text-red-500' : 'text-slate-400'}`}>
+        <div className={`text-[10px] lg:text-xs font-black shrink-0 flex items-center gap-1 ${vencido ? 'text-red-500' : 'text-[var(--color-text-muted)]'}`}>
           {tarea.venceEn ? (
             <>
               {vencido && <AlertTriangle size={12} />}
               {formatFecha(tarea.venceEn)}
             </>
-          ) : '—'}
+          ) : '-'}
         </div>
 
         <div className="flex gap-2 ml-4">
           <button 
             onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
-            className="p-2 lg:p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
+            className="p-2 lg:p-2.5 bg-[var(--color-surface-3)] text-[var(--color-text-dim)] rounded-xl hover:brightness-105 transition-colors border border-[var(--color-border)]"
           >
             {tarea.estado === 'HECHO' ? <RotateCcw size={14} /> : <ArrowRight size={14} />}
           </button>
@@ -154,18 +193,18 @@ const TareaCard = ({ tarea, onClick, onEliminar, onCambiarEstado }) => {
 };
 
 // ── Toggle Vista (Material) ─────────────────────────────────────────────────
-const ToggleVista = ({ vista, onChange }) => (
-  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 w-full lg:w-auto">
+const ToggleVista = ({ vista, onChange, t }) => (
+  <div className="flex bg-[var(--color-surface-3)] p-1 rounded-xl border border-[var(--color-border)] gap-1 w-full lg:w-auto">
     {[
-      { k: 'lista',  l: 'Lista', i: <List size={16} /> },
-      { k: 'kanban', l: 'Kanban', i: <LayoutGrid size={16} /> },
-      { k: 'gantt',  l: 'Gantt', i: <CalendarRange size={16} /> }
+      { k: 'lista',  l: t('projectList'), i: <List size={16} /> },
+      { k: 'kanban', l: t('projectKanban'), i: <LayoutGrid size={16} /> },
+      { k: 'gantt',  l: t('projectGantt'), i: <CalendarRange size={16} /> }
     ].map(v => (
       <button 
         key={v.k} onClick={() => onChange(v.k)}
         className={`
           flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs lg:text-sm font-black transition-all
-          ${vista === v.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500 hover:bg-white'}
+          ${vista === v.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'}
         `}
       >
         {v.i} <span className="hidden lg:inline">{v.l}</span>
@@ -177,7 +216,9 @@ const ToggleVista = ({ vista, onChange }) => (
 // ── Main Page Component ─────────────────────────────────────────────────────
 const ProyectoDetallePage = () => {
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { usuario } = useAuth();
+  const { t } = usePreferences();
   const { showToast } = useToast();
 
   const [proyecto, setProyecto] = useState(null);
@@ -192,6 +233,9 @@ const ProyectoDetallePage = () => {
   const [vista, setVista] = useState('lista');
   const [busqueda, setBusqueda] = useState('');
   const [limite, setLimite] = useState(10);
+  const [filtroPrioridad, setFiltroPrioridad] = useState('todas');
+  const [filtroResponsable, setFiltroResponsable] = useState('todos');
+  const [filtroFecha, setFiltroFecha] = useState({ from: null, to: null });
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -210,6 +254,28 @@ const ProyectoDetallePage = () => {
     };
     fetch();
   }, [cargar]);
+
+  useEffect(() => {
+    const tareaIdParam = searchParams.get('tarea');
+    if (!tareaIdParam || !tareas.length) return;
+
+    const tareaObjetivo = tareas.find((item) => String(item.id) === tareaIdParam);
+    if (!tareaObjetivo) return;
+
+    setTareaEditando(tareaObjetivo);
+    setModal(true);
+  }, [searchParams, tareas]);
+
+  const cerrarModalTarea = useCallback(() => {
+    setModal(false);
+    setTareaEditando(null);
+
+    if (searchParams.get('tarea')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('tarea');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const stats = useMemo(() => {
     const hechas = tareas.filter(t => t.estado === 'HECHO').length;
@@ -248,14 +314,42 @@ const ProyectoDetallePage = () => {
     );
   }, [tareas, busqueda]);
 
-  const tareasListaFiltradas = useMemo(() => sortTareasLista(tareasFiltradas), [tareasFiltradas]);
+  const responsablesFiltro = useMemo(() => {
+    const mapa = new Map();
+    tareas.forEach((tarea) => {
+      if (tarea.asignado?.id) {
+        mapa.set(String(tarea.asignado.id), tarea.asignado);
+      }
+    });
+    return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [tareas]);
+
+  const tareasFiltradasAvanzadas = useMemo(() => (
+    tareasFiltradas.filter((tarea) => {
+      if (filtroPrioridad !== 'todas' && tarea.prioridad !== filtroPrioridad) return false;
+
+      if (filtroResponsable !== 'todos') {
+        if (filtroResponsable === 'sin_asignar') {
+          if (tarea.asignado?.id) return false;
+        } else if (String(tarea.asignado?.id || '') !== filtroResponsable) {
+          return false;
+        }
+      }
+
+      if (!tareaCoincideConRango(tarea, filtroFecha)) return false;
+
+      return true;
+    })
+  ), [filtroFecha, filtroPrioridad, filtroResponsable, tareasFiltradas]);
+
+  const tareasListaFiltradas = useMemo(() => sortTareasLista(tareasFiltradasAvanzadas), [tareasFiltradasAvanzadas]);
 
   const handleEliminar = async (t) => {
-    if (!window.confirm(`¿Eliminar "${t.titulo}"?`)) return;
+    if (!window.confirm(t('taskDeleteConfirm', { name: t.titulo }))) return;
     try {
       await tareasService.eliminar(t.id);
       setTareas(prev => prev.filter(x => x.id !== t.id));
-      showToast('Tarea eliminada');
+      showToast(t('taskDeleted'));
     } catch (err) { showToast(err.message, 'error'); }
   };
 
@@ -309,14 +403,14 @@ const ProyectoDetallePage = () => {
     try {
       const { tarea } = await tareasService.editar(id, datos);
       setTareas(prev => sortTareas(prev.map(x => x.id === id ? tarea : x)));
-      showToast('Tarea actualizada');
+      showToast(t('taskUpdated'));
     } catch (err) { showToast(err.message, 'error'); }
   };
 
   const handleExportar = (tipo) => {
     try {
       tareasService.exportarProyecto(id, tipo);
-      showToast(`Exportación ${tipo.toUpperCase()} iniciada`);
+      showToast(t('taskExportStarted', { type: tipo.toUpperCase() }));
       setModalExportar(false);
     } catch (err) {
       showToast(err.message, 'error');
@@ -326,7 +420,7 @@ const ProyectoDetallePage = () => {
   const handleGuardarPlantilla = async ({ nombre, descripcion }) => {
     try {
       await proyectosService.guardarComoPlantilla(id, { nombre, descripcion });
-      showToast('Plantilla guardada correctamente');
+      showToast(t('taskTemplateSaved'));
       setModalPlantilla(false);
     } catch (err) {
       showToast(err.message, 'error');
@@ -343,43 +437,43 @@ const ProyectoDetallePage = () => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-4">
             <Link to="/proyectos" className="text-blue-600 font-black text-[10px] lg:text-xs tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
-              <ChevronLeft size={14} /> PROYECTOS
+              <ChevronLeft size={14} /> {String(t('projects')).toUpperCase()}
             </Link>
-            <span className="text-slate-300">/</span>
-            <span className="text-[10px] font-black text-slate-400 tracking-widest truncate max-w-[200px]">ID #{proyecto?.id}</span>
+            <span className="text-[var(--color-border)]">/</span>
+            <span className="text-[10px] font-black text-[var(--color-text-muted)] tracking-widest truncate max-w-[200px]">ID #{proyecto?.id}</span>
           </div>
-          <h1 className="text-2xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-2">
+          <h1 className="text-2xl lg:text-5xl font-black text-[var(--color-text)] tracking-tight leading-tight mb-2">
             {proyecto?.nombre}
           </h1>
-          <p className="text-sm lg:text-base text-slate-500 font-medium max-w-2xl">{proyecto?.descripcion}</p>
+          <p className="text-sm lg:text-base text-[var(--color-text-dim)] font-medium max-w-2xl">{proyecto?.descripcion}</p>
         </div>
 
         <div className="flex gap-2 w-full lg:w-auto">
           <button 
             onClick={() => setModalExportar(true)} 
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-white border border-slate-200 rounded-xl text-xs lg:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs lg:text-sm font-black text-[var(--color-text-dim)] hover:bg-[var(--color-surface-3)] transition-all shadow-sm"
           >
-            <Download size={18} /> Exportar
+            <Download size={18} /> {t('projectExport')}
           </button>
           {usuario?.rol === 'ADMIN' && (
             <button 
               onClick={() => setModalPlantilla(true)} 
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-white border border-slate-200 rounded-xl text-xs lg:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs lg:text-sm font-black text-[var(--color-text-dim)] hover:bg-[var(--color-surface-3)] transition-all shadow-sm"
             >
-              <Save size={18} /> Guardar Plantilla
+              <Save size={18} /> {t('projectSaveTemplate')}
             </button>
           )}
           <button 
             onClick={() => setModalImportar(true)} 
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-white border border-slate-200 rounded-xl text-xs lg:text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs lg:text-sm font-black text-[var(--color-text-dim)] hover:bg-[var(--color-surface-3)] transition-all shadow-sm"
           >
-            <Download size={18} /> Importar
+            <Download size={18} /> {t('projectImport')}
           </button>
           <button 
             onClick={() => { setTareaEditando(null); setModal(true); }} 
             className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-blue-600 text-white rounded-xl text-xs lg:text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
           >
-            <Plus size={18} /> Nueva Tarea
+            <Plus size={18} /> {t('projectNewTask')}
           </button>
         </div>
       </div>
@@ -387,17 +481,17 @@ const ProyectoDetallePage = () => {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10 overflow-x-auto pb-2 lg:pb-0">
         {[
-          { l: 'Progreso general', v: `${progresoGeneral}%`, sub: `${totalGeneral} tareas`, i: <Target size={24} />, c: '#2563eb', bg: '#eff6ff' },
-          { l: 'Mi progreso', v: `${progresoMiembro}%`, sub: `${totalMiembro} asignadas`, i: <Target size={24} />, c: '#10b981', bg: '#f0fdf4' },
-          { l: 'Por Hacer', v: stats.pendientes, i: <ListTodo size={24} />, c: '#64748b', bg: '#f8fafc' },
-          { l: 'En Marcha', v: stats.progreso, i: <Zap size={24} />, c: '#8b5cf6', bg: '#f5f3ff' },
-          { l: 'Hechas', v: stats.hechas, i: <CheckCircle2 size={24} />, c: '#10b981', bg: '#f0fdf4' }
+          { l: t('projectGeneralProgress'), v: `${progresoGeneral}%`, sub: `${totalGeneral} ${totalGeneral === 1 ? t('projectTaskSingular') : t('projectTaskPlural')}`, i: <Target size={24} />, c: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
+          { l: t('projectMyProgress'), v: `${progresoMiembro}%`, sub: `${totalMiembro} ${t('taskAssignedPlural')}`, i: <Target size={24} />, c: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+          { l: t('projectTodo'), v: stats.pendientes, i: <ListTodo size={24} />, c: '#64748b', bg: 'var(--color-surface-3)' },
+          { l: t('projectInProgress'), v: stats.progreso, i: <Zap size={24} />, c: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+          { l: t('projectDone'), v: stats.hechas, i: <CheckCircle2 size={24} />, c: '#10b981', bg: 'rgba(16,185,129,0.12)' }
         ].map((s, i) => (
-          <div key={i} className="bg-white p-5 lg:p-6 rounded-[24px] shadow-sm border border-slate-50 flex items-center justify-between min-w-[140px]">
+          <div key={i} className="bg-[var(--color-surface)] p-5 lg:p-6 rounded-[24px] shadow-sm border border-[var(--color-border)] flex items-center justify-between min-w-[140px]">
             <div className="flex flex-col gap-0.5">
-              <div className="text-xl lg:text-2xl font-black text-slate-900 leading-none">{s.v}</div>
-              <div className="text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.l}</div>
-              {s.sub && <div className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{s.sub}</div>}
+              <div className="text-xl lg:text-2xl font-black text-[var(--color-text)] leading-none">{s.v}</div>
+              <div className="text-[9px] lg:text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{s.l}</div>
+              {s.sub && <div className="text-[9px] font-black text-[var(--color-text-muted)] opacity-70 uppercase tracking-widest">{s.sub}</div>}
             </div>
             <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.bg, color: s.c }}>
               {s.i}
@@ -409,13 +503,13 @@ const ProyectoDetallePage = () => {
       {/* Toolbar Vistas */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '300px' }}>
-          <ToggleVista vista={vista} onChange={setVista} />
+          <ToggleVista vista={vista} onChange={setVista} t={t} />
           
           <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
             <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dim)', opacity: 0.5 }} />
             <input 
               type="text"
-              placeholder="Buscar tareas..."
+              placeholder={t('projectTaskSearch')}
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               style={{
@@ -435,10 +529,64 @@ const ProyectoDetallePage = () => {
           </div>
         </div>
         
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Mostrando {tareasFiltradas.length} {tareasFiltradas.length === 1 ? 'tarea' : 'tareas'}
+            {t('projectShowing')} {tareasFiltradasAvanzadas.length} {tareasFiltradasAvanzadas.length === 1 ? t('projectTaskSingular') : t('projectTaskPlural')}
           </span>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 lg:px-5 lg:py-4 shadow-sm">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-surface-3)] text-[var(--color-text-dim)]">
+            <SlidersHorizontal size={18} />
+          </div>
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectTaskFilters')}</div>
+            <div className="text-sm font-black text-[var(--color-text)]">{t('projectTaskFiltersDesc')}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectDate')}</label>
+            <RangeDatePicker
+              from={filtroFecha.from}
+              to={filtroFecha.to}
+              onChange={(range) => setFiltroFecha(range || { from: null, to: null })}
+              placeholder={t('projectSelectDate')}
+              title={t('projectSelectDate')}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectPriority')}</label>
+            <select
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-3)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-dim)] outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+              value={filtroPrioridad}
+              onChange={(e) => setFiltroPrioridad(e.target.value)}
+            >
+              <option value="todas">{t('projectAllPriorities')}</option>
+              {PRIORIDADES.map((prioridad) => (
+                <option key={prioridad.value} value={prioridad.value}>{t(prioridad.labelKey)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectResponsible')}</label>
+            <select
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-3)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-dim)] outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+              value={filtroResponsable}
+              onChange={(e) => setFiltroResponsable(e.target.value)}
+            >
+              <option value="todos">{t('projectAllResponsibles')}</option>
+              <option value="sin_asignar">{t('projectUnassigned')}</option>
+              {responsablesFiltro.map((responsable) => (
+                <option key={responsable.id} value={String(responsable.id)}>{responsable.nombre}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -459,13 +607,14 @@ const ProyectoDetallePage = () => {
               {tareasListaFiltradas.length === 0 ? (
                 <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
                   <Search size={40} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
-                  <p style={{ fontWeight: '700' }}>No se encontraron tareas que coincidan con tu búsqueda</p>
+                  <p style={{ fontWeight: '700' }}>{t('projectNoTasksFound')}</p>
                 </div>
               ) : (
                 tareasListaFiltradas.slice(0, limite).map(t => (
                   <TareaCard 
                     key={t.id} 
                     tarea={t} 
+                    usuarioActual={usuario}
                     onClick={(x) => { setTareaEditando(x); setModal(true); }}
                     onEliminar={handleEliminar}
                     onCambiarEstado={handleCambiarEstado}
@@ -480,14 +629,14 @@ const ProyectoDetallePage = () => {
                   onClick={() => setLimite(prev => prev + 10)}
                   className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm uppercase tracking-widest flex items-center gap-2"
                 >
-                  Ver más tareas ({tareasFiltradas.length - limite} restantes) <Plus size={14} />
+                  {t('projectLoadMoreTasks', { count: tareasFiltradasAvanzadas.length - limite })} <Plus size={14} />
                 </button>
               </div>
             )}
           </div>
         )}
-        {vista === 'kanban' && <KanbanView tareas={tareasFiltradas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onEliminar={handleEliminar} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} onActualizarTarea={handleActualizarTarea} />}
-        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradas} />}
+        {vista === 'kanban' && <KanbanView tareas={tareasFiltradasAvanzadas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onEliminar={handleEliminar} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} onActualizarTarea={handleActualizarTarea} />}
+        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradasAvanzadas} />}
       </div>
 
       {/* Modales */}
@@ -495,9 +644,10 @@ const ProyectoDetallePage = () => {
         <ModalTarea 
           tarea={tareaEditando} 
           proyectoId={id} 
+          usuarioActual={usuario}
           usuarios={usuarios} 
-          onClose={() => setModal(false)} 
-          onGuardar={() => { setModal(false); cargar(); }} 
+          onClose={cerrarModalTarea} 
+          onGuardar={() => { cerrarModalTarea(); cargar(); }} 
           onEliminar={handleEliminar}
         />
       )}
@@ -529,7 +679,10 @@ const ProyectoDetallePage = () => {
 };
 
 // ── Modal de Tarea (Simplified & Professional) ──────────────────────────────
-const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onEliminar }) => {
+const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGuardar, onEliminar }) => {
+  const { t } = usePreferences();
+  const creadorEsUsuarioActual = tarea?.creador?.id === usuarioActual?.id
+    || (!tarea?.creador?.id && (!tarea?.asignado?.id || tarea?.asignado?.id === usuarioActual?.id));
   const [form, setForm] = useState({
     titulo: tarea?.titulo || '',
     descripcion: tarea?.descripcion || '',
@@ -565,10 +718,10 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
       onClick={(e) => e.target === e.currentTarget && onClose()}
       className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4 transition-all"
     >
-      <div className="bg-white w-full max-w-2xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
+      <div className="bg-[var(--color-surface)] w-full max-w-2xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
         {/* Modal Header */}
-        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">{tarea ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
+        <div className="px-8 py-6 border-b border-[var(--color-border)] flex justify-between items-center bg-[var(--color-surface-3)]">
+          <h2 className="text-xl lg:text-2xl font-black text-[var(--color-text)] tracking-tight">{tarea ? t('taskEditTitle') : t('taskNewTitle')}</h2>
           <button onClick={onClose} className="p-2 hover:bg-white rounded-xl text-slate-400 transition-colors border border-transparent hover:border-slate-100">
             <Zap size={20} className="rotate-45" />
           </button>
@@ -577,65 +730,71 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
         <div className="flex-1 overflow-y-auto px-8 py-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">TÍTULO DE LA TAREA</label>
-              <input 
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" 
-                value={form.titulo} 
-                onChange={e => setForm({...form, titulo: e.target.value})} 
-                required 
-                placeholder="¿Qué hay que hacer?" 
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskTitle').toUpperCase()}</label>
+              <input
+                className="form-input"
+                value={form.titulo}
+                onChange={e => setForm({...form, titulo: e.target.value})}
+                required
+                placeholder={t('taskTitlePlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DESCRIPCIÓN</label>
-              <textarea 
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none resize-none" 
-                rows="3" 
-                value={form.descripcion} 
-                onChange={e => setForm({...form, descripcion: e.target.value})} 
-                placeholder="Detalles adicionales..." 
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskDescription').toUpperCase()}</label>
+              <textarea
+                className="form-input resize-none"
+                rows="3"
+                value={form.descripcion}
+                onChange={e => setForm({...form, descripcion: e.target.value})}
+                placeholder={t('taskDescriptionPlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">NUMERO DE ACTIVIDAD</label>
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskActivityNumber').toUpperCase()}</label>
               <input
                 type="number"
                 min="1"
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
+                className="form-input"
                 value={form.numeroActividad}
                 onChange={e => setForm({ ...form, numeroActividad: e.target.value })}
-                placeholder="Ej. 10"
+                placeholder={t('taskActivityPlaceholder')}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ASIGNADO A</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none appearance-none" value={form.asignadoId} onChange={e => setForm({...form, asignadoId: e.target.value})}>
-                  <option value="">Sin asignar</option>
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskAssignedTo').toUpperCase()}</label>
+                <select className="form-input form-select" value={form.asignadoId} onChange={e => setForm({...form, asignadoId: e.target.value})}>
+                  <option value="">{t('taskUnassigned')}</option>
                   {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ESTADO</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
-                  {ESTADOS_TAREA.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskStatus').toUpperCase()}</label>
+                <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
+                  {ESTADOS_TAREA.map(e => <option key={e.value} value={e.value}>{t(e.labelKey)}</option>)}
                 </select>
               </div>
             </div>
 
+            {(tarea?.creador?.nombre || creadorEsUsuarioActual) && (
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
+                {creadorEsUsuarioActual ? t('taskCreatedByYou') : `${t('taskAssignedBy')} ${tarea.creador.nombre}`}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PRIORIDAD</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
-                  {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskPriority').toUpperCase()}</label>
+                <select className="form-input form-select" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
+                  {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{t(p.labelKey)}</option>)}
                 </select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DURACIÓN (INICIO - FIN)</label>
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskDuration').toUpperCase()}</label>
                 <RangeDatePicker 
                   from={form.fechaInicio ? new Date(form.fechaInicio + 'T12:00:00') : null}
                   to={form.venceEn ? new Date(form.venceEn + 'T12:00:00') : null}
@@ -650,70 +809,38 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
               </div>
             </div>
 
-            {!tarea && (
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DOCUMENTOS DE APOYO</label>
-                <div className="relative group">
-                  <input
-                    type="file"
-                    multiple
-                    onChange={e => setArchivos(prev => [...prev, ...Array.from(e.target.files || [])])}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                  />
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl group-hover:border-blue-400 transition-all">
-                    <div className="p-2 bg-white rounded-xl shadow-sm text-slate-400 group-hover:text-blue-500">
-                      <Plus size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Haz clic para subir documentos</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Se permite cualquier tipo de archivo</p>
-                    </div>
-                  </div>
-                </div>
-
-                {archivos.length > 0 && (
-                  <div className="grid grid-cols-1 gap-2 mt-2">
-                    {archivos.map((file, idx) => (
-                      <div key={`${file.name}-${idx}`} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-xl">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileSpreadsheet size={16} className="text-blue-500 shrink-0" />
-                          <span className="text-[10px] font-black text-slate-600 truncate">{file.name}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setArchivos(prev => prev.filter((_, i) => i !== idx))}
-                          className="text-red-500 hover:bg-red-50 p-1 rounded-md transition-colors"
-                        >
-                          <Plus size={16} className="rotate-45" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <TaskAttachments
+              tareaId={tarea?.id}
+              type="tareas"
+              title={t('taskSupportDocuments')}
+              pendingFiles={archivos}
+              onPendingFilesChange={setArchivos}
+              showUploader
+              showExisting={Boolean(tarea?.id)}
+              uploadLabel={tarea ? t('taskAddFiles') : t('taskSelectFiles')}
+            />
           </form>
         </div>
 
         {/* Modal Footer */}
-        <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse lg:flex-row gap-3">
-          <button 
-            onClick={onClose} 
-            className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all uppercase tracking-widest"
+        <div className="px-8 py-6 border-t border-[var(--color-border)] bg-[var(--color-surface-3)] flex flex-col-reverse lg:flex-row gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all uppercase tracking-widest"
           >
-            Cancelar
+            {t('cancel')}
           </button>
           {tarea && (
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => { onEliminar(tarea); onClose(); }}
               className="flex-1 px-6 py-4 bg-red-50 text-red-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all"
             >
-              Eliminar
+              {t('delete')}
             </button>
           )}
           <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
-            {cargando ? 'Guardando...' : 'Guardar Tarea'}
+            {cargando ? t('saving') : t('save')}
           </button>
         </div>
       </div>
@@ -721,44 +848,48 @@ const ModalTarea = ({ tarea, proyectoId, usuarios, onClose, onGuardar, onElimina
   );
 };
 
-const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => (
+const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => {
+  const { t } = usePreferences();
+  return (
   <div
     onClick={(e) => e.target === e.currentTarget && onClose()}
     className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
   >
-    <div className="bg-white w-full max-w-md rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
-      <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-        <h2 className="text-xl font-black text-slate-900">Exportar tareas</h2>
-        <p className="text-sm text-slate-500 font-medium mt-1">{proyecto?.nombre}</p>
+    <div className="bg-[var(--color-surface)] w-full max-w-md rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
+      <div className="px-8 py-6 border-b border-[var(--color-border)] bg-[var(--color-surface-3)]">
+        <h2 className="text-xl font-black text-[var(--color-text)]">{t('taskExportTitle')}</h2>
+        <p className="text-sm text-[var(--color-text-muted)] font-medium mt-1">{proyecto?.nombre}</p>
       </div>
       <div className="px-8 py-6 space-y-3">
         <button
           onClick={() => onExportar('excel')}
-          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-all"
+          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-all"
         >
-          <span className="flex items-center gap-3 text-sm font-black text-slate-800"><FileSpreadsheet size={18} /> Excel</span>
-          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">.xlsx</span>
+          <span className="flex items-center gap-3 text-sm font-black text-[var(--color-text)]"><FileSpreadsheet size={18} /> Excel</span>
+          <span className="text-xs font-black text-[var(--color-text-muted)] uppercase tracking-widest">.xlsx</span>
         </button>
         <button
           onClick={() => onExportar('json')}
-          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-all"
+          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-all"
         >
-          <span className="flex items-center gap-3 text-sm font-black text-slate-800"><FileJson size={18} /> JSON</span>
-          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">.json</span>
+          <span className="flex items-center gap-3 text-sm font-black text-[var(--color-text)]"><FileJson size={18} /> JSON</span>
+          <span className="text-xs font-black text-[var(--color-text-muted)] uppercase tracking-widest">.json</span>
         </button>
       </div>
-      <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50">
-        <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-all">
-          Cerrar
+      <div className="px-8 py-5 border-t border-[var(--color-border)] bg-[var(--color-surface-3)]">
+        <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-all">
+          {t('close')}
         </button>
       </div>
     </div>
   </div>
-);
+  );
+};
 
 const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
+  const { t } = usePreferences();
   const [form, setForm] = useState({
-    nombre: `${proyecto?.nombre || 'Proyecto'} Template`,
+    nombre: t('taskTemplateDefaultName', { project: proyecto?.nombre || t('projects') }),
     descripcion: proyecto?.descripcion || '',
   });
   const [guardando, setGuardando] = useState(false);
@@ -778,36 +909,34 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
       onClick={(e) => e.target === e.currentTarget && onClose()}
       className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
     >
-      <div className="bg-white w-full max-w-lg rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-          <h2 className="text-xl font-black text-slate-900">Guardar como plantilla</h2>
-          <p className="text-sm text-slate-500 font-medium mt-1">Esto guarda una base reutilizable del proyecto actual: tareas, prioridades, orden, dependencias y fechas relativas. No guarda el avance real ni el historial.</p>
+      <div className="bg-[var(--color-surface)] w-full max-w-lg rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
+        <div className="px-8 py-6 border-b border-[var(--color-border)] bg-[var(--color-surface-3)]">
+          <h2 className="text-xl font-black text-[var(--color-text)]">{t('projectSaveTemplate')}</h2>
         </div>
         <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre de la plantilla</label>
+            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldName')}</label>
             <input
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
+              className="form-input"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
               required
             />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción</label>
+            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskDescription')}</label>
             <input
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none resize-none"
-              rows="3"
+              className="form-input"
               value={form.descripcion}
               onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
             />
           </div>
           <div className="flex flex-col-reverse lg:flex-row gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all uppercase tracking-widest">
-              Cancelar
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-3)] transition-all uppercase tracking-widest">
+              {t('cancel')}
             </button>
             <button type="submit" disabled={guardando} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20">
-              {guardando ? 'Guardando...' : 'Guardar plantilla'}
+              {guardando ? t('saving') : t('save')}
             </button>
           </div>
         </form>

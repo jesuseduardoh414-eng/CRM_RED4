@@ -18,6 +18,9 @@ const INCLUDE_ASIGNADO = {
   asignado: {
     select: { id: true, nombre: true, area: true },
   },
+  creador: {
+    select: { id: true, nombre: true, area: true },
+  },
 };
 
 const visibilidadTareasPara = (usuarioId) => ({
@@ -51,7 +54,14 @@ const asignadoPerteneceAProyecto = (proyecto, asignadoId) => {
 };
 
 // Helper para crear notificaciones
-const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
+const crearNotificacion = async (
+  usuarioId,
+  mensaje,
+  tipo,
+  {
+    tareaId = null,
+  } = {}
+) => {
   if (!usuarioId) return;
   try {
     await prisma.notificacion.create({
@@ -59,7 +69,7 @@ const crearNotificacion = async (usuarioId, mensaje, tipo, tareaId = null) => {
         usuarioId,
         mensaje,
         tipo,
-        tareaId
+        tareaId,
       }
     });
   } catch (error) {
@@ -356,7 +366,9 @@ const crear = async (req, res) => {
         tarea.asignadoId,
         `Te han asignado una nueva tarea: "${tarea.titulo}"`,
         'ASIGNACION',
-        tarea.id
+        {
+          tareaId: tarea.id,
+        }
       );
     }
 
@@ -451,7 +463,9 @@ const editar = async (req, res) => {
         msg = `Se actualizó la información de tu tarea: "${tarea.titulo}"`;
       }
       
-      await crearNotificacion(tarea.asignadoId, msg, 'URGENTE', tarea.id);
+      await crearNotificacion(tarea.asignadoId, msg, 'URGENTE', {
+        tareaId: tarea.id,
+      });
     }
 
     // Registrar en el Log de Actividad
@@ -556,7 +570,9 @@ const actualizarEstado = async (req, res) => {
         tarea.asignadoId,
         `El estado de tu tarea "${tarea.titulo}" cambió a ${tarea.estado}`,
         'ESTADO',
-        tarea.id
+        {
+          tareaId: tarea.id,
+        }
       );
     }
 

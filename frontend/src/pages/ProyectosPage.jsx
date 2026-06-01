@@ -3,8 +3,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { agendaService, proyectosService, usuariosService } from '../services/api';
 import { PageSkeleton } from '../components/Skeleton';
+import TaskAttachments from '../components/TaskAttachments';
 import { sortProyectos } from '../utils/sorters';
 import { 
   Code2, 
@@ -25,16 +27,16 @@ import {
 
 // ── Configuraciones Visuales ────────────────────────────────────────────────
 const AREA_CONF = {
-  DESARROLLO:     { label: 'Desarrollo',     color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={14} /> },
-  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  icon: <BarChart3 size={14} /> },
-  COMUNICACION:   { label: 'Comunicación',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={14} /> },
-  MARKETING:      { label: 'Marketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)', icon: <Megaphone size={14} /> },
+  DESARROLLO:     { labelKey: 'areaDesarrollo',    color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={14} /> },
+  ADMINISTRACION: { labelKey: 'areaAdministracion', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  icon: <BarChart3 size={14} /> },
+  COMUNICACION:   { labelKey: 'areaComunicacion',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={14} /> },
+  MARKETING:      { labelKey: 'areaMarketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)', icon: <Megaphone size={14} /> },
 };
 
 const ESTADOS = [
-  { value: 'ACTIVO',   label: 'Activo',   color: '#00d166', bg: 'rgba(0,209,102,0.12)' },
-  { value: 'EN_PAUSA', label: 'En pausa', color: '#ff9100', bg: 'rgba(255,145,0,0.12)' },
-  { value: 'CERRADO',  label: 'Cerrado',  color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
+  { value: 'ACTIVO',   labelKey: 'statusActive', color: '#00d166', bg: 'rgba(0,209,102,0.12)' },
+  { value: 'EN_PAUSA', labelKey: 'statusPaused', color: '#ff9100', bg: 'rgba(255,145,0,0.12)' },
+  { value: 'CERRADO',  labelKey: 'statusClosed', color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
 ];
 
 const ESTADO_ALIASES = {
@@ -53,13 +55,13 @@ const getAreasProyecto = (area) => {
   return area.split(',').map(a => a.trim()).filter(Boolean);
 };
 
-const getLabelAreas = (area) => getAreasProyecto(area)
-  .map(a => AREA_CONF[a]?.label || a)
+const getLabelAreas = (area, tFn) => getAreasProyecto(area)
+  .map(a => tFn ? tFn(AREA_CONF[a]?.labelKey || 'areaGeneral') : (AREA_CONF[a]?.labelKey || a))
   .join(', ');
 
-const formatFechaCorta = (fecha) => {
-  if (!fecha) return 'Sin fecha fin';
-  return new Date(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+const formatFechaCorta = (fecha, locale, t) => {
+  if (!fecha) return t('projectDateNoEnd');
+  return new Date(fecha).toLocaleDateString(locale, { day: '2-digit', month: 'short' });
 };
 
 const esAdminUsuario = (usuario) => usuario?.rol?.toString().toUpperCase() === 'ADMIN';
@@ -123,6 +125,7 @@ const conflictOverlapsRange = (conflicto, startKey, endKey) => {
 };
 
 const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = false }) => {
+  const { locale, t } = usePreferences();
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const base = value ? parseDateKey(value) : new Date();
@@ -158,7 +161,7 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
         onClick={() => setOpen(prev => !prev)}
         className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none flex items-center justify-between"
       >
-        <span>{value ? parseDateKey(value).toLocaleDateString('es-MX') : 'dd/mm/aaaa'}</span>
+        <span>{value ? parseDateKey(value).toLocaleDateString(locale) : 'dd/mm/aaaa'}</span>
         <Calendar size={18} className="text-slate-500" />
       </button>
       {required && !value && <input className="sr-only" required value="" onChange={() => {}} />}
@@ -170,7 +173,7 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
               <ChevronLeft size={18} />
             </button>
             <p className="text-xs font-black uppercase tracking-widest text-slate-900">
-              {visibleMonth.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+              {visibleMonth.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}
             </p>
             <button type="button" onClick={() => moveMonth(1)} className="p-2 rounded-lg hover:bg-slate-50 text-slate-500">
               <ChevronRight size={18} />
@@ -192,7 +195,7 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
                   key={key}
                   type="button"
                   onClick={() => handleSelect(date)}
-                  title={conflicts.length > 0 ? conflicts.map(c => `${c.usuario?.nombre || 'Miembro'}: ${c.titulo}`).join('\n') : ''}
+                  title={conflicts.length > 0 ? conflicts.map(c => `${c.usuario?.nombre || t('projectMemberLabel')}: ${c.titulo}`).join('\n') : ''}
                   disabled={isHardBlocked}
                   className={`h-9 rounded-lg text-xs font-black transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : isHardBlocked ? 'bg-red-50 text-red-500 border border-red-100 cursor-not-allowed opacity-80' : hasProjectWarning ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'text-slate-700 hover:bg-slate-100'}`}
                 >
@@ -202,8 +205,8 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
             })}
           </div>
           <div className="mt-4 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-400" /> Tarea ocupada</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-300" /> Proyecto activo</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-400" /> {t('projectBlockedTask')}</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-300" /> {t('projectActiveProject')}</span>
           </div>
         </div>
       )}
@@ -213,7 +216,8 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
 
 // ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
 const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
-  const areaLabel = getLabelAreas(proyecto.area);
+  const { t, locale } = usePreferences();
+  const areaLabel = getLabelAreas(proyecto.area, t);
   const estado = ESTADOS.find(e => e.value === normalizarEstadoProyecto(proyecto.estado)) || ESTADOS[0];
   const total = proyecto._count?.tareas || 0;
   const progresoGeneral = proyecto.progresoGeneral ?? proyecto.progreso ?? 0;
@@ -229,7 +233,7 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
           <h3 className="text-lg lg:text-xl font-black text-slate-900 truncate mb-1">{proyecto.nombre}</h3>
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md" style={{ color: estado.color, background: estado.bg }}>
-              {estado.label}
+              {t(estado.labelKey)}
             </span>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
               {areaLabel}
@@ -242,12 +246,12 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
       </div>
 
       <p className="text-sm text-slate-500 font-medium line-clamp-2 min-h-[40px]">
-        {proyecto.descripcion || 'Gestión operativa del proyecto y seguimiento de hitos.'}
+        {proyecto.descripcion || t('projectDefaultDescription')}
       </p>
 
       <div className="space-y-3">
         <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-          <span className="text-slate-400">Progreso general</span>
+          <span className="text-slate-400">{t('projectGeneralProgress')}</span>
           <span className="text-slate-900">{progresoGeneral}%</span>
         </div>
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -259,7 +263,7 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
         {progresoMiembro !== null && progresoMiembro !== undefined && (
           <>
             <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-              <span className="text-slate-400">Mi progreso</span>
+              <span className="text-slate-400">{t('projectMyProgress')}</span>
               <span className="text-slate-900">{progresoMiembro}%</span>
             </div>
             <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -277,7 +281,7 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
           <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500">
             {proyecto.creador?.nombre?.charAt(0)}
           </div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{total} Tareas</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{total} {t('projectTaskPlural').toUpperCase()}</span>
         </div>
         
         {esAdmin && (
@@ -303,6 +307,7 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
 
 // ── Modal de Proyecto ────────────────────────────────────────────────────────
 const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
+  const { t, locale } = usePreferences();
   const { usuario: usuarioActual } = useAuth();
   const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
   const areasIniciales = proyecto?.area ? getAreasProyecto(proyecto.area) : [usuarioActual?.area || 'DESARROLLO'];
@@ -427,11 +432,11 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.areas.length === 0) {
-      alert('Selecciona al menos un area');
+      alert(t('projectPickArea'));
       return;
     }
     if (form.fechaFin && new Date(`${form.fechaFin}T23:59:59`) <= new Date(`${form.fechaInicio}T00:00:00`)) {
-      alert('La fecha fin debe ser posterior a la fecha inicio');
+      alert(t('projectDateRangeError'));
       return;
     }
     const inicio = parseDateKey(form.fechaInicio);
@@ -440,7 +445,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
     while (cursor <= fin) {
       const conflictosDia = fechasBloqueadas.get(dateKey(cursor)) || [];
       if (conflictosDia.some(esBloqueoReal)) {
-        alert('El rango seleccionado cruza con tareas activas de los miembros.');
+        alert(t('projectMemberRangeConflict'));
         return;
       }
       cursor.setDate(cursor.getDate() + 1);
@@ -473,10 +478,10 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
       onClick={(e) => e.target === e.currentTarget && onClose()}
       className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
     >
-      <div className="bg-white w-full max-w-xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
+      <div className="bg-[var(--color-surface)] w-full max-w-xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">{proyecto ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
+        <div className="px-8 py-6 border-b border-[var(--color-border)] flex justify-between items-center bg-[var(--color-surface-3)]">
+          <h2 className="text-xl lg:text-2xl font-black text-[var(--color-text)] tracking-tight">{proyecto ? t('projectEditTitle') : t('projectNewModalTitle')}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <Plus size={24} className="rotate-45" />
           </button>
@@ -486,7 +491,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {!proyecto && (
               <div className="hidden space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('projectTemplateLabel').toUpperCase()}</label>
                 <select
                   className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
                   value={form.plantillaId}
@@ -504,7 +509,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                   <option value="">Selecciona una plantilla (opcional)</option>
                   {plantillas.map(plantilla => (
                     <option key={plantilla.id} value={plantilla.id}>
-                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} {t('projectTaskPlural')}
                     </option>
                   ))}
                 </select>
@@ -522,27 +527,27 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                     <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
                     <p className="text-[11px] font-bold text-slate-500 mt-1">
-                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
+                      {t('projectTemplateTasksBase', { count: plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0 })}
                     </p>
                   </div>
                 )}
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">NOMBRE DEL PROYECTO</label>
-              <input className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required placeholder="Ej: Rediseño de Marca" />
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectFieldName').toUpperCase()}</label>
+              <input className="form-input" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required placeholder={t('projectFieldNamePlaceholder')} />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DESCRIPCIÓN</label>
-              <textarea className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all resize-none" rows="3" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Objetivos y alcance..." />
+              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskDescription').toUpperCase()}</label>
+              <textarea className="form-input resize-none" rows="3" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder={t('projectFieldDescPlaceholder')} />
             </div>
 
             {!proyecto && (
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectTemplateLabel').toUpperCase()}</label>
                 <select
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
+                  className="form-input form-select"
                   value={form.plantillaId}
                   onChange={e => {
                     const plantillaId = e.target.value;
@@ -555,29 +560,26 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                     }));
                   }}
                 >
-                  <option value="">Selecciona una plantilla (opcional)</option>
+                  <option value="">{t('projectTemplatePlaceholder')}</option>
                   {plantillas.map(plantilla => (
                     <option key={plantilla.id} value={plantilla.id}>
-                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                      {plantilla.nombre} — {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} {t('projectTaskPlural')}
                     </option>
                   ))}
                 </select>
                 {!plantillaSeleccionada && (
-                  <p className="text-[11px] font-bold text-slate-400">
-                    Si no eliges una plantilla, el proyecto se crea vacío para que armes las tareas manualmente.
+                  <p className="text-[11px] font-bold text-[var(--color-text-muted)]">
+                    {t('projectTemplateNoSelect')}
                   </p>
                 )}
                 {!plantillaSeleccionada && plantillas.length === 0 && (
                   <p className="text-[11px] font-bold text-amber-600">
-                    Aún no hay plantillas guardadas. Primero entra a un proyecto existente y usa "Guardar Plantilla".
+                    {t('projectTemplateEmpty')}
                   </p>
                 )}
                 {plantillaSeleccionada && (
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-                    <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
-                    <p className="text-[11px] font-bold text-slate-500 mt-1">
-                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
-                    </p>
+                    <p className="text-xs font-black text-[var(--color-text)]">{plantillaSeleccionada.nombre}</p>
                   </div>
                 )}
               </div>
@@ -585,13 +587,13 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ESTADO</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
-                  {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectFieldStatus').toUpperCase()}</label>
+                <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
+                  {ESTADOS.map(e => <option key={e.value} value={e.value}>{t(e.labelKey)}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AREA RESPONSABLE</label>
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectFieldArea').toUpperCase()}</label>
                 <div className="grid grid-cols-1 gap-2">
                   {Object.keys(AREA_CONF).map(k => {
                     const selected = form.areas.includes(k);
@@ -604,7 +606,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                         className={`flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all ${selected ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/15' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-white'} ${esAdminArea && k !== usuarioActual?.area ? 'opacity-40 cursor-not-allowed hover:bg-slate-50' : ''}`}
                       >
                         <span>{AREA_CONF[k].label}</span>
-                        <span>{selected ? 'Seleccionada' : esAdminArea && k !== usuarioActual?.area ? 'Sin acceso' : 'Agregar'}</span>
+                        <span>{selected ? t('statusActive') : esAdminArea && k !== usuarioActual?.area ? '—' : t('add')}</span>
                       </button>
                     );
                   })}
@@ -614,18 +616,18 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MIEMBROS DE LAS AREAS SELECCIONADAS</label>
-                {consultandoDisponibilidad && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Revisando agenda...</span>}
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectFieldMembers').toUpperCase()}</label>
+                {consultandoDisponibilidad && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">{t('projectCheckingCalendar')}</span>}
               </div>
               <div className="space-y-3">
                 {usuariosPorArea.map(grupo => (
                   <div key={grupo.area} className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
-                      {grupo.area === 'ADMIN' ? 'Administradores' : AREA_CONF[grupo.area]?.label || grupo.area}
+                      {grupo.area === 'ADMIN' ? t('projectAdmins') : t(AREA_CONF[grupo.area]?.labelKey || 'areaGeneral')}
                     </p>
                     <div className="flex flex-wrap gap-2 min-h-[36px]">
                       {grupo.usuarios.length === 0 && (
-                        <span className="text-xs font-bold text-slate-400">Sin miembros en esta area.</span>
+                        <span className="text-xs font-bold text-[var(--color-text-muted)]">{t('projectNoMembers')}</span>
                       )}
                       {grupo.usuarios.map(u => {
                         const isSelected = form.miembrosIds.includes(u.id);
@@ -636,10 +638,10 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                             key={u.id}
                             type="button"
                             onClick={() => toggleMiembro(u.id)}
-                            title={conflictos.length > 0 ? `Tiene tareas/eventos: ${conflictos.map(c => c.titulo).join(', ')}` : ''}
+                            title={conflictos.length > 0 ? t('projectHasBusyItems', { items: conflictos.map(c => c.titulo).join(', ') }) : ''}
                             className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-blue-600 text-white shadow-lg' : tieneProyectoActivo ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
                           >
-                            {isSelected ? 'OK ' : tieneProyectoActivo ? 'En proyecto ' : '+ '}{u.nombre}
+                            {isSelected ? `${t('projectMemberSelected')} ` : tieneProyectoActivo ? `${t('projectMemberInProject')} ` : '+ '}{u.nombre}
                           </button>
                         );
                       })}
@@ -651,7 +653,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
             {!proyecto && (
               <div className="hidden space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('projectTemplateLabel').toUpperCase()}</label>
                 <select
                   className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
                   value={form.plantillaId}
@@ -669,7 +671,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                   <option value="">Selecciona una plantilla (opcional)</option>
                   {plantillas.map(plantilla => (
                     <option key={plantilla.id} value={plantilla.id}>
-                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} {t('projectTaskPlural')}
                     </option>
                   ))}
                 </select>
@@ -687,7 +689,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                     <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
                     <p className="text-[11px] font-bold text-slate-500 mt-1">
-                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
+                      {t('projectTemplateTasksBase', { count: plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0 })}
                     </p>
                   </div>
                 )}
@@ -696,7 +698,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
             {!proyecto && (
               <div className="hidden space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PLANTILLA BASE</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('projectTemplateLabel').toUpperCase()}</label>
                 <select
                   className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none"
                   value={form.plantillaId}
@@ -714,7 +716,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                   <option value="">Selecciona una plantilla (opcional)</option>
                   {plantillas.map(plantilla => (
                     <option key={plantilla.id} value={plantilla.id}>
-                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} tareas
+                      {plantilla.nombre} - {plantilla.totalTareas || plantilla._count?.tareas || plantilla.tareas?.length || 0} {t('projectTaskPlural')}
                     </option>
                   ))}
                 </select>
@@ -732,7 +734,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                     <p className="text-xs font-black text-slate-900">{plantillaSeleccionada.nombre}</p>
                     <p className="text-[11px] font-bold text-slate-500 mt-1">
-                      {plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0} tareas base, con prioridades, dependencias y fechas relativas. Al guardar el proyecto, esa estructura se crea automáticamente.
+                      {t('projectTemplateTasksBase', { count: plantillaSeleccionada.totalTareas || plantillaSeleccionada._count?.tareas || plantillaSeleccionada.tareas?.length || 0 })}
                     </p>
                   </div>
                 )}
@@ -741,14 +743,14 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <ProjectDatePicker
-                label="FECHA INICIO"
+                label={t('projectStartDate').toUpperCase()}
                 value={form.fechaInicio}
                 onChange={fechaInicio => setForm({ ...form, fechaInicio })}
                 blockedDates={fechasBloqueadas}
                 required
               />
               <ProjectDatePicker
-                label="FECHA FIN"
+                label={t('projectEndDate').toUpperCase()}
                 value={form.fechaFin}
                 onChange={fechaFin => setForm({ ...form, fechaFin })}
                 blockedDates={fechasBloqueadas}
@@ -757,16 +759,16 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CALENDARIO DE RESPONSABLES</label>
+                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectFieldCalendar').toUpperCase()}</label>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {usuariosEnAreas.length} miembros visibles
+                  {usuariosEnAreas.length} {t('teamMemberPlural')}
                 </span>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 {usuariosEnAreas.length === 0 ? (
-                  <p className="text-xs font-bold text-slate-400">Selecciona un area para ver tareas activas de sus miembros.</p>
+                  <p className="text-xs font-bold text-[var(--color-text-muted)]">{t('projectAreaSelect')}</p>
                 ) : conflictosEnAreas.length === 0 ? (
-                  <p className="text-xs font-bold text-emerald-600">Sin tareas activas ni eventos en el rango seleccionado.</p>
+                  <p className="text-xs font-bold text-emerald-600">{t('projectNoConflicts')}</p>
                 ) : (
                   <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
                     {conflictosEnAreas.map(conflicto => (
@@ -776,7 +778,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{conflicto.usuario.nombre}</p>
                         </div>
                         <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-red-500">
-                          {formatFechaCorta(conflicto.fechaInicio)} - {formatFechaCorta(conflicto.fechaFin)}
+                          {formatFechaCorta(conflicto.fechaInicio, locale, t)} - {formatFechaCorta(conflicto.fechaFin, locale, t)}
                         </span>
                       </div>
                     ))}
@@ -831,7 +833,17 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
             </div>
             )}
 
-            <div className="space-y-3">
+            <TaskAttachments
+              tareaId={proyecto?.id}
+              type="proyectos"
+              title={t('projectFieldDocuments')}
+              pendingFiles={archivos}
+              onPendingFilesChange={setArchivos}
+              showUploader
+              showExisting={Boolean(proyecto?.id)}
+              uploadLabel={proyecto ? t('projectAddFiles') : t('projectSelectFiles')}
+            />
+            <div className="hidden">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DOCUMENTOS DE APOYO</label>
               <div className="relative group">
                 <input 
@@ -874,15 +886,15 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse lg:flex-row gap-3">
-          <button 
-            onClick={onClose} 
-            className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+        <div className="px-8 py-6 border-t border-[var(--color-border)] bg-[var(--color-surface-3)] flex flex-col-reverse lg:flex-row gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all"
           >
-            Cancelar
+            {t('cancel')}
           </button>
           <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
-            {cargando ? 'Guardando...' : 'Guardar Proyecto'}
+            {cargando ? t('saving') : t('projectSaveButton')}
           </button>
         </div>
       </div>
@@ -892,6 +904,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
 
 // ── Componente Principal ─────────────────────────────────────────────────────
 const ProyectosPage = () => {
+  const { t } = usePreferences();
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -920,11 +933,11 @@ const ProyectosPage = () => {
   }, [cargar]);
 
   const handleEliminar = async (p) => {
-    if (!window.confirm(`¿Eliminar "${p.nombre}"?`)) return;
+    if (!window.confirm(t('projectDeleteConfirm', { name: p.nombre }))) return;
     try {
       await proyectosService.eliminar(p.id);
       setProyectos(prev => prev.filter(x => x.id !== p.id));
-      showToast('Proyecto eliminado');
+      showToast(t('projectDeleted'));
     } catch (err) { showToast(err.message, 'error'); }
   };
 
@@ -936,15 +949,15 @@ const ProyectosPage = () => {
     <div className="max-w-7xl mx-auto">
       <div className="mb-10 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6">
         <div>
-          <h1 className="text-3xl lg:text-5xl font-black text-slate-900 tracking-tight leading-none mb-2">Proyectos</h1>
-          <p className="text-sm lg:text-base text-slate-500 font-medium">Gestión estratégica y operativa del equipo</p>
+          <h1 className="text-3xl lg:text-5xl font-black text-[var(--color-text)] tracking-tight leading-none mb-2">{t('projectsPageTitle')}</h1>
+          <p className="text-sm lg:text-base text-[var(--color-text-muted)] font-medium">{t('projectsPageSubtitle')}</p>
         </div>
         {esAdmin && (
           <button 
             onClick={() => { setEditando(null); setModal(true); }} 
             className="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
           >
-            <Plus size={18} /> Nuevo Proyecto
+            <Plus size={18} /> {t('projectsNewProject')}
           </button>
         )}
       </div>
@@ -960,7 +973,7 @@ const ProyectosPage = () => {
               ${filtro === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
             `}
           >
-            {f === 'TODOS' ? 'Todos' : ESTADOS.find(e => e.value === f)?.label}
+            {f === 'TODOS' ? t('projectFilterAll') : t(ESTADOS.find(e => e.value === f)?.labelKey || 'statusActive')}
           </button>
         ))}
       </div>
@@ -971,8 +984,8 @@ const ProyectosPage = () => {
             <FolderOpen size={40} />
           </div>
           <div>
-            <h3 className="text-xl font-black text-slate-900 mb-1">No se encontraron proyectos</h3>
-            <p className="text-sm text-slate-500 font-medium">Comienza creando uno nuevo o cambia el filtro.</p>
+            <h3 className="text-xl font-black text-slate-900 mb-1">{t('projectNoResultsTitle')}</h3>
+            <p className="text-sm text-slate-500 font-medium">{t('projectNoResultsSubtitle')}</p>
           </div>
         </div>
       ) : (

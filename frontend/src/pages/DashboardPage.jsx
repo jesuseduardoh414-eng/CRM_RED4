@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { proyectosService, statsService } from '../services/api';
+import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
 import {
   Layers,
@@ -27,18 +28,18 @@ import {
 } from 'lucide-react';
 
 const AREA_CONF = {
-  DESARROLLO: { label: 'Desarrollo', color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={18} /> },
-  ADMINISTRACION: { label: 'Administracion', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', icon: <BarChart3 size={18} /> },
-  COMUNICACION: { label: 'Comunicacion', color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={18} /> },
-  MARKETING: { label: 'Marketing', color: '#db2777', bg: 'rgba(219,39,119,0.08)', icon: <Megaphone size={18} /> },
+  DESARROLLO:     { labelKey: 'areaDesarrollo',    color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={18} /> },
+  ADMINISTRACION: { labelKey: 'areaAdministracion', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', icon: <BarChart3 size={18} /> },
+  COMUNICACION:   { labelKey: 'areaComunicacion',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', icon: <Mail size={18} /> },
+  MARKETING:      { labelKey: 'areaMarketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)', icon: <Megaphone size={18} /> },
 };
 
 const CALENDAR_FILTERS = [
-  { id: 'todo', label: 'Todo', color: '#0f172a', bg: '#f8fafc' },
-  { id: 'proyecto', label: 'Proyectos', color: '#2563eb', bg: '#eff6ff' },
-  { id: 'tarea', label: 'Tareas', color: '#16a34a', bg: '#f0fdf4' },
-  { id: 'evento', label: 'Eventos', color: '#7c3aed', bg: '#f5f3ff' },
-  { id: 'reunion', label: 'Reuniones', color: '#db2777', bg: '#fdf2f8' },
+  { id: 'todo',    labelKey: 'agendaAllTypes',  color: '#0f172a', bg: 'var(--color-surface-3)' },
+  { id: 'proyecto', labelKey: 'agendaProjects', color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
+  { id: 'tarea',   labelKey: 'agendaTasks',     color: '#16a34a', bg: 'rgba(22,163,74,0.10)' },
+  { id: 'evento',  labelKey: 'agendaEvents',    color: '#7c3aed', bg: 'rgba(124,58,237,0.10)' },
+  { id: 'reunion', labelKey: 'agendaMeetings',  color: '#db2777', bg: 'rgba(219,39,119,0.10)' },
 ];
 
 const IconProjects = () => <Layers size={20} strokeWidth={2.5} />;
@@ -47,15 +48,15 @@ const IconChart = () => <BarChart3 size={20} strokeWidth={2.5} />;
 const IconTeam = () => <Users size={20} strokeWidth={2.5} />;
 const IconCheck = () => <CheckCircle2 size={20} strokeWidth={2.5} />;
 
-const saludo = () => {
+const saludo = (t) => {
   const h = new Date().getHours();
-  if (h < 12) return 'Buenos dias';
-  if (h < 19) return 'Buenas tardes';
-  return 'Buenas noches';
+  if (h < 12) return t('dashboardGoodMorning');
+  if (h < 19) return t('dashboardGoodAfternoon');
+  return t('dashboardGoodEvening');
 };
 
-const formatMonthLabel = (date) =>
-  date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+const formatMonthLabel = (date, locale = 'es-MX') =>
+  date.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
 
 const startOfDay = (value) => {
   const date = new Date(value);
@@ -156,11 +157,11 @@ const PROJECT_TIMELINE_COLORS = [
 ];
 
 const PROJECT_STATUS_CONF = {
-  ACTIVO: { label: 'Activo', color: '#2563eb', bg: '#eff6ff', icon: 'live' },
-  PAUSA: { label: 'En pausa', color: '#f59e0b', bg: '#fff7ed', icon: 'pause' },
-  PAUSADO: { label: 'En pausa', color: '#f59e0b', bg: '#fff7ed', icon: 'pause' },
-  TERMINADO: { label: 'Terminado', color: '#16a34a', bg: '#f0fdf4', icon: 'done' },
-  CERRADO: { label: 'Cerrado', color: '#16a34a', bg: '#f0fdf4', icon: 'done' },
+  ACTIVO:    { labelKey: 'statusActive', color: '#2563eb', bg: 'rgba(37,99,235,0.10)',  icon: 'live' },
+  PAUSA:     { labelKey: 'statusPaused', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', icon: 'pause' },
+  PAUSADO:   { labelKey: 'statusPaused', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', icon: 'pause' },
+  TERMINADO: { labelKey: 'statusDone',   color: '#16a34a', bg: 'rgba(22,163,74,0.10)',  icon: 'done' },
+  CERRADO:   { labelKey: 'statusClosed', color: '#16a34a', bg: 'rgba(22,163,74,0.10)',  icon: 'done' },
 };
 
 const getProjectTimelineColor = (project) => {
@@ -171,6 +172,7 @@ const getProjectTimelineColor = (project) => {
 };
 
 const getProjectStatusConf = (estado) => PROJECT_STATUS_CONF[String(estado || 'ACTIVO').toUpperCase()] || PROJECT_STATUS_CONF.ACTIVO;
+const getAreaLabel = (area, t) => t(AREA_CONF[String(area || '').toUpperCase()]?.labelKey || 'areaGeneral');
 
 const getTaskStableKey = (taskLike) => `tarea-${getTaskNumericId(taskLike) || taskLike?.origenId || taskLike?.id}-${taskLike?.fechaInicio || ''}`;
 
@@ -218,21 +220,24 @@ const StatCard = ({ value, sub, icon, color, bg, onClick, helper }) => (
   </button>
 );
 
-const MiniTask = ({ tarea, onOpen }) => (
+const MiniTask = ({ tarea, onOpen }) => {
+  const { locale } = usePreferences();
+  return (
   <button
     type="button"
     onClick={() => onOpen?.(tarea)}
     style={{ padding: '0.65rem 0', borderBottom: '1px solid rgba(148,163,184,0.16)', width: '100%', textAlign: 'left' }}
   >
-    <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.25 }}>
+    <div style={{ fontSize: '0.82rem', fontWeight: '800', color: 'var(--color-text)', lineHeight: 1.25 }}>
       {tarea.titulo}
     </div>
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginTop: '0.25rem', fontSize: '0.68rem', color: '#64748b', fontWeight: '700' }}>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.proyecto?.nombre || 'Sin proyecto'}</span>
-      {tarea.venceEn && <span>{new Date(tarea.venceEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</span>}
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginTop: '0.25rem', fontSize: '0.68rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.proyecto?.nombre || ''}</span>
+      {tarea.venceEn && <span>{new Date(tarea.venceEn).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}</span>}
     </div>
   </button>
-);
+  );
+};
 
 const ActivityBucket = ({ label, count, icon, color, children }) => (
   <div style={{ minWidth: 0 }}>
@@ -248,48 +253,62 @@ const ActivityBucket = ({ label, count, icon, color, children }) => (
 );
 
 const AdminMemberActivity = ({ miembros, onOpenTask }) => {
+  const { t } = usePreferences();
   if (!miembros?.length) return null;
 
   return (
     <div className="card" style={{ padding: '2rem', marginBottom: '3rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>Actividad del equipo</h3>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Tareas hechas hoy, en curso y pendientes por vencimiento.</p>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>{t('dashboardTeamActivity')}</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>{t('dashboardTeamActivityDesc')}</p>
         </div>
-        <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Hoy / Semana</span>
+        <span style={{ fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t('dashboardTodayWeek')}</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '72vh', overflowY: 'auto', paddingRight: '0.35rem' }}>
         {miembros.map((miembro) => (
-          <div key={miembro.id} style={{ border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1rem', background: '#fff' }}>
+          <div key={miembro.id} style={{ border: '1px solid var(--color-border)', borderRadius: '16px', padding: '1rem', background: 'var(--color-surface)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(37,99,235,0.10)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>
                 {miembro.nombre?.charAt(0).toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: '900', color: '#0f172a' }}>{miembro.nombre}</div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '800' }}>{miembro.area}</div>
+                <div style={{ fontWeight: '900', color: 'var(--color-text)' }}>{miembro.nombre}</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>{getAreaLabel(miembro.area, t)}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#16a34a', background: '#f0fdf4', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.hechasHoy} hechas</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#2563eb', background: '#eff6ff', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.enProgreso} curso</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#dc2626', background: '#fef2f2', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.faltanHoy} hoy</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#0f172a', background: 'var(--color-surface-3)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.totalTareas} {t('dashboardTasksLabel').toLowerCase()}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.hechasHoy} {t('dashboardCompletedShort')}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.enProgreso} {t('dashboardInProgressShort')}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#dc2626', background: 'rgba(239,68,68,0.10)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.faltanHoy} {t('dashboardDueShort')}</span>
               </div>
             </div>
 
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.55rem', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                {miembro.totales.totalHechas} {t('dashboardDone').toLowerCase()}
+              </span>
+              <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#dc2626', background: 'rgba(239,68,68,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                {miembro.totales.pendientes} {t('dashboardPending').toLowerCase()}
+              </span>
+              <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                {miembro.totales.porcentajeCumplimiento}% {t('dashboardDone').toLowerCase()}
+              </span>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
-              <ActivityBucket label="Hechas hoy" count={miembro.totales.hechasHoy} color="#16a34a" icon={<CheckCircle2 size={15} />}>
-                {miembro.hechasHoy.length ? miembro.hechasHoy.map((t) => <MiniTask key={t.id} tarea={t} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin completadas hoy</span>}
+              <ActivityBucket label={t('dashboardDoneToday')} count={miembro.totales.hechasHoy} color="#16a34a" icon={<CheckCircle2 size={15} />}>
+                {miembro.hechasHoy.length ? miembro.hechasHoy.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardCompletedToday')}</span>}
               </ActivityBucket>
-              <ActivityBucket label="Haciendo" count={miembro.totales.enProgreso} color="#2563eb" icon={<PlayCircle size={15} />}>
-                {miembro.enProgreso.length ? miembro.enProgreso.map((t) => <MiniTask key={t.id} tarea={t} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin tareas en curso</span>}
+              <ActivityBucket label={t('dashboardDoing')} count={miembro.totales.enProgreso} color="#2563eb" icon={<PlayCircle size={15} />}>
+                {miembro.enProgreso.length ? miembro.enProgreso.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardNoCurrent')}</span>}
               </ActivityBucket>
-              <ActivityBucket label="Faltan hoy" count={miembro.totales.faltanHoy} color="#dc2626" icon={<Clock size={15} />}>
-                {miembro.faltanHoy.length ? miembro.faltanHoy.map((t) => <MiniTask key={t.id} tarea={t} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin pendientes de hoy</span>}
+              <ActivityBucket label={t('dashboardDueToday')} count={miembro.totales.faltanHoy} color="#dc2626" icon={<Clock size={15} />}>
+                {miembro.faltanHoy.length ? miembro.faltanHoy.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardNoDueToday')}</span>}
               </ActivityBucket>
-              <ActivityBucket label="Faltan semana" count={miembro.totales.faltanSemana} color="#f59e0b" icon={<CalendarDays size={15} />}>
-                {miembro.faltanSemana.length ? miembro.faltanSemana.map((t) => <MiniTask key={t.id} tarea={t} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '700' }}>Sin pendientes proximos</span>}
+              <ActivityBucket label={t('dashboardDueWeek')} count={miembro.totales.faltanSemana} color="#f59e0b" icon={<CalendarDays size={15} />}>
+                {miembro.faltanSemana.length ? miembro.faltanSemana.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardNoDueWeek')}</span>}
               </ActivityBucket>
             </div>
           </div>
@@ -308,8 +327,16 @@ const ProjectCalendarPanel = ({
   headerAction = null,
   embedded = false,
 }) => {
+  const { t, locale } = usePreferences();
   const days = useMemo(() => buildCalendarDays(monthDate), [monthDate]);
-  const weekLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
+  const weekLabels = useMemo(() => {
+    const base = new Date(2024, 0, 1);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(1 + i);
+      return d.toLocaleDateString(locale, { weekday: 'short' }).slice(0, 3);
+    });
+  }, [locale]);
   const todayKey = startOfDay(new Date()).getTime();
   const [expandedDay, setExpandedDay] = useState(null);
 
@@ -320,8 +347,8 @@ const ProjectCalendarPanel = ({
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>Calendario de proyectos</h3>
-              <p style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>Selecciona un proyecto desde sus fechas activas.</p>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>{t('dashboardProjectCalendar')}</h3>
+              <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardProjectCalendarDesc')}</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {headerAction}
@@ -331,7 +358,7 @@ const ProjectCalendarPanel = ({
           </div>
 
           <div style={{ fontSize: '0.78rem', fontWeight: '900', textTransform: 'uppercase', color: '#2563eb', marginBottom: '0.85rem', letterSpacing: '0.06em' }}>
-            {formatMonthLabel(monthDate)}
+            {formatMonthLabel(monthDate, locale)}
           </div>
         </>
       )}
@@ -339,7 +366,7 @@ const ProjectCalendarPanel = ({
       {embedded && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <div style={{ fontSize: '0.78rem', fontWeight: '900', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.06em' }}>
-            {formatMonthLabel(monthDate)}
+            {formatMonthLabel(monthDate, locale)}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {headerAction}
@@ -351,7 +378,7 @@ const ProjectCalendarPanel = ({
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.6rem' }}>
         {weekLabels.map((label) => (
-          <div key={label} style={{ fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+          <div key={label} style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-text-muted)', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
             {label}
           </div>
         ))}
@@ -367,15 +394,15 @@ const ProjectCalendarPanel = ({
               style={{
                 minHeight: '116px',
                 borderRadius: '18px',
-                border: '1px solid #e2e8f0',
-                background: isCurrentMonth ? '#fff' : '#f8fafc',
+                border: '1px solid var(--color-border)',
+                background: isCurrentMonth ? 'var(--color-surface)' : 'var(--color-surface-3)',
                 padding: '0.65rem',
                 opacity: isCurrentMonth ? 1 : 0.55,
                 boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)' : 'none',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: isToday ? '#2563eb' : '#0f172a' }}>{day.getDate()}</span>
+                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: isToday ? '#2563eb' : 'var(--color-text)' }}>{day.getDate()}</span>
                 {dayProjects.length > 0 && <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#2563eb' }}>{dayProjects.length}</span>}
               </div>
 
@@ -409,7 +436,7 @@ const ProjectCalendarPanel = ({
                   <button
                     type="button"
                     onClick={() => setExpandedDay({ date: day, projects: dayProjects })}
-                    style={{ fontSize: '0.6rem', fontWeight: '900', color: '#475569', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 0 0 0.2rem' }}
+                    style={{ fontSize: '0.6rem', fontWeight: '900', color: 'var(--color-text-dim)', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 0 0 0.2rem' }}
                   >
                     +{dayProjects.length - 2} mas
                   </button>
@@ -443,13 +470,13 @@ const ProjectCalendarPanel = ({
             padding: '1.5rem',
           }}
         >
-          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '80vh', overflow: 'hidden', background: '#fff', borderRadius: '24px', boxShadow: '0 24px 70px rgba(15,23,42,0.2)' }}>
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '80vh', overflow: 'hidden', background: 'var(--color-surface)', borderRadius: '24px', boxShadow: '0 24px 70px rgba(15,23,42,0.2)' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
               <div>
-                <h4 style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0f172a', marginBottom: '0.2rem' }}>
-                  Proyectos del {expandedDay.date.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
+                <h4 style={{ fontSize: '1.05rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '0.2rem' }}>
+                  Proyectos del {expandedDay.date.toLocaleDateString(locale, { day: 'numeric', month: 'long' })}
                 </h4>
-                <p style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '700' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
                   {expandedDay.projects.length} proyectos activos en esta fecha
                 </p>
               </div>
@@ -467,14 +494,14 @@ const ProjectCalendarPanel = ({
                     onSelectProject(entry.project.id);
                     closeExpandedDay();
                   }}
-                  style={{ width: '100%', textAlign: 'left', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0.95rem 1rem', background: selectedProjectId === entry.project.id ? '#eff6ff' : '#fff', cursor: 'pointer' }}
+                  style={{ width: '100%', textAlign: 'left', border: '1px solid var(--color-border)', borderRadius: '16px', padding: '0.95rem 1rem', background: selectedProjectId === entry.project.id ? 'rgba(37,99,235,0.10)' : 'var(--color-surface)', cursor: 'pointer' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.45rem' }}>
-                    <span style={{ fontWeight: '900', color: '#0f172a' }}>{entry.project.nombre}</span>
+                    <span style={{ fontWeight: '900', color: 'var(--color-text)' }}>{entry.project.nombre}</span>
                     <span style={{ fontSize: '0.78rem', fontWeight: '900', color: '#2563eb' }}>{entry.project.progresoGeneral ?? entry.project.progreso ?? 0}%</span>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700' }}>
-                    {new Date(entry.start).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })} - {new Date(entry.end).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
+                    {new Date(entry.start).toLocaleDateString(locale, { day: '2-digit', month: 'short' })} - {new Date(entry.end).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
                   </div>
                 </button>
               ))}
@@ -487,6 +514,7 @@ const ProjectCalendarPanel = ({
 };
 
 const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject }) => {
+  const { t, locale } = usePreferences();
   const validEntries = projectEntries.filter((entry) => entry.start && entry.end);
 
   const range = useMemo(() => {
@@ -518,7 +546,7 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
 
       items.push({
         key: `${cursor.getFullYear()}-${cursor.getMonth()}`,
-        label: cursor.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }),
+        label: cursor.toLocaleDateString(locale, { month: 'long', year: 'numeric' }),
         width: `${(days / totalDays) * 100}%`,
       });
 
@@ -534,37 +562,37 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
 
   if (!validEntries.length) {
     return (
-      <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed #cbd5e1', borderRadius: '20px', color: '#64748b', fontWeight: '700' }}>
+      <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: '20px', color: 'var(--color-text-muted)', fontWeight: '700' }}>
         No hay proyectos con fechas para mostrar en la linea de tiempo.
       </div>
     );
   }
 
   return (
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: '20px', overflow: 'hidden', background: '#fff' }}>
-      <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-        <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid #e2e8f0', fontSize: '0.72rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: '20px', overflow: 'hidden', background: 'var(--color-surface)' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-3)' }}>
+        <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid var(--color-border)', fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Proyectos
         </div>
         <div style={{ flex: 1, display: 'flex' }}>
           {months.map((month) => (
-            <div key={month.key} style={{ width: month.width, padding: '1rem 0.75rem', borderRight: '1px solid #e2e8f0', fontSize: '0.7rem', fontWeight: '900', color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div key={month.key} style={{ width: month.width, padding: '1rem 0.75rem', borderRight: '1px solid var(--color-border)', fontSize: '0.7rem', fontWeight: '900', color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               {month.label}
             </div>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', padding: '0.85rem 1.1rem', borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.74rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', padding: '0.85rem 1.1rem', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.74rem', fontWeight: '900', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           <Layers size={14} color="#2563eb" />
           Identidad por proyecto
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#2563eb', background: '#eff6ff', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
             {validEntries.length} proyectos visibles
           </span>
-          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#f59e0b', background: '#fff7ed', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#f59e0b', background: 'rgba(245,158,11,0.10)', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
             Línea roja = hoy
           </span>
         </div>
@@ -596,28 +624,28 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
                 display: 'flex',
                 alignItems: 'stretch',
                 border: 'none',
-                borderBottom: index < validEntries.length - 1 ? '1px solid #f1f5f9' : 'none',
-                background: selected ? '#eff6ff' : '#fff',
+                borderBottom: index < validEntries.length - 1 ? '1px solid var(--color-border-light)' : 'none',
+                background: selected ? 'rgba(37,99,235,0.10)' : 'var(--color-surface)',
                 cursor: 'pointer',
                 textAlign: 'left',
                 position: 'relative',
               }}
             >
-              <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid #e2e8f0', position: 'relative' }}>
+              <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid var(--color-border)', position: 'relative' }}>
                 <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: palette.solid }} />
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.35rem' }}>
-                  <div style={{ fontWeight: '900', color: '#0f172a', lineHeight: 1.2 }}>{entry.project.nombre}</div>
+                  <div style={{ fontWeight: '900', color: 'var(--color-text)', lineHeight: 1.2 }}>{entry.project.nombre}</div>
                   <span style={{ flexShrink: 0, width: '11px', height: '11px', borderRadius: '999px', background: palette.solid, boxShadow: `0 0 0 5px ${palette.soft}` }} />
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.55rem' }}>
                   <span style={{ fontSize: '0.68rem', fontWeight: '900', color: statusConf.color, background: statusConf.bg, padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
-                    {statusConf.label}
+                    {t(statusConf.labelKey)}
                   </span>
                   <span style={{ fontSize: '0.68rem', fontWeight: '900', color: palette.solid, background: palette.soft, padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
                     {progress}%
                   </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#475569', background: '#f8fafc', padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
-                    {entry.project._count?.tareas || 0} tareas
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: 'var(--color-text-dim)', background: 'var(--color-surface-3)', padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
+                    {entry.project._count?.tareas || 0} {t('projectTaskPlural')}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
@@ -630,7 +658,7 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
                           width: '26px',
                           height: '26px',
                           borderRadius: '999px',
-                          background: '#fff',
+                          background: 'var(--color-surface)',
                           border: `2px solid ${palette.soft}`,
                           color: palette.solid,
                           fontSize: '0.68rem',
@@ -645,14 +673,14 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
                         {String(miembro.nombre || '?').charAt(0).toUpperCase()}
                       </div>
                     )) : (
-                      <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94a3b8' }}>Sin integrantes</div>
+                      <div style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Sin integrantes</div>
                     )}
                     {miembros.length > 3 && (
-                      <span style={{ marginLeft: '0.45rem', fontSize: '0.68rem', fontWeight: '900', color: '#64748b' }}>+{miembros.length - 3}</span>
+                      <span style={{ marginLeft: '0.45rem', fontSize: '0.68rem', fontWeight: '900', color: 'var(--color-text-muted)' }}>+{miembros.length - 3}</span>
                     )}
                   </div>
-                  <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b' }}>
-                    {miembros.length} miembro{miembros.length === 1 ? '' : 's'}
+                  <div style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>
+                    {t('dashboardMembersCount', { count: miembros.length, memberLabel: miembros.length === 1 ? t('teamMemberSingular') : t('teamMemberPlural') })}
                   </div>
                 </div>
               </div>
@@ -662,13 +690,13 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 50%)' }} />
                   <div style={{ width: `${progress}%`, maxWidth: '100%', height: '100%', borderRadius: '999px', background: palette.accent, opacity: 0.92 }} />
                 </div>
-                <div style={{ position: 'absolute', left: `${offset}%`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: '#64748b' }}>
-                  {new Date(entry.start).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
+                <div style={{ position: 'absolute', left: `${offset}%`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>
+                  {new Date(entry.start).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
                 </div>
-                <div style={{ position: 'absolute', left: `calc(${offset + width}% - 44px)`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: '#64748b' }}>
-                  {new Date(entry.end).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
+                <div style={{ position: 'absolute', left: `calc(${offset + width}% - 44px)`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>
+                  {new Date(entry.end).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
                 </div>
-                <div style={{ position: 'absolute', left: `calc(${offset}% + 10px)`, top: 'calc(50% - 22px)', fontSize: '0.65rem', fontWeight: '900', color: palette.solid, background: '#fff', border: `1px solid ${palette.soft}`, padding: '0.2rem 0.45rem', borderRadius: '999px' }}>
+                <div style={{ position: 'absolute', left: `calc(${offset}% + 10px)`, top: 'calc(50% - 22px)', fontSize: '0.65rem', fontWeight: '900', color: palette.solid, background: 'var(--color-surface)', border: `1px solid ${palette.soft}`, padding: '0.2rem 0.45rem', borderRadius: '999px' }}>
                   {progress}% avance
                 </div>
               </div>
@@ -681,11 +709,13 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
 };
 
 const DashboardMiembro = ({ usuario }) => {
+  const { t, locale } = usePreferences();
   const navigate = useNavigate();
   const [proyectos, setProyectos] = useState([]);
   const [todasTareas, setTodas] = useState([]);
+  const [resumenTareas, setResumenTareas] = useState({ total: 0, hechas: 0, pendientes: 0, enProgreso: 0 });
   const [cargando, setCargando] = useState(true);
-  const area = AREA_CONF[usuario?.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', icon: <User size={18} />, label: usuario?.area };
+  const area = AREA_CONF[usuario?.area] || { color: 'var(--color-text-muted)', bg: 'rgba(148,163,184,0.1)', icon: <User size={18} />, labelKey: 'areaGeneral' };
 
   useEffect(() => {
     const cargar = async () => {
@@ -693,6 +723,7 @@ const DashboardMiembro = ({ usuario }) => {
         const data = await statsService.getMemberStats();
         setProyectos(data.proyectos || []);
         setTodas(data.tareas || []);
+        setResumenTareas(data.resumenTareas || { total: 0, hechas: 0, pendientes: 0, enProgreso: 0 });
       } catch (e) {
         console.error(e);
       } finally {
@@ -707,6 +738,7 @@ const DashboardMiembro = ({ usuario }) => {
   const pendientes = todasTareas.filter((t) => t.estado === 'PENDIENTE');
   const enProgreso = todasTareas.filter((t) => t.estado === 'EN_PROGRESO');
   const hechas = todasTareas.filter((t) => t.estado === 'HECHO');
+  const tareasRestantes = Math.max((resumenTareas.total || 0) - (resumenTareas.hechas || 0), 0);
   const proximas = [...pendientes, ...enProgreso]
     .filter((t) => t.venceEn)
     .sort((a, b) => new Date(a.venceEn) - new Date(b.venceEn))
@@ -723,36 +755,37 @@ const DashboardMiembro = ({ usuario }) => {
         </div>
         <div>
           <h1 className="text-xl lg:text-3xl font-black tracking-tight text-slate-900 leading-tight">
-            {saludo()}, {usuario?.nombre?.split(' ')[0]}
+            {saludo(t)}, {usuario?.nombre?.split(' ')[0]}
           </h1>
           <div className="flex flex-wrap gap-2 mt-1">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">
-              {area.label}
+              {t(area.labelKey)}
             </span>
             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest px-2 py-0.5 bg-blue-50 rounded-md border border-blue-100">
-              Activo
+              {t('statusActive')}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-        <StatCard value={proyectos.length} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub="PROYECTOS" helper="Ver proyectos" onClick={() => navigate('/proyectos')} />
-        <StatCard value={pendientes.length} icon={<IconTasks />} color="#64748b" bg="#f8fafc" sub="PENDIENTES" helper="Abrir tablero" onClick={() => navigate('/proyectos')} />
-        <StatCard value={enProgreso.length} icon={<IconTasks />} color="#8b5cf6" bg="#f5f3ff" sub="EN MARCHA" helper="Seguir tareas" onClick={() => navigate('/proyectos')} />
-        <StatCard value={hechas.length} icon={<IconCheck />} color="#10b981" bg="#f0fdf4" sub="HECHAS" helper="Ver agenda" onClick={() => navigate('/agenda')} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
+        <StatCard value={proyectos.length} icon={<IconProjects />} color="#2563eb" bg="rgba(37,99,235,0.10)" sub={t('dashboardProjects').toUpperCase()} helper={t('dashboardSeeProjects')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={resumenTareas.total} icon={<IconTasks />} color="#0f172a" bg="var(--color-surface-3)" sub={t('dashboardTasksLabel').toUpperCase()} helper={`${tareasRestantes} ${t('dashboardPending').toLowerCase()}`} onClick={() => navigate('/proyectos')} />
+        <StatCard value={resumenTareas.hechas} icon={<IconCheck />} color="#10b981" bg="rgba(16,185,129,0.10)" sub={t('dashboardDone').toUpperCase()} helper={t('dashboardSeeAgenda')} onClick={() => navigate('/agenda')} />
+        <StatCard value={tareasRestantes} icon={<AlertCircle size={20} strokeWidth={2.5} />} color="#dc2626" bg="rgba(239,68,68,0.10)" sub={t('dashboardPending').toUpperCase()} helper={t('dashboardOpenBoard')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={enProgreso.length} icon={<PlayCircle size={20} strokeWidth={2.5} />} color="#8b5cf6" bg="rgba(139,92,246,0.10)" sub={t('dashboardInProgress').toUpperCase()} helper={t('dashboardFollowTasks')} onClick={() => navigate('/proyectos')} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', alignItems: 'start' }}>
         <div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>Proyectos en los que participas</h3>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{t('dashboardMyProjects')}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {proyectos.map((p) => (
               <button key={p.id} type="button" onClick={() => navigate(`/proyectos/${p.id}`)} className="card" style={{ padding: '1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', textAlign: 'left' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--color-primary)' }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>{p.nombre}</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>{p._count?.tareas || 0} tareas asignadas</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>{p._count?.tareas || 0} {t('taskAssignedPlural')}</div>
                 </div>
                 <span style={{ color: 'var(--color-primary)', display: 'flex' }}><ArrowRight size={20} /></span>
               </button>
@@ -762,21 +795,23 @@ const DashboardMiembro = ({ usuario }) => {
 
         {proximas.length > 0 && (
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>Proximas a vencer</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{t('dashboardUpcoming')}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {proximas.map((t) => (
+              {proximas.map((tarea) => (
                 <button
-                  key={t.id}
+                  key={tarea.id}
                   type="button"
-                  onClick={() => navigate(`/proyectos/${t.proyectoId || t.proyecto?.id}`)}
+                  onClick={() => navigate(`/proyectos/${tarea.proyectoId || tarea.proyecto?.id}`)}
                   style={{ background: 'var(--color-surface-2)', padding: '1rem', borderRadius: '0.85rem', border: '1px solid var(--color-border)', width: '100%', textAlign: 'left', cursor: 'pointer' }}
                 >
-                  <div style={{ fontWeight: '700', fontSize: '0.9rem', marginBottom: '0.25rem' }}>{t.titulo}</div>
+                  <div style={{ fontWeight: '700', fontSize: '0.9rem', marginBottom: '0.25rem' }}>{tarea.titulo}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <AlertCircle size={10} /> {new Date(t.venceEn).toLocaleDateString()}
+                      <AlertCircle size={10} /> {new Date(tarea.venceEn).toLocaleDateString()}
                     </span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>{t.prioridad}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
+                      {t({ ALTA: 'priorityHigh', MEDIA: 'priorityMedium', BAJA: 'priorityLow' }[tarea.prioridad] || 'priorityMedium')}
+                    </span>
                   </div>
                 </button>
               ))}
@@ -789,6 +824,7 @@ const DashboardMiembro = ({ usuario }) => {
 };
 
 const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }) => {
+  const { t, locale } = usePreferences();
   const { showToast } = useToast();
   const [localMiembros, setLocalMiembros] = useState(miembros || []);
   const [selectedId, setSelectedId] = useState(miembros[0]?.id || null);
@@ -934,7 +970,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
     }
 
     if (tareasAMover.size === 0) {
-      showToast('No se encontraron tareas para mover en este bloque.', 'info');
+      showToast(t('dashboardMoveTaskNone'), 'info');
       return false;
     }
 
@@ -960,8 +996,13 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
           })
         )
       ),
-      mensajeExito: `Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`,
-      mensajeError: 'No se pudieron mover las tareas.',
+      mensajeExito: t('dashboardMoveTaskSuccess', {
+        count: tareasAMover.size,
+        taskLabel: tareasAMover.size === 1 ? t('projectTaskSingular') : t('projectTaskPlural'),
+        days: Math.abs(dias),
+        dayLabel: Math.abs(dias) === 1 ? t('taskDaySingular') : t('taskDayPlural'),
+      }),
+      mensajeError: t('dashboardMoveTaskError'),
     });
   }, [aplicarCambioOptimistaMiembro, getDayModalItems, selectedId, showToast]);
 
@@ -1004,7 +1045,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
 
   const pedirMovimientoPersonalizado = async (tarea) => {
     if (!tarea) return;
-    const value = window.prompt('Mover esta tarea cuántos días?', '3');
+    const value = window.prompt(t('dashboardMoveTaskPrompt'), '3');
     if (value === null) return;
     const dias = Number(value);
     if (!Number.isInteger(dias) || dias === 0) return;
@@ -1022,13 +1063,13 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
       {!embedded && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '0.25rem' }}>Disponibilidad del Equipo</h3>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '700' }}>Ocupacion por proyectos (azul) y tareas (verde) por miembro.</p>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '0.25rem' }}>{t('dashboardTeamAvailability')}</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardTeamOccupation')}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button>
             <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#2563eb', textTransform: 'uppercase', minWidth: '140px', textAlign: 'center' }}>
-              {formatMonthLabel(monthDate)}
+              {formatMonthLabel(monthDate, locale)}
             </div>
             <button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button>
           </div>
@@ -1038,7 +1079,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
       {embedded && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <div style={{ fontSize: '0.78rem', fontWeight: '900', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.06em' }}>
-            {formatMonthLabel(monthDate)}
+            {formatMonthLabel(monthDate, locale)}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button>
@@ -1047,16 +1088,16 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
         </div>
       )}
 
-      <div style={{ border: '1px solid #e2e8f0', borderRadius: '22px', padding: '1rem', marginBottom: '1.25rem', background: '#fff', boxShadow: '0 16px 38px rgba(15,23,42,0.04)' }}>
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: '22px', padding: '1rem', marginBottom: '1.25rem', background: 'var(--color-surface)', boxShadow: '0 16px 38px rgba(15,23,42,0.04)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>
-              Filtros del calendario
+            <div style={{ fontSize: '0.68rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
+              {t('dashboardCalendarFilters')}
             </div>
-            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', marginTop: '0.18rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', marginTop: '0.18rem' }}>
               {selectedProjectFilter === 'todos'
-                ? 'Mostrando los elementos disponibles del miembro.'
-                : `Contexto: ${selectedProjectOption?.nombre || 'proyecto seleccionado'}`}
+                ? t('dashboardShowingMemberItems')
+                : t('dashboardSelectedProjectContext', { project: selectedProjectOption?.nombre || t('projects').toLowerCase() })}
             </div>
           </div>
 
@@ -1083,7 +1124,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                     boxShadow: active ? `0 10px 22px ${filter.color}22` : 'none',
                   }}
                 >
-                  {filter.label}
+                  {t(filter.labelKey)}
                 </button>
               );
             })}
@@ -1094,15 +1135,15 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
           <div style={{ marginTop: '0.9rem', paddingTop: '0.9rem', borderTop: '1px solid #eef2f7' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               <div>
-                <div style={{ fontSize: '0.66rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>
-                  Proyecto
+                <div style={{ fontSize: '0.66rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
+                  {t('projects')}
                 </div>
-                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginTop: '0.12rem' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-text-dim)', marginTop: '0.12rem' }}>
                   {calendarFilter === 'proyecto'
-                    ? 'Escoge un proyecto para ver solo su rango.'
+                    ? t('dashboardChooseProjectRange')
                     : calendarFilter === 'tarea'
-                      ? 'Escoge un proyecto para ver solo sus tareas.'
-                      : 'Este proyecto queda como contexto para los filtros.'}
+                      ? t('dashboardChooseProjectTasks')
+                      : t('dashboardProjectContextFilters')}
                 </div>
               </div>
               {selectedProjectFilter !== 'todos' && (
@@ -1110,9 +1151,9 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                   type="button"
                   onClick={() => setSelectedProjectFilter('todos')}
                   style={{
-                    border: '1px solid #e2e8f0',
-                    background: '#fff',
-                    color: '#64748b',
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text-muted)',
                     borderRadius: '999px',
                     padding: '0.45rem 0.75rem',
                     fontSize: '0.66rem',
@@ -1121,7 +1162,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                     cursor: 'pointer',
                   }}
                 >
-                  Limpiar proyecto
+                  {t('agendaClearProject')}
                 </button>
               )}
             </div>
@@ -1133,9 +1174,9 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                 style={{
                   flexShrink: 0,
                   border: '1px solid',
-                  borderColor: selectedProjectFilter === 'todos' ? '#0f172a' : '#dbe3ef',
-                  background: selectedProjectFilter === 'todos' ? '#0f172a' : '#fff',
-                  color: selectedProjectFilter === 'todos' ? '#fff' : '#475569',
+                  borderColor: selectedProjectFilter === 'todos' ? 'var(--color-text)' : '#dbe3ef',
+                  background: selectedProjectFilter === 'todos' ? 'var(--color-text)' : 'var(--color-surface)',
+                  color: selectedProjectFilter === 'todos' ? 'var(--color-surface)' : 'var(--color-text-dim)',
                   borderRadius: '999px',
                   padding: '0.55rem 0.85rem',
                   fontSize: '0.7rem',
@@ -1144,7 +1185,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                   whiteSpace: 'nowrap',
                 }}
               >
-                Todos los proyectos
+                {t('dashboardAllProjects')}
               </button>
               {projectFilterOptions.map((project) => {
                 const active = selectedProjectFilter === project.id;
@@ -1157,8 +1198,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                       flexShrink: 0,
                       border: '1px solid',
                       borderColor: active ? '#2563eb' : '#dbe3ef',
-                      background: active ? '#eff6ff' : '#fff',
-                      color: active ? '#2563eb' : '#475569',
+                      background: active ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
+                      color: active ? 'var(--color-primary)' : 'var(--color-text-dim)',
                       borderRadius: '999px',
                       padding: '0.55rem 0.85rem',
                       fontSize: '0.7rem',
@@ -1186,9 +1227,9 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
               padding: '0.75rem 1.25rem',
               borderRadius: '16px',
               border: '1px solid',
-              borderColor: selectedId === m.id ? '#2563eb' : '#e2e8f0',
-              background: selectedId === m.id ? '#eff6ff' : '#fff',
-              color: selectedId === m.id ? '#2563eb' : '#475569',
+              borderColor: selectedId === m.id ? '#2563eb' : 'var(--color-border)',
+              background: selectedId === m.id ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
+              color: selectedId === m.id ? 'var(--color-primary)' : 'var(--color-text-dim)',
               display: 'flex',
               alignItems: 'center',
               gap: '0.75rem',
@@ -1197,7 +1238,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
               whiteSpace: 'nowrap'
             }}
           >
-            <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: selectedId === m.id ? '#2563eb' : '#f1f5f9', color: selectedId === m.id ? '#fff' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '900' }}>
+            <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: selectedId === m.id ? '#2563eb' : 'var(--color-surface-3)', color: selectedId === m.id ? '#fff' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '900' }}>
               {m.nombre.charAt(0)}
             </div>
             <span style={{ fontSize: '0.82rem', fontWeight: '800' }}>{m.nombre}</span>
@@ -1205,10 +1246,10 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
         ))}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #eef2f7', borderRadius: '28px', padding: embedded ? '1rem' : '1.15rem', boxShadow: '0 20px 45px rgba(15,23,42,0.05)' }}>
+      <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '28px', padding: embedded ? '1rem' : '1.15rem', boxShadow: '0 20px 45px rgba(15,23,42,0.05)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.7rem' }}>
         {weekLabels.map(l => (
-          <div key={l} style={{ fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{l}</div>
+          <div key={l} style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-text-muted)', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{l}</div>
         ))}
 
         {days.map(day => {
@@ -1250,10 +1291,10 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
               style={{
                 minHeight: '116px',
                 borderRadius: '18px',
-                border: '1px solid #e2e8f0',
-                background: isCurrentMonth 
-                  ? '#fff'
-                  : '#f8fafc',
+                border: '1px solid var(--color-border)',
+                background: isCurrentMonth
+                  ? 'var(--color-surface)'
+                  : 'var(--color-surface-3)',
                 padding: '0.65rem',
                 opacity: isCurrentMonth ? 1 : 0.4,
                 cursor: modalItems.length > 0 ? 'pointer' : 'default',
@@ -1268,7 +1309,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
               }}
               className={modalItems.length > 0 ? 'hover:border-blue-200 hover:shadow-md' : ''}
             >
-              <div style={{ fontSize: '0.78rem', fontWeight: '900', color: isToday ? '#2563eb' : '#0f172a', position: 'relative', zIndex: 2 }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: '900', color: isToday ? '#2563eb' : 'var(--color-text)', position: 'relative', zIndex: 2 }}>
                 {day.getDate()}
               </div>
 
@@ -1279,7 +1320,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                     style={{
                       padding: '0.25rem 0.4rem',
                       borderRadius: '7px',
-                      background: '#eaf1ff',
+                      background: 'rgba(37,99,235,0.10)',
                       color: '#2563eb',
                       borderLeft: '2px solid #2563eb',
                       fontSize: '0.55rem',
@@ -1310,7 +1351,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                       gap: '0.35rem',
                       padding: '0.25rem 0.4rem',
                       borderRadius: '7px',
-                      background: '#dcfce7',
+                      background: 'rgba(22,163,74,0.10)',
                       color: '#15803d',
                       borderLeft: '2px solid #16a34a',
                       fontSize: '0.55rem',
@@ -1320,7 +1361,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                       cursor: 'grab'
                     }}
                   >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Tareas</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('dashboardTasksLabel')}</span>
                     {taskCount > 1 && <span style={{ flexShrink: 0 }}>{taskCount}</span>}
                   </div>
                 ))}
@@ -1331,7 +1372,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                     style={{
                       padding: '0.25rem 0.4rem',
                       borderRadius: '7px',
-                      background: '#f3e8ff',
+                      background: 'rgba(124,58,237,0.10)',
                       color: '#7c3aed',
                       borderLeft: '2px solid #7c3aed',
                       fontSize: '0.55rem',
@@ -1351,7 +1392,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                     style={{
                       padding: '0.25rem 0.4rem',
                       borderRadius: '7px',
-                      background: '#fce7f3',
+                      background: 'rgba(219,39,119,0.10)',
                       color: '#db2777',
                       borderLeft: '2px solid #db2777',
                       fontSize: '0.55rem',
@@ -1366,7 +1407,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                 ))}
 
                 {hiddenCount > 0 && (
-                  <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#475569', paddingLeft: '0.2rem' }}>
+                  <div style={{ fontSize: '0.6rem', fontWeight: '900', color: 'var(--color-text-dim)', paddingLeft: '0.2rem' }}>
                     +{hiddenCount} mas
                   </div>
                 )}
@@ -1393,11 +1434,11 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
           }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
         >
-          <div style={{ width: '100%', maxWidth: '500px', background: '#fff', borderRadius: '32px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-            <div style={{ padding: '1.75rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+          <div style={{ width: '100%', maxWidth: '500px', background: 'var(--color-surface)', borderRadius: '32px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div style={{ padding: '1.75rem 2rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-surface-3)' }}>
               <div>
-                <h4 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0f172a' }}>{expandedDay.date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
-                <p style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b' }}>Agenda de {selectedMember?.nombre}</p>
+                <h4 style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--color-text)' }}>{expandedDay.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
+                <p style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--color-text-muted)' }}>Agenda de {selectedMember?.nombre}</p>
               </div>
               <button onClick={() => { setActiveTaskMenu(null); setExpandedDay(null); }} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-slate-100">
                 <ChevronDown size={20} style={{ transform: 'rotate(90deg)' }} />
@@ -1411,9 +1452,9 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                 const bg = isProject ? '#eff6ff' : isTask ? '#f0fdf4' : t.tipo === 'reunion' ? '#fce7f3' : '#f3e8ff';
                 const label = isProject ? 'PROYECTO' : isTask ? 'TAREA' : t.tipo === 'reunion' ? 'REUNION' : 'EVENTO';
                 return (
-                <div key={t.id} style={{ padding: '1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px', position: 'relative' }}>
+                <div key={t.id} style={{ padding: '1.1rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '20px', position: 'relative' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.5rem' }}>
-                    <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.titulo}</div>
+                    <div style={{ fontWeight: '900', fontSize: '0.95rem', color: 'var(--color-text)', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.titulo}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                       <span style={{
                         fontSize: '0.6rem',
@@ -1436,25 +1477,25 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                           }}
                           disabled={movingTasks}
                           title="Mover solo esta tarea"
-                          style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === t.id ? '#eff6ff' : '#fff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
+                          style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === t.id ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
                         >
                           <MoreHorizontal size={15} />
                         </button>
                       )}
                     </div>
                   </div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color }} />
                     {t.proyecto?.nombre || (t.tipo === 'evento' || t.tipo === 'reunion' ? 'Agenda' : 'Sin proyecto')}
                   </div>
                   {t.tipo === 'tarea' && activeTaskMenu === t.id && (
                     <div
                       onClick={(ev) => ev.stopPropagation()}
-                      style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: '#fff', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
+                      style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: 'var(--color-surface)', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
                     >
-                      <button type="button" onClick={() => ejecutarMovimiento(t, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
-                      <button type="button" onClick={() => ejecutarMovimiento(t, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
-                      <button type="button" onClick={() => pedirMovimientoPersonalizado(t)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
+                      <button type="button" onClick={() => ejecutarMovimiento(t, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>{t('dashboardMovePlusOne')}</button>
+                      <button type="button" onClick={() => ejecutarMovimiento(t, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>{t('dashboardMovePlusTwo')}</button>
+                      <button type="button" onClick={() => pedirMovimientoPersonalizado(t)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>{t('dashboardMoveChooseAmount')}</button>
                     </div>
                   )}
                 </div>
@@ -1468,6 +1509,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
 };
 
 const DashboardAdmin = () => {
+  const { t, locale } = usePreferences();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [stats, setStats] = useState(null);
@@ -1533,40 +1575,44 @@ const DashboardAdmin = () => {
     [projects, selectedProjectId]
   );
 
+  const { proyectos, tareas, topUsuarios, actividadReciente, proyectosProgreso, actividadMiembros } = stats || {};
+
   const selectedProjectStats = selectedProject ? getProjectStats(selectedProject) : null;
   const globalDone = stats?.tareas?.estados?.find((estado) => estado.estado === 'HECHO')?._count || 0;
+  const globalRemaining = Math.max((stats?.tareas?.total || 0) - globalDone, 0);
+  const completionRate = Math.round((globalDone / (stats?.tareas?.total || 1)) * 100);
 
   if (cargando) return <PageSkeleton cards={4} />;
-  if (!stats) return <div style={{ padding: '4rem', textAlign: 'center' }}>Error de conexion</div>;
-
-  const { proyectos, tareas, topUsuarios, actividadReciente, proyectosProgreso, actividadMiembros } = stats;
+  if (!stats) return <div style={{ padding: '4rem', textAlign: 'center' }}>{t('dashboardConnectionError')}</div>;
 
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4">
         <div>
-          <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">Control Central</h1>
-          <p className="text-sm lg:text-base text-slate-500 mt-1">Supervision estrategica del equipo CRM RED 4</p>
+          <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">{t('dashboardAdminTitle')}</h1>
+          <p className="text-sm lg:text-base text-slate-500 mt-1">{t('dashboardAdminSubtitle')}</p>
         </div>
         <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
-          {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+          {new Date().toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-        <StatCard value={proyectos.total} icon={<IconProjects />} color="#2563eb" bg="#eff6ff" sub="PROYECTOS" helper="Gestionar proyectos" onClick={() => navigate('/proyectos')} />
-        <StatCard value={globalDone} icon={<IconTasks />} color="#10b981" bg="#f0fdf4" sub="FINALIZADAS" helper="Ver avance" onClick={() => navigate('/proyectos')} />
-        <StatCard value={topUsuarios.length} icon={<IconTeam />} color="#8b5cf6" bg="#f5f3ff" sub="EQUIPO" helper="Abrir comunidad" onClick={() => navigate('/equipo')} />
-        <StatCard value={`${Math.round((globalDone / (tareas.total || 1)) * 100)}%`} icon={<IconChart />} color="#f59e0b" bg="#fffbeb" sub="EFICIENCIA" helper="Abrir agenda" onClick={() => navigate('/agenda')} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
+        <StatCard value={proyectos.total} icon={<IconProjects />} color="#2563eb" bg="rgba(37,99,235,0.10)" sub={t('dashboardProjects').toUpperCase()} helper={t('dashboardSeeProjects')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={tareas.total} icon={<IconTasks />} color="#0f172a" bg="var(--color-surface-3)" sub={t('dashboardTasksLabel').toUpperCase()} helper={`${globalRemaining} ${t('dashboardPending').toLowerCase()}`} onClick={() => navigate('/proyectos')} />
+        <StatCard value={globalDone} icon={<IconCheck />} color="#10b981" bg="rgba(16,185,129,0.10)" sub={t('dashboardDone').toUpperCase()} helper={t('dashboardSeeProjects')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={globalRemaining} icon={<AlertCircle size={20} strokeWidth={2.5} />} color="#dc2626" bg="rgba(239,68,68,0.10)" sub={t('dashboardPending').toUpperCase()} helper={t('dashboardOpenBoard')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={topUsuarios.length} icon={<IconTeam />} color="#8b5cf6" bg="rgba(139,92,246,0.10)" sub={t('teamTitle').toUpperCase()} helper={t('teamTitle')} onClick={() => navigate('/equipo')} />
+        <StatCard value={`${completionRate}%`} icon={<IconChart />} color="#f59e0b" bg="rgba(245,158,11,0.10)" sub={t('dashboardDone').toUpperCase()} helper={t('dashboardSeeAgenda')} onClick={() => navigate('/agenda')} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '3rem' }}>
         <div className="card" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
             <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '0.3rem' }}>Gantt general de proyectos</h3>
-              <p style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: '700' }}>
-                {selectedProject ? `Vista enfocada en ${selectedProject.nombre}` : 'Vista global solo con fechas y avance de proyectos'}
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '0.3rem' }}>{t('dashboardProjectGantt')}</h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
+                {selectedProject ? t('dashboardFocusedView', { project: selectedProject.nombre }) : t('dashboardGlobalView')}
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -1576,14 +1622,14 @@ const DashboardAdmin = () => {
                 className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200 flex items-center gap-2"
               >
                 {ganttCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                {ganttCollapsed ? 'Expandir' : 'Minimizar'}
+                {ganttCollapsed ? t('dashboardExpand') : t('dashboardMinimize')}
               </button>
               <button
                 type="button"
                 onClick={() => navigate(selectedProject ? `/proyectos/${selectedProject.id}` : '/proyectos')}
                 className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-black uppercase tracking-widest border border-blue-100"
               >
-                {selectedProject ? 'Abrir proyecto' : 'Ver tablero'}
+                {selectedProject ? t('dashboardOpenProject') : t('dashboardViewBoard')}
               </button>
             </div>
           </div>
@@ -1605,7 +1651,7 @@ const DashboardAdmin = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  Todos
+                  {t('dashboardAllProjects')}
                 </button>
                 {projects.map((project) => (
                   <button
@@ -1615,9 +1661,9 @@ const DashboardAdmin = () => {
                     style={{
                       padding: '0.55rem 0.85rem',
                       borderRadius: '999px',
-                      border: '1px solid #e2e8f0',
-                      background: selectedProjectId === project.id ? '#0f172a' : '#fff',
-                      color: selectedProjectId === project.id ? '#fff' : '#334155',
+                      border: '1px solid var(--color-border)',
+                      background: selectedProjectId === project.id ? 'var(--color-text)' : 'var(--color-surface)',
+                      color: selectedProjectId === project.id ? 'var(--color-surface)' : 'var(--color-text-dim)',
                       fontSize: '0.72rem',
                       fontWeight: '900',
                       cursor: 'pointer',
@@ -1633,8 +1679,8 @@ const DashboardAdmin = () => {
           )}
 
           {ganttCollapsed && (
-            <div style={{ padding: '0.85rem 1rem', borderRadius: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '0.82rem', color: '#64748b', fontWeight: '700' }}>
-              El gantt esta minimizado. Puedes expandirlo cuando necesites revisar la linea de tiempo.
+            <div style={{ padding: '0.85rem 1rem', borderRadius: '16px', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
+              {t('dashboardTimelineMinimized')}
             </div>
           )}
         </div>
@@ -1644,11 +1690,11 @@ const DashboardAdmin = () => {
             <div className="card" style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>Calendarios del tablero</h3>
-                  <p style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>{t('dashboardBoardCalendars')}</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
                     {activeCalendarView === 'projects'
-                      ? 'Selecciona un proyecto desde sus fechas activas.'
-                      : 'Visualiza la ocupacion del equipo por proyectos y tareas.'}
+                      ? t('dashboardProjectCalendarDesc')
+                      : t('dashboardTeamAvailabilityDesc')}
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -1657,24 +1703,24 @@ const DashboardAdmin = () => {
                     onClick={() => setActiveCalendarView('projects')}
                     className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors"
                     style={{
-                      background: activeCalendarView === 'projects' ? '#eff6ff' : '#fff',
-                      color: activeCalendarView === 'projects' ? '#2563eb' : '#64748b',
-                      borderColor: activeCalendarView === 'projects' ? '#bfdbfe' : '#e2e8f0',
+                      background: activeCalendarView === 'projects' ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
+                      color: activeCalendarView === 'projects' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                      borderColor: activeCalendarView === 'projects' ? '#bfdbfe' : 'var(--color-border)',
                     }}
                   >
-                    Calendario de proyectos
+                    {t('dashboardProjectCalendar')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveCalendarView('team')}
                     className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors"
                     style={{
-                      background: activeCalendarView === 'team' ? '#eff6ff' : '#fff',
-                      color: activeCalendarView === 'team' ? '#2563eb' : '#64748b',
-                      borderColor: activeCalendarView === 'team' ? '#bfdbfe' : '#e2e8f0',
+                      background: activeCalendarView === 'team' ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
+                      color: activeCalendarView === 'team' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                      borderColor: activeCalendarView === 'team' ? '#bfdbfe' : 'var(--color-border)',
                     }}
                   >
-                    Disponibilidad de equipo
+                    {t('dashboardTeamAvailability')}
                   </button>
                   <button
                     type="button"
@@ -1682,7 +1728,7 @@ const DashboardAdmin = () => {
                     className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200 flex items-center gap-2"
                   >
                     <ChevronUp size={14} />
-                    Minimizar
+                    {t('dashboardMinimize')}
                   </button>
                 </div>
               </div>
@@ -1706,8 +1752,8 @@ const DashboardAdmin = () => {
             <div className="card" style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>Calendarios del tablero</h3>
-                  <p style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>Alterna entre el calendario de proyectos y la disponibilidad del equipo.</p>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>{t('dashboardBoardCalendars')}</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardBoardCalendarsToggle')}</p>
                 </div>
                 <button
                   type="button"
@@ -1715,11 +1761,11 @@ const DashboardAdmin = () => {
                   className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200 flex items-center gap-2"
                 >
                   <ChevronDown size={14} />
-                  Expandir
+                  {t('dashboardExpand')}
                 </button>
               </div>
-              <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', borderRadius: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '0.82rem', color: '#64748b', fontWeight: '700' }}>
-                Esta seccion esta minimizada. Puedes expandirla para revisar proyectos o disponibilidad del equipo.
+              <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', borderRadius: '16px', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
+                {t('dashboardSectionMinimized')}
               </div>
             </div>
           )}
@@ -1728,7 +1774,7 @@ const DashboardAdmin = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', marginBottom: '3rem' }}>
         <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>Progreso de Proyectos</h3>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>{t('dashboardProjectProgress')}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {(selectedProject && selectedProjectStats
               ? [{
@@ -1742,7 +1788,7 @@ const DashboardAdmin = () => {
                 }]
               : proyectosProgreso
             ).map((p) => (
-              <button key={p.id} type="button" onClick={() => navigate(`/proyectos/${p.id}`)} style={{ width: '100%', textAlign: 'left', padding: '1rem 1.1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '18px', cursor: 'pointer' }}>
+              <button key={p.id} type="button" onClick={() => navigate(`/proyectos/${p.id}`)} style={{ width: '100%', textAlign: 'left', padding: '1rem 1.1rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '18px', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', fontSize: '0.9rem', fontWeight: '700', gap: '1rem' }}>
                   <span>{p.nombre}</span>
                   <span style={{ color: 'var(--color-primary-light)' }}>{p.porcentaje}%</span>
@@ -1751,19 +1797,31 @@ const DashboardAdmin = () => {
                   <div style={{ width: `${p.porcentaje}%`, height: '100%', background: 'var(--color-primary)', transition: 'width 1s ease' }} />
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#2563eb', background: '#eff6ff', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {(p.totalTareas ?? projects.find((project) => project.id === p.id)?._count?.tareas ?? 0)} tareas
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                    {(p.totalTareas ?? projects.find((project) => project.id === p.id)?._count?.tareas ?? 0)} {t('projectTaskPlural')}
                   </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: '#f0fdf4', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {p.estado ?? projects.find((project) => project.id === p.id)?.estado ?? 'ACTIVO'}
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                    {(p.completas ?? 0)} {t('dashboardDone').toLowerCase()}
                   </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#8b5cf6', background: '#f5f3ff', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {(p.miembros ?? projects.find((project) => project.id === p.id)?.miembros?.length ?? 0)} miembros
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#dc2626', background: 'rgba(239,68,68,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                    {(p.pendientes ?? 0)} {t('dashboardPending').toLowerCase()}
                   </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#f59e0b', background: '#fff7ed', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#8b5cf6', background: 'rgba(139,92,246,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                    {(p.enProgreso ?? 0)} {t('dashboardInProgress').toLowerCase()}
+                  </span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                    {t(getProjectStatusConf(p.estado ?? projects.find((project) => project.id === p.id)?.estado ?? 'ACTIVO').labelKey)}
+                  </span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#8b5cf6', background: 'rgba(139,92,246,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
+                    {t('dashboardMembersCount', {
+                      count: (p.miembros ?? projects.find((project) => project.id === p.id)?.miembros?.length ?? 0),
+                      memberLabel: (p.miembros ?? projects.find((project) => project.id === p.id)?.miembros?.length ?? 0) === 1 ? t('teamMemberSingular') : t('teamMemberPlural'),
+                    })}
+                  </span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#f59e0b', background: 'rgba(245,158,11,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
                     {(p.inicio ?? projects.find((project) => project.id === p.id)?.fechaInicio)
-                      ? new Date(p.inicio ?? projects.find((project) => project.id === p.id)?.fechaInicio).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
-                      : 'Sin fecha'}
+                      ? new Date(p.inicio ?? projects.find((project) => project.id === p.id)?.fechaInicio).toLocaleDateString(locale, { day: '2-digit', month: 'short' })
+                      : t('projectDateNoEnd')}
                   </span>
                 </div>
               </button>
@@ -1772,19 +1830,19 @@ const DashboardAdmin = () => {
         </div>
 
         <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>Top Productividad</h3>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>{t('dashboardTopProductivity')}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {topUsuarios.map((u, idx) => (
               <button key={u.id} type="button" onClick={() => navigate(`/usuarios?actividad=${u.id}`)} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--color-surface-3)', borderRadius: '1rem', border: 'none', textAlign: 'left', cursor: 'pointer' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: idx === 0 ? '#fbbf24' : 'var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: idx === 0 ? '#000' : '#fff' }}>{idx + 1}</div>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: idx === 0 ? '#fbbf24' : 'var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: idx === 0 ? 'var(--color-text)' : '#fff' }}>{idx + 1}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>{u.nombre}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{u.area}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{getAreaLabel(u.area, t)}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: '900', color: 'var(--color-primary-light)', fontSize: '1.25rem' }}>{u.promedioSemanal}</div>
                   <div style={{ fontSize: '0.66rem', fontWeight: '800', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
-                    por semana
+                    {t('dashboardPerWeek')}
                   </div>
                 </div>
               </button>
@@ -1797,9 +1855,9 @@ const DashboardAdmin = () => {
 
       <div className="card" style={{ padding: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900' }}>Flujo Reciente de Actividad</h3>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: '900' }}>{t('dashboardRecentActivity')}</h3>
           <button type="button" onClick={() => navigate('/proyectos')} className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200">
-            Ir a proyectos
+            {t('dashboardGoProjects')}
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
@@ -1824,6 +1882,3 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-
-
-

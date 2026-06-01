@@ -2,6 +2,7 @@
 const express = require('express');
 const cors    = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 require('dotenv').config();
 
 const authRoutes                        = require('./routes/auth.routes');
@@ -25,6 +26,12 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json()); // Parsear cuerpo JSON de las peticiones
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  setHeaders: (res) => {
+    // Permite que el frontend en otro origen (ej. Vite en localhost:5173) renderice imagenes subidas.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
+}));
 
 // Rutas
 app.use('/api/auth',                        authRoutes);

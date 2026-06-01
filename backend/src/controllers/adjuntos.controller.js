@@ -4,35 +4,109 @@ const path = require('path');
 const fs = require('fs');
 const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
 
+const getEntityType = (req) => {
+  if (req.baseUrl.includes('agenda')) return 'agenda';
+  if (req.baseUrl.includes('proyectos')) return 'proyectos';
+  return 'tareas';
+};
+
+const getFilesFromRequest = (req) => {
+  if (req.file) return [req.file];
+  if (Array.isArray(req.files)) return req.files;
+  if (req.files && typeof req.files === 'object') {
+    return Object.values(req.files).flat();
+  }
+  return [];
+};
+
+const canAccessEvento = (evento, usuarioId) => (
+  evento.usuarioId === usuarioId ||
+  evento.creadoPorId === usuarioId ||
+  evento.esGlobal ||
+  (evento.invitados || []).some((invitado) => invitado.usuarioId === usuarioId)
+);
+
+const canManageEvento = (evento, usuarioId) => (
+  evento.usuarioId === usuarioId || evento.creadoPorId === usuarioId
+);
+
+const buildActivityPayload = async ({ entityType, parentId, reqUsuario, adjunto, tituloRef }) => {
+  if (entityType === 'tareas') {
+    const tarea = await prisma.tarea.findUnique({ where: { id: Number(parentId) } });
+    return {
+      proyectoId: tarea?.proyectoId || null,
+      tareaId: Number(parentId),
+      descripcion: `${reqUsuario.nombre} subio ${adjunto.length > 1 ? `${adjunto.length} archivos` : `el archivo "${adjunto[0].nombre}"`} a ${tituloRef}`,
+    };
+  }
+
+  if (entityType === 'proyectos') {
+    return {
+      proyectoId: Number(parentId),
+      tareaId: null,
+      descripcion: `${reqUsuario.nombre} subio ${adjunto.length > 1 ? `${adjunto.length} archivos` : `el archivo "${adjunto[0].nombre}"`} a ${tituloRef}`,
+    };
+  }
+
+  const evento = await prisma.evento.findUnique({
+    where: { id: String(parentId) },
+    select: { proyectoId: true, titulo: true },
+  });
+
+  if (!evento?.proyectoId) return null;
+
+  return {
+    proyectoId: evento.proyectoId,
+    tareaId: null,
+    descripcion: `${reqUsuario.nombre} subio ${adjunto.length > 1 ? `${adjunto.length} archivos` : `el archivo "${adjunto[0].nombre}"`} al evento "${evento.titulo}"`,
+  };
+};
+
 const listar = async (req, res) => {
   const { id: parentId } = req.params;
-  const isTarea = req.baseUrl.includes('tareas');
-  
+  const entityType = getEntityType(req);
+
   try {
-    if (isTarea) {
+    if (entityType === 'tareas') {
       const tarea = await prisma.tarea.findUnique({
         where: { id: Number(parentId) },
-        include: { proyecto: { select: { area: true } } }
+        include: { proyecto: { select: { area: true } } },
       });
       if (!tarea) return res.status(404).json({ error: 'Tarea no encontrada' });
       if (esAdmin(req.usuario) && !puedeAdministrarProyecto(req.usuario, tarea.proyecto)) {
         return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de esta tarea' });
       }
-    } else {
+    } else if (entityType === 'proyectos') {
       const proyecto = await prisma.proyecto.findUnique({ where: { id: Number(parentId) } });
       if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
       if (esAdmin(req.usuario) && !puedeAdministrarProyecto(req.usuario, proyecto)) {
         return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de este proyecto' });
       }
+    } else {
+      const evento = await prisma.evento.findUnique({
+        where: { id: String(parentId) },
+        include: { invitados: { select: { usuarioId: true } } },
+      });
+      if (!evento) return res.status(404).json({ error: 'Evento no encontrado' });
+      if (!canAccessEvento(evento, req.usuario.id)) {
+        return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de este evento' });
+      }
     }
 
+    const where = entityType === 'tareas'
+      ? { tareaId: Number(parentId) }
+      : entityType === 'proyectos'
+        ? { proyectoId: Number(parentId), tareaId: null, eventoId: null }
+        : { eventoId: String(parentId) };
+
     const adjuntos = await prisma.adjunto.findMany({
-      where: isTarea ? { tareaId: Number(parentId) } : { proyectoId: Number(parentId) },
+      where,
       orderBy: { creadoEn: 'desc' },
       include: {
-        usuario: { select: { id: true, nombre: true } }
-      }
+        usuario: { select: { id: true, nombre: true } },
+      },
     });
+
     res.json({ adjuntos });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -41,78 +115,103 @@ const listar = async (req, res) => {
 
 const subir = async (req, res) => {
   const { id: parentId } = req.params;
-  const isTarea = req.baseUrl.includes('tareas');
-  
-  if (!req.file) {
-    return res.status(400).json({ error: 'No se subió ningún archivo' });
+  const entityType = getEntityType(req);
+  const files = getFilesFromRequest(req);
+
+  if (files.length === 0) {
+    return res.status(400).json({ error: 'No se subio ningun archivo' });
   }
 
   try {
-    let proyectoId = null;
+    let createBase = {};
     let tituloRef = '';
 
-    if (isTarea) {
+    if (entityType === 'tareas') {
       const tarea = await prisma.tarea.findUnique({ where: { id: Number(parentId) } });
       if (!tarea) return res.status(404).json({ error: 'Tarea no encontrada' });
-      proyectoId = tarea.proyectoId;
       tituloRef = `la tarea "${tarea.titulo}"`;
+      createBase = { tareaId: Number(parentId), proyectoId: null, eventoId: null };
 
-      // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
       if (esAdmin(req.usuario)) {
-        const proyecto = await prisma.proyecto.findUnique({ where: { id: proyectoId } });
+        const proyecto = await prisma.proyecto.findUnique({ where: { id: tarea.proyectoId } });
+        if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
+          return res.status(403).json({ error: 'No tienes permiso para subir archivos a esta tarea' });
+        }
+      } else {
+        const miembro = await prisma.proyecto.findFirst({
+          where: { id: tarea.proyectoId, miembros: { some: { id: req.usuario.id } } },
+        });
+        if (!miembro) return res.status(403).json({ error: 'No tienes permiso para subir archivos a esta tarea' });
+      }
+    } else if (entityType === 'proyectos') {
+      const proyecto = await prisma.proyecto.findUnique({ where: { id: Number(parentId) } });
+      if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+      tituloRef = `el proyecto "${proyecto.nombre}"`;
+      createBase = { proyectoId: Number(parentId), tareaId: null, eventoId: null };
+
+      if (esAdmin(req.usuario)) {
         if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
           return res.status(403).json({ error: 'No tienes permiso para subir archivos a este proyecto' });
         }
       } else {
         const miembro = await prisma.proyecto.findFirst({
-          where: { id: proyectoId, miembros: { some: { id: req.usuario.id } } }
+          where: { id: proyecto.id, miembros: { some: { id: req.usuario.id } } },
         });
         if (!miembro) return res.status(403).json({ error: 'No tienes permiso para subir archivos a este proyecto' });
       }
     } else {
-      const proyecto = await prisma.proyecto.findUnique({ where: { id: Number(parentId) } });
-      if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
-      proyectoId = proyecto.id;
-      tituloRef = `el proyecto "${proyecto.nombre}"`;
-
-      // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
-      if (esAdmin(req.usuario)) {
-        if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
-          return res.status(403).json({ error: 'No tienes permiso para subir archivos a este proyecto' });
-        }
-      } else {
-        const miembro = await prisma.proyecto.findFirst({
-          where: { id: proyectoId, miembros: { some: { id: req.usuario.id } } }
-        });
-        if (!miembro) return res.status(403).json({ error: 'No tienes permiso para subir archivos a este proyecto' });
+      const evento = await prisma.evento.findUnique({
+        where: { id: String(parentId) },
+        include: { invitados: { select: { usuarioId: true } } },
+      });
+      if (!evento) return res.status(404).json({ error: 'Evento no encontrado' });
+      if (!canManageEvento(evento, req.usuario.id)) {
+        return res.status(403).json({ error: 'No tienes permiso para subir archivos a este evento' });
       }
+      tituloRef = `el evento "${evento.titulo}"`;
+      createBase = { eventoId: String(parentId), tareaId: null, proyectoId: null };
     }
 
-    const adjunto = await prisma.adjunto.create({
-      data: {
-        nombre: req.file.originalname,
-        url: req.file.filename,
-        tipo: req.file.mimetype,
-        tamano: req.file.size,
-        tareaId: isTarea ? Number(parentId) : null,
-        proyectoId: !isTarea ? Number(parentId) : null,
-        usuarioId: req.usuario.id
-      },
-      include: {
-        usuario: { select: { id: true, nombre: true } }
-      }
+    const createdAdjuntos = [];
+    for (const file of files) {
+      const adjunto = await prisma.adjunto.create({
+        data: {
+          nombre: file.originalname,
+          url: file.filename,
+          tipo: file.mimetype,
+          tamano: file.size,
+          usuarioId: req.usuario.id,
+          ...createBase,
+        },
+        include: {
+          usuario: { select: { id: true, nombre: true } },
+        },
+      });
+      createdAdjuntos.push(adjunto);
+    }
+
+    const actividad = await buildActivityPayload({
+      entityType,
+      parentId,
+      reqUsuario: req.usuario,
+      adjunto: createdAdjuntos,
+      tituloRef,
     });
 
-    // Registrar actividad
-    await registrarActividad(
-      req.usuario.id,
-      proyectoId,
-      'SUBIR_ARCHIVO',
-      `${req.usuario.nombre} subió el archivo "${adjunto.nombre}" a ${tituloRef}`,
-      isTarea ? Number(parentId) : null
-    );
+    if (actividad?.proyectoId) {
+      await registrarActividad(
+        req.usuario.id,
+        actividad.proyectoId,
+        'SUBIR_ARCHIVO',
+        actividad.descripcion,
+        actividad.tareaId
+      );
+    }
 
-    res.status(201).json({ adjunto });
+    res.status(201).json({
+      adjunto: createdAdjuntos[0],
+      adjuntos: createdAdjuntos,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -121,9 +220,16 @@ const subir = async (req, res) => {
 const eliminar = async (req, res) => {
   const { id } = req.params;
   try {
-    const adjunto = await prisma.adjunto.findUnique({ 
+    const adjunto = await prisma.adjunto.findUnique({
       where: { id: Number(id) },
-      include: { tarea: true }
+      include: {
+        tarea: true,
+        evento: {
+          include: {
+            invitados: { select: { usuarioId: true } },
+          },
+        },
+      },
     });
 
     if (!adjunto) return res.status(404).json({ error: 'Archivo no encontrado' });
@@ -132,23 +238,22 @@ const eliminar = async (req, res) => {
     if (adjunto.tarea) {
       proyectoScope = await prisma.proyecto.findUnique({
         where: { id: adjunto.tarea.proyectoId },
-        select: { area: true }
+        select: { area: true },
       });
     } else if (adjunto.proyectoId) {
       proyectoScope = await prisma.proyecto.findUnique({
         where: { id: adjunto.proyectoId },
-        select: { area: true }
+        select: { area: true },
       });
     }
 
     const adminPuedeBorrar = esAdmin(req.usuario) && proyectoScope && puedeAdministrarProyecto(req.usuario, proyectoScope);
+    const puedeBorrarEvento = adjunto.evento && canManageEvento(adjunto.evento, req.usuario.id);
 
-    // Solo el autor o un ADMIN con alcance pueden borrarlo
-    if (adjunto.usuarioId !== req.usuario.id && !adminPuedeBorrar) {
+    if (adjunto.usuarioId !== req.usuario.id && !adminPuedeBorrar && !puedeBorrarEvento) {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este archivo' });
     }
 
-    // Borrar archivo físico
     const filePath = path.join(__dirname, '../../uploads', adjunto.url);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -156,7 +261,6 @@ const eliminar = async (req, res) => {
 
     await prisma.adjunto.delete({ where: { id: Number(id) } });
 
-    // Registrar actividad
     let proyectoId = adjunto.proyectoId;
     let desc = `archivo "${adjunto.nombre}"`;
 
@@ -166,15 +270,20 @@ const eliminar = async (req, res) => {
     } else if (adjunto.proyectoId) {
       const proyecto = await prisma.proyecto.findUnique({ where: { id: adjunto.proyectoId } });
       if (proyecto) desc += ` del proyecto "${proyecto.nombre}"`;
+    } else if (adjunto.evento) {
+      proyectoId = adjunto.evento.proyectoId;
+      desc += ` del evento "${adjunto.evento.titulo}"`;
     }
 
-    await registrarActividad(
-      req.usuario.id,
-      proyectoId,
-      'ELIMINAR_ARCHIVO',
-      `${req.usuario.nombre} eliminó el ${desc}`,
-      adjunto.tareaId || null
-    );
+    if (proyectoId) {
+      await registrarActividad(
+        req.usuario.id,
+        proyectoId,
+        'ELIMINAR_ARCHIVO',
+        `${req.usuario.nombre} elimino el ${desc}`,
+        adjunto.tareaId || null
+      );
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -189,7 +298,18 @@ const descargar = async (req, res) => {
   if (fs.existsSync(filePath)) {
     res.download(filePath);
   } else {
-    res.status(404).json({ error: 'Archivo no encontrado físicamente' });
+    res.status(404).json({ error: 'Archivo no encontrado fisicamente' });
+  }
+};
+
+const ver = async (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(__dirname, '../../uploads', filename);
+
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'Archivo no encontrado fisicamente' });
   }
 };
 
@@ -197,5 +317,6 @@ module.exports = {
   listar,
   subir,
   eliminar,
-  descargar
+  descargar,
+  ver,
 };

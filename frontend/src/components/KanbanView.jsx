@@ -1,60 +1,62 @@
 import { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
-import { 
-  Plus, 
-  ListTodo, 
-  Zap, 
-  CheckCircle2, 
+import {
+  Plus,
+  ListTodo,
+  Zap,
+  CheckCircle2,
   AlertCircle,
   ArrowRight,
   Pencil,
   Trash2,
   Calendar
 } from 'lucide-react';
+import { usePreferences } from '../context/PreferencesContext';
 
 // ── Configuración Visual ───────────────────────────────────────────────────
 const COLUMNAS = [
   {
-    key:    'PENDIENTE',
-    label:  'Por hacer',
-    icon:   <ListTodo size={18} />,
-    color:  'var(--color-text-muted)',
-    bg:     'var(--color-surface-2)',
-    borde:  'var(--color-border)',
-    hover:  'var(--color-surface-3)',
+    key:      'PENDIENTE',
+    labelKey: 'kanbanTodo',
+    icon:     <ListTodo size={18} />,
+    color:    'var(--color-text-muted)',
+    bg:       'var(--color-surface-2)',
+    borde:    'var(--color-border)',
+    hover:    'var(--color-surface-3)',
   },
   {
-    key:    'EN_PROGRESO',
-    label:  'En progreso',
-    icon:   <Zap size={18} />,
-    color:  'var(--color-accent-blue)',
-    bg:     'rgba(0,162,255,0.05)',
-    borde:  'rgba(0,162,255,0.15)',
-    hover:  'rgba(0,162,255,0.1)',
+    key:      'EN_PROGRESO',
+    labelKey: 'kanbanInProgress',
+    icon:     <Zap size={18} />,
+    color:    'var(--color-accent-blue)',
+    bg:       'rgba(0,162,255,0.05)',
+    borde:    'rgba(0,162,255,0.15)',
+    hover:    'rgba(0,162,255,0.1)',
   },
   {
-    key:    'HECHO',
-    label:  'Completado',
-    icon:   <CheckCircle2 size={18} />,
-    color:  'var(--color-accent-green)',
-    bg:     'rgba(0,209,102,0.05)',
-    borde:  'rgba(0,209,102,0.15)',
-    hover:  'rgba(0,209,102,0.1)',
+    key:      'HECHO',
+    labelKey: 'kanbanDone',
+    icon:     <CheckCircle2 size={18} />,
+    color:    'var(--color-accent-green)',
+    bg:       'rgba(0,209,102,0.05)',
+    borde:    'rgba(0,209,102,0.15)',
+    hover:    'rgba(0,209,102,0.1)',
   },
 ];
 
 const PRIORIDAD_CONFIG = {
-  ALTA:  { color: 'var(--color-accent-pink)',  bg: 'rgba(255,0,85,0.1)', label: 'Crítica' },
-  MEDIA: { color: 'var(--color-accent-amber)', bg: 'rgba(255,145,0,0.1)', label: 'Media' },
-  BAJA:  { color: 'var(--color-accent-blue)',  bg: 'rgba(0,162,255,0.1)', label: 'Normal' },
+  ALTA:  { color: 'var(--color-accent-pink)',  bg: 'rgba(255,0,85,0.1)',   labelKey: 'priorityCritical' },
+  MEDIA: { color: 'var(--color-accent-amber)', bg: 'rgba(255,145,0,0.1)',  labelKey: 'priorityMedium' },
+  BAJA:  { color: 'var(--color-accent-blue)',  bg: 'rgba(0,162,255,0.1)',  labelKey: 'priorityNormal' },
 };
 
 const CICLO_ESTADOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 
 // ── Utilidades ──────────────────────────────────────────────────────────────
+const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
 const formatFecha = (iso) => {
   if (!iso) return null;
   const d = new Date(iso);
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+  return d.toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' });
 };
 
 const getDateKeyLocal = (value) => {
@@ -87,6 +89,7 @@ const getScrollSnapshot = (el, count) => {
 
 // ── Tarjeta Kanban (Material Style) ──────────────────────────────────────────
 const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart }) => {
+  const { t } = usePreferences();
   const prio = PRIORIDAD_CONFIG[tarea.prioridad] || PRIORIDAD_CONFIG.MEDIA;
   const idxActual = CICLO_ESTADOS.indexOf(tarea.estado);
   const sigEstado = CICLO_ESTADOS[(idxActual + 1) % CICLO_ESTADOS.length];
@@ -129,11 +132,11 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
           letterSpacing: '0.05em', padding: '0.2rem 0.6rem', borderRadius: '4px',
           background: prio.bg, color: prio.color
         }}>
-          {prio.label}
+          {t(prio.labelKey)}
         </span>
         {esVencida(tarea.venceEn) && tarea.estado !== 'HECHO' && (
           <span style={{ color: 'var(--color-error)', fontSize: '0.65rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-            <AlertCircle size={10} /> Vencida
+            <AlertCircle size={10} /> {t('taskOverdue')}
           </span>
         )}
       </div>
@@ -191,7 +194,7 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem'
             }}
           >
-            Avanzar <ArrowRight size={12} />
+            {t('taskAdvance')} <ArrowRight size={12} />
           </button>
         )}
         <button 
@@ -213,6 +216,7 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
 
 // ── Columna Kanban ───────────────────────────────────────────────────────────
 const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, limite, onCargarMas, scrollRef }) => {
+  const { t } = usePreferences();
   const [dragOver, setDragOver] = useState(false);
   const tareasVisibles = tareas.slice(0, (tareas.length > 20 && limite === 10) ? 10 : limite);
 
@@ -221,7 +225,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-2">
           <span className="text-lg">{col.icon}</span>
-          <h3 className="text-sm font-black uppercase tracking-widest" style={{ color: col.color }}>{col.label}</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest" style={{ color: col.color }}>{t(col.labelKey)}</h3>
         </div>
         <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-500">
           {tareas.length}
@@ -260,7 +264,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
         {tareas.length === 0 && (
           <div className="flex-1 min-h-[420px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 flex items-center justify-center px-6 text-center">
             <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">
-              Sin tareas
+              {t('taskNoTasks')}
             </span>
           </div>
         )}
@@ -270,7 +274,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
             onClick={onCargarMas}
             className="w-full py-3 bg-white/50 border border-slate-200 border-dashed rounded-xl text-[10px] font-black text-slate-500 hover:bg-white hover:border-slate-300 transition-all uppercase tracking-widest flex items-center justify-center gap-2"
           >
-            Ver más ({tareas.length - tareasVisibles.length}) <Plus size={12} />
+            {t('loadMore')} ({tareas.length - tareasVisibles.length}) <Plus size={12} />
           </button>
         )}
       </div>
@@ -280,6 +284,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
 
 // ── View Principal ───────────────────────────────────────────────────────────
 const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea }) => {
+  const { t } = usePreferences();
   const [actualizando, setActualizando] = useState(null);
   const [optimisticMoves, setOptimisticMoves] = useState({});
   const [soloHoy, setSoloHoy] = useState(true);
@@ -451,7 +456,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
             ${soloHoy ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
           `}
         >
-          Solo hoy <Calendar size={14} />
+          {t('taskFilterToday')} <Calendar size={14} />
         </button>
         <button 
           onClick={() => setSoloHoy(false)}
@@ -462,7 +467,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
               : 'bg-white text-slate-700 border-slate-300 shadow-sm hover:bg-slate-50 hover:border-slate-400'}
           `}
         >
-          Todas las tareas
+          {t('taskFilterAll')}
         </button>
       </div>
 

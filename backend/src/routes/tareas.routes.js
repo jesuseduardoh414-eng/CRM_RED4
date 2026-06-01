@@ -7,7 +7,7 @@ const { importar, vistaPreviaImportacion, confirmarImportacion, plantillaJSON, p
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin }      = require('../middlewares/roles.middleware');
 const { listar: listarComentarios, crear: crearComentario, eliminar: eliminarComentario } = require('../controllers/comentarios.controller');
-const { listar: listarAdjuntos, subir: subirAdjunto, eliminar: eliminarAdjunto, descargar: descargarAdjunto } = require('../controllers/adjuntos.controller');
+const { listar: listarAdjuntos, subir: subirAdjunto, eliminar: eliminarAdjunto, descargar: descargarAdjunto, ver: verAdjunto } = require('../controllers/adjuntos.controller');
 const upload = require('../middlewares/upload.middleware');
 const uploadImport = require('../middlewares/uploadImport.middleware');
 
@@ -46,8 +46,9 @@ routerTarea.delete('/comentarios/:id', eliminarComentario);
 
 // Adjuntos de una tarea
 routerTarea.get('/:id/adjuntos',         listarAdjuntos);
-routerTarea.post('/:id/adjuntos',        upload.single('archivo'), subirAdjunto);
+routerTarea.post('/:id/adjuntos',        upload.fields([{ name: 'archivo', maxCount: 1 }, { name: 'archivos', maxCount: 10 }]), subirAdjunto);
 routerTarea.delete('/adjuntos/:id',      eliminarAdjunto);
 routerTarea.get('/adjuntos/descargar/:filename', descargarAdjunto);
+routerTarea.get('/adjuntos/ver/:filename', verAdjunto);
 
 module.exports = { routerProyecto, routerTarea };

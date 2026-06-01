@@ -535,7 +535,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                     style={{
                       border: `1px solid ${fila.omitida ? 'rgba(148,163,184,0.3)' : errores.length ? 'rgba(239,68,68,0.35)' : 'var(--color-border)'}`,
                       borderRadius: '1rem',
-                      background: fila.omitida ? 'rgba(148,163,184,0.07)' : '#fff',
+                      background: fila.omitida ? 'rgba(148,163,184,0.07)' : 'var(--color-surface)',
                       padding: '1rem',
                     }}
                   >

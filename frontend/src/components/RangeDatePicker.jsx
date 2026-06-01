@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -6,7 +6,13 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { Calendar as CalendarIcon, X, Check } from 'lucide-react';
 
-const RangeDatePicker = ({ from, to, onChange }) => {
+const RangeDatePicker = ({
+  from,
+  to,
+  onChange,
+  placeholder = 'Seleccionar fecha',
+  title = 'Seleccionar fecha',
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const range = { from, to };
 
@@ -14,11 +20,11 @@ const RangeDatePicker = ({ from, to, onChange }) => {
     onChange(newRange);
   };
 
-  const displayText = from && to 
-    ? `${format(from, "dd MMM", { locale: es })} - ${format(to, "dd MMM", { locale: es })}`
+  const displayText = from && to
+    ? `${format(from, 'dd MMM', { locale: es })} - ${format(to, 'dd MMM', { locale: es })}`
     : from
-      ? `${format(from, "dd MMM", { locale: es })} - ...`
-      : "Seleccionar rango";
+      ? `${format(from, 'dd MMM', { locale: es })} - ...`
+      : placeholder;
 
   return (
     <>
@@ -41,54 +47,56 @@ const RangeDatePicker = ({ from, to, onChange }) => {
           transition: 'all 0.2s',
           textAlign: 'left',
         }}
-        onMouseOver={e => e.currentTarget.style.borderColor = 'var(--color-primary-40)'}
-        onMouseOut={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+        onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--color-primary-40)'; }}
+        onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
       >
         <CalendarIcon size={18} style={{ color: 'var(--color-primary)', opacity: 0.8 }} />
         <span style={{ flex: 1 }}>{displayText}</span>
       </button>
 
       {isOpen && createPortal(
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 10000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem',
-          background: 'rgba(15, 23, 42, 0.6)',
-          backdropFilter: 'blur(8px)',
-          animation: 'fadeIn 0.2s ease-out'
-        }}>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            background: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(8px)',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
           <style>{`
             @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
             @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
             .rdp { --rdp-accent-color: var(--color-primary); --rdp-background-color: var(--color-primary-10); margin: 0 auto; }
             .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover { background-color: var(--color-primary); color: white; }
           `}</style>
-          
-          <div style={{
-            background: 'var(--color-surface)',
-            width: '100%',
-            maxWidth: '400px',
-            borderRadius: '2rem',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            overflow: 'hidden',
-            animation: 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            {/* Header */}
+
+          <div
+            style={{
+              background: 'var(--color-surface)',
+              width: '100%',
+              maxWidth: '400px',
+              borderRadius: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              overflow: 'hidden',
+              animation: 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
             <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--color-text)', margin: 0 }}>Seleccionar Duración</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--color-text)', margin: 0 }}>{title}</h3>
               <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-dim)', cursor: 'pointer', padding: '0.5rem' }}>
                 <X size={24} />
               </button>
             </div>
 
-            {/* Calendar */}
             <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <DayPicker
                 mode="range"
@@ -97,29 +105,30 @@ const RangeDatePicker = ({ from, to, onChange }) => {
                 locale={es}
                 numberOfMonths={1}
               />
-              
-              {/* Presets */}
-              <div style={{ 
-                marginTop: '1.5rem', 
-                width: '100%',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '0.5rem',
-                justifyContent: 'center'
-              }}>
+
+              <div
+                style={{
+                  marginTop: '1.5rem',
+                  width: '100%',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                  justifyContent: 'center',
+                }}
+              >
                 {[
-                  { label: "Hoy", val: 0 },
-                  { label: "Mañana", val: 1 },
-                  { label: "3 días", val: 3 },
-                  { label: "1 semana", val: 7 },
-                  { label: "2 semanas", val: 14 },
-                ].map((p) => (
+                  { label: 'Hoy', val: 0 },
+                  { label: 'Manana', val: 1 },
+                  { label: '3 dias', val: 3 },
+                  { label: '1 semana', val: 7 },
+                  { label: '2 semanas', val: 14 },
+                ].map((preset) => (
                   <button
-                    key={p.val}
+                    key={preset.val}
                     type="button"
                     onClick={() => {
-                      const from = addDays(new Date(), p.val);
-                      onChange({ from, to: from });
+                      const selectedFrom = addDays(new Date(), preset.val);
+                      onChange({ from: selectedFrom, to: selectedFrom });
                     }}
                     style={{
                       padding: '0.5rem 1rem',
@@ -130,22 +139,25 @@ const RangeDatePicker = ({ from, to, onChange }) => {
                       fontWeight: '800',
                       color: 'var(--color-text-dim)',
                       cursor: 'pointer',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
                     }}
                   >
-                    {p.label}
+                    {preset.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Footer */}
             <div style={{ padding: '1.5rem', borderTop: '1px solid var(--color-border-light)', display: 'flex', gap: '1rem' }}>
-              <button 
+              <button
+                type="button"
                 onClick={() => setIsOpen(false)}
                 style={{ flex: 1, padding: '1rem', borderRadius: '1rem', border: '1px solid var(--color-border)', background: 'none', fontSize: '0.8rem', fontWeight: '800', color: 'var(--color-text-dim)', cursor: 'pointer' }}
-              >Cerrar</button>
-              <button 
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsOpen(false)}
                 style={{ flex: 2, padding: '1rem', borderRadius: '1rem', border: 'none', background: 'var(--color-primary)', fontSize: '0.8rem', fontWeight: '900', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
               >

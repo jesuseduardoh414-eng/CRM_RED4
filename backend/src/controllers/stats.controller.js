@@ -316,11 +316,16 @@ const getActividadMiembros = async (usuario) => {
       todasConFecha: tareasDelMiembro.map(resumenTarea),
       ocupacionCalendario,
       totales: {
+        totalTareas: tareasDelMiembro.length,
         hechasHoy: hechasHoy.length,
         enProgreso: enProgreso.length,
         faltanHoy: faltanHoy.length,
         faltanSemana: faltanSemana.length,
         totalHechas: hechas.length,
+        pendientes: tareasDelMiembro.filter((tarea) => tarea.estado === 'PENDIENTE').length,
+        porcentajeCumplimiento: tareasDelMiembro.length > 0
+          ? Math.round((hechas.length / tareasDelMiembro.length) * 100)
+          : 0,
       },
     };
   });
@@ -366,6 +371,21 @@ const getMemberStats = async (req, res) => {
       };
     });
 
+    const resumenTareas = proyectos.reduce((acc, proyecto) => {
+      proyecto.tareas.forEach((tarea) => {
+        acc.total += 1;
+        if (tarea.estado === 'HECHO') acc.hechas += 1;
+        if (tarea.estado === 'PENDIENTE') acc.pendientes += 1;
+        if (tarea.estado === 'EN_PROGRESO') acc.enProgreso += 1;
+      });
+      return acc;
+    }, {
+      total: 0,
+      hechas: 0,
+      pendientes: 0,
+      enProgreso: 0,
+    });
+
     const tareas = await prisma.tarea.findMany({
       where: {
         proyectoId: { in: proyectos.map((proyecto) => proyecto.id) },
@@ -385,6 +405,7 @@ const getMemberStats = async (req, res) => {
     return res.json({
       proyectos: proyectosConProgreso,
       tareas: sortTareas(tareas),
+      resumenTareas,
     });
   } catch (error) {
     console.error('[stats.getMemberStats]', error);
@@ -428,28 +449,39 @@ const getAdminStats = async (req, res) => {
 
     // 5. Proyectos con más progreso (Top 5 activos)
     const proyectosActivos = await prisma.proyecto.findMany({
-      where: { estado: 'ACTIVO', ...(scopeProyecto || {}) },
-      take: 5,
+      where: scopeProyecto || undefined,
       include: {
         _count: { select: { tareas: true } },
         tareas: {
-          where: { estado: 'HECHO' },
+          select: { id: true, estado: true }
+        },
+        miembros: {
           select: { id: true }
-        }
+        },
       }
     });
 
     const proyectosProgreso = proyectosActivos.map(p => {
       const total = p._count.tareas;
-      const completas = p.tareas.length;
+      const completas = p.tareas.filter((tarea) => tarea.estado === 'HECHO').length;
+      const pendientes = p.tareas.filter((tarea) => tarea.estado === 'PENDIENTE').length;
+      const enProgreso = p.tareas.filter((tarea) => tarea.estado === 'EN_PROGRESO').length;
       return {
         id: p.id,
         nombre: p.nombre,
-        total,
+        estado: p.estado,
+        totalTareas: total,
         completas,
+        pendientes,
+        enProgreso,
+        miembros: p.miembros.length,
         porcentaje: total > 0 ? Math.round((completas / total) * 100) : 0
       };
-    }).sort((a, b) => b.porcentaje - a.porcentaje);
+    }).sort((a, b) =>
+      b.porcentaje - a.porcentaje
+      || b.completas - a.completas
+      || a.nombre.localeCompare(b.nombre)
+    );
 
     const actividadMiembros = await getActividadMiembros(req.usuario);
 

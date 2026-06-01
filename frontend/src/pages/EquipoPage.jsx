@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { proyectosService } from '../services/api';
 import { PageSkeleton } from '../components/Skeleton';
+import UserAvatar from '../components/UserAvatar';
+import { usePreferences } from '../context/PreferencesContext';
 import { 
   Code2, 
   BarChart3, 
@@ -19,15 +21,15 @@ import {
 } from 'lucide-react';
 
 const AREA_CONF = {
-  DESARROLLO:     { label: 'Desarrollo',     color: '#818cf8', bg: 'rgba(129,140,248,0.08)',  icon: <Code2 size={16} /> },
-  ADMINISTRACION: { label: 'Administración', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',   icon: <BarChart3 size={16} /> },
-  COMUNICACION:   { label: 'Comunicación',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: <Mail size={16} /> },
-  MARKETING:      { label: 'Marketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)',  icon: <Megaphone size={16} /> },
+  DESARROLLO:     { labelKey: 'areaDesarrollo',    color: '#818cf8', bg: 'rgba(129,140,248,0.08)',  icon: <Code2 size={16} /> },
+  ADMINISTRACION: { labelKey: 'areaAdministracion', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',   icon: <BarChart3 size={16} /> },
+  COMUNICACION:   { labelKey: 'areaComunicacion',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: <Mail size={16} /> },
+  MARKETING:      { labelKey: 'areaMarketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)',  icon: <Megaphone size={16} /> },
 };
 
 const ROL_CONF = {
-  ADMIN:   { label: 'Admin',   color: '#818cf8', bg: 'rgba(129,140,248,0.08)' },
-  MIEMBRO: { label: 'Miembro', color: '#94a3b8', bg: 'rgba(148,163,184,0.08)' },
+  ADMIN:   { labelKey: 'roleAdmin',   color: '#818cf8', bg: 'rgba(129,140,248,0.08)' },
+  MIEMBRO: { labelKey: 'roleMember',  color: '#94a3b8', bg: 'rgba(148,163,184,0.08)' },
 };
 
 const ESTADO_COLOR = {
@@ -38,7 +40,8 @@ const ESTADO_COLOR = {
 
 // —— Tarjeta de miembro —————————————————————————————————————————————————————
 const MiembroCard = ({ miembro }) => {
-  const areaConf = AREA_CONF[miembro.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', icon: <User size={16} />, label: miembro.area };
+  const { t } = usePreferences();
+  const areaConf = AREA_CONF[miembro.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', icon: <User size={16} />, labelKey: 'areaGeneral' };
   const rolConf  = ROL_CONF[miembro.rol] || ROL_CONF.MIEMBRO;
   const pct      = miembro.tareas.total > 0
     ? Math.round((miembro.tareas.hechas / miembro.tareas.total) * 100)
@@ -70,15 +73,16 @@ const MiembroCard = ({ miembro }) => {
     >
       {/* Cabecera */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <div style={{
-          width: '48px', height: '48px', borderRadius: '14px', flexShrink: 0,
-          background: areaConf.bg, border: `1.5px solid ${areaConf.color}30`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '900', fontSize: '1.15rem', color: areaConf.color,
-          boxShadow: `0 8px 16px ${areaConf.color}15`
-        }}>
-          {miembro.nombre.charAt(0).toUpperCase()}
-        </div>
+        <UserAvatar
+          usuario={miembro}
+          size={48}
+          radius={14}
+          color={areaConf.color}
+          background={areaConf.bg}
+          borderColor={`${areaConf.color}30`}
+          fontSize="1.15rem"
+          shadow={`0 8px 16px ${areaConf.color}15`}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: '800', fontSize: '1.1rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.02em' }}>
             {miembro.nombre}
@@ -98,8 +102,8 @@ const MiembroCard = ({ miembro }) => {
           display: 'flex', alignItems: 'center', gap: '0.4rem',
           border: `1px solid ${areaConf.color}20`
         }}>
-          {areaConf.icon} 
-          <span style={{ position: 'relative', top: '0.5px' }}>{areaConf.label}</span>
+          {areaConf.icon}
+          <span style={{ position: 'relative', top: '0.5px' }}>{t(areaConf.labelKey)}</span>
         </span>
         <span style={{
           padding: '0.25rem 0.75rem', borderRadius: '999px',
@@ -108,7 +112,7 @@ const MiembroCard = ({ miembro }) => {
           border: `1px solid ${rolConf.color}20`,
           display: 'flex', alignItems: 'center'
         }}>
-          <span style={{ position: 'relative', top: '0.5px' }}>{rolConf.label}</span>
+          <span style={{ position: 'relative', top: '0.5px' }}>{t(rolConf.labelKey)}</span>
         </span>
       </div>
 
@@ -116,7 +120,7 @@ const MiembroCard = ({ miembro }) => {
       {miembro.tareas.total > 0 && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--color-text-dim)', marginBottom: '0.4rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-            <span>{miembro.tareas.hechas}/{miembro.tareas.total} tareas</span>
+            <span>{miembro.tareas.hechas}/{miembro.tareas.total} {t('teamTasksPlural')}</span>
             <span style={{ color: pct === 100 ? '#34d399' : areaConf.color }}>{pct}%</span>
           </div>
           <div style={{ height: '4px', background: 'var(--color-surface-3)', borderRadius: '999px', overflow: 'hidden' }}>
@@ -140,6 +144,7 @@ const MiembroCard = ({ miembro }) => {
 
 // —— Sección de proyecto —————————————————————————————————————————————————————
 const ProyectoEquipo = ({ proyecto, equipoData }) => {
+  const { t } = usePreferences();
   const [open, setOpen] = useState(true);
   const estadoColor = ESTADO_COLOR[proyecto.estado] || '#94a3b8';
   const areaConf    = AREA_CONF[proyecto.creador?.area] || AREA_CONF.DESARROLLO;
@@ -167,7 +172,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
             {proyecto.nombre}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginTop: '0.15rem', fontWeight: '600' }}>
-            {equipoData.length} miembro{equipoData.length !== 1 ? 's' : ''} asignados
+            {equipoData.length} {equipoData.length !== 1 ? t('teamMemberPlural') : t('teamMemberSingular')}
           </div>
         </div>
         <span style={{
@@ -180,7 +185,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
           whiteSpace: 'nowrap'
         }}>
           {areaConf.icon && <span style={{ display: 'flex', opacity: 0.8 }}>{areaConf.icon}</span>}
-          {areaConf.label}
+          {t(areaConf.labelKey)}
         </span>
         <span style={{ color: 'var(--color-text-dim)', display: 'flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0 }}><ChevronDown size={18} strokeWidth={2.5} /></span>
       </button>
@@ -194,7 +199,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
               border: '1px dashed var(--color-border)', borderRadius: '0.6rem',
               color: 'var(--color-text-muted)', fontSize: '0.8rem',
             }}>
-              Sin miembros asignados en este proyecto
+              {t('teamNoMembers')}
             </div>
           ) : (
             <div style={{
@@ -213,6 +218,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
 
 // —— Página principal ————————————————————————————————————————————————————————
 const EquipoPage = () => {
+  const { t } = usePreferences();
   const { usuario }               = useAuth();
   const [datos, setDatos]         = useState([]); // [{ proyecto, equipo }]
   const [cargando, setCargando]   = useState(true);
@@ -249,11 +255,11 @@ const EquipoPage = () => {
   return (
     <div style={{ padding: '1.5rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>Mi Equipo</h1>
+        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>{t('teamTitle')}</h1>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '1.15rem' }}>
           {esAdmin
-            ? `${totalMiembros} miembro${totalMiembros !== 1 ? 's' : ''} activos en ${datos.length} proyecto${datos.length !== 1 ? 's' : ''}`
-            : `Equipo de tus ${datos.length} proyecto${datos.length !== 1 ? 's' : ''} asignados`
+            ? t('teamSummary', { members: totalMiembros, memberLabel: totalMiembros !== 1 ? t('teamMemberPlural') : t('teamMemberSingular'), projects: datos.length, projectLabel: datos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular') })
+            : `${t('projectList')} ${datos.length} ${datos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular')}`
           }
         </p>
       </div>
@@ -266,7 +272,7 @@ const EquipoPage = () => {
           background: 'var(--color-surface-2)', border: '1px dashed var(--color-border)',
           borderRadius: '1rem', color: 'var(--color-text-muted)',
         }}>
-          No tienes proyectos asignados aún.
+          {t('teamNoProjects')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

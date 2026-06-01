@@ -1,8 +1,9 @@
 // Rutas de Usuarios — Gestión Administrativa
 const express = require('express');
-const { listar, listarParaProyectos, crear, editar, eliminar, toggleEstado, actividad } = require('../controllers/usuarios.controller');
+const { listar, listarParaProyectos, obtenerPerfil, actualizarPerfil, crear, editar, eliminar, toggleEstado, actividad } = require('../controllers/usuarios.controller');
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin }      = require('../middlewares/roles.middleware');
+const upload = require('../middlewares/upload.middleware');
 
 const router = express.Router();
 
@@ -12,6 +13,8 @@ router.use(verificarToken);
 // Listar usuarios
 router.get('/', listar);
 router.get('/catalogo/proyectos', listarParaProyectos);
+router.get('/perfil', obtenerPerfil);
+router.put('/perfil', upload.single('fotoPerfil'), actualizarPerfil);
 
 // Operaciones de gestión (solo para administradores)
 router.post('/',           soloAdmin, crear);

@@ -45,8 +45,18 @@ export const AuthProvider = ({ children }) => {
     setUsuario(null);
   };
 
+  const updateUsuario = (datosUsuario) => {
+    setUsuario((prev) => prev ? { ...prev, ...datosUsuario } : datosUsuario);
+  };
+
+  const refreshUsuario = async () => {
+    const data = await authService.me();
+    setUsuario(data.usuario);
+    return data.usuario;
+  };
+
   return (
-    <AuthContext.Provider value={{ usuario, cargando, login, logout }}>
+    <AuthContext.Provider value={{ usuario, cargando, login, logout, updateUsuario, refreshUsuario }}>
       {children}
     </AuthContext.Provider>
   );

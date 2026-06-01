@@ -13,7 +13,7 @@ router.use(verificarToken);
 const upload = require('../middlewares/upload.middleware');
 
 const { listar: listarComentarios, crear: crearComentario } = require('../controllers/comentarios.controller');
-const { listar: listarAdjuntos, subir: subirAdjunto } = require('../controllers/adjuntos.controller');
+const { listar: listarAdjuntos, subir: subirAdjunto, eliminar: eliminarAdjunto } = require('../controllers/adjuntos.controller');
 
 router.get('/',              listar);
 router.get('/plantillas',    listarPlantillas);
@@ -30,6 +30,7 @@ router.post('/:id/comentarios', crearComentario);
 
 // Archivos de Proyecto
 router.get('/:id/adjuntos',  listarAdjuntos);
-router.post('/:id/adjuntos', upload.single('archivo'), subirAdjunto);
+router.post('/:id/adjuntos', upload.fields([{ name: 'archivo', maxCount: 1 }, { name: 'archivos', maxCount: 10 }]), subirAdjunto);
+router.delete('/adjuntos/:id', eliminarAdjunto);
 
 module.exports = router;

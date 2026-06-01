@@ -13,9 +13,12 @@ import {
   Video,
   Link2,
 } from 'lucide-react';
-import { agendaService, usuariosService } from '../services/api';
+import { agendaService, adjuntosService, usuariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { usePreferences } from '../context/PreferencesContext';
+import TaskAttachments from './TaskAttachments';
+import RangeDatePicker from './RangeDatePicker';
 
 const COLOR_CATEGORIA = {
   tarea: '#16a34a',
@@ -25,9 +28,133 @@ const COLOR_CATEGORIA = {
 
 const getColorCategoria = (tipo) => COLOR_CATEGORIA[tipo] || COLOR_CATEGORIA.evento;
 
+const toPickerDate = (dateValue, timeValue = '12:00') => {
+  if (!dateValue) return null;
+  return new Date(`${dateValue}T${timeValue}`);
+};
+
+const formatTimeRangeLabel = (start, end, label) => {
+  if (!start || !end) return label;
+  return `${start} - ${end}`;
+};
+
+const TimeRangePicker = ({ start, end, onChange }) => {
+  const { t } = usePreferences();
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        style={{
+          width: '100%',
+          padding: '0.85rem 1rem',
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-border)',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          fontSize: '0.85rem',
+          fontWeight: '700',
+          color: 'var(--color-text)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <Clock size={18} style={{ color: 'var(--color-primary)', opacity: 0.85 }} />
+        <span style={{ flex: 1 }}>{formatTimeRangeLabel(start, end, t('eventSelectTime'))}</span>
+      </button>
+
+      {isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            background: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '460px',
+              background: 'var(--color-surface)',
+              borderRadius: '1.75rem',
+              border: '1px solid var(--color-border)',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.45)',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ padding: '1.4rem 1.5rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900' }}>{t('eventSelectTime')}</h3>
+              <button type="button" onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-dim)' }}>
+                <X size={22} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-dim)', letterSpacing: '0.06em' }}>{t('eventFrom').toUpperCase()}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'var(--color-surface-2)', borderRadius: '0.95rem', border: '1px solid var(--color-border)', padding: '0 0.9rem' }}>
+                  <Clock size={15} color="var(--color-primary)" />
+                  <input
+                    type="time"
+                    className="form-input"
+                    style={{ border: 'none', background: 'transparent', paddingLeft: 0 }}
+                    value={start}
+                    onChange={(e) => onChange({ start: e.target.value, end })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-dim)', letterSpacing: '0.06em' }}>{t('eventTo').toUpperCase()}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'var(--color-surface-2)', borderRadius: '0.95rem', border: '1px solid var(--color-border)', padding: '0 0.9rem' }}>
+                  <Clock size={15} color="var(--color-primary)" />
+                  <input
+                    type="time"
+                    className="form-input"
+                    style={{ border: 'none', background: 'transparent', paddingLeft: 0 }}
+                    value={end}
+                    onChange={(e) => onChange({ start, end: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '1.25rem 1.5rem 1.5rem', borderTop: '1px solid var(--color-border-light)', display: 'flex', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                style={{ flex: 1, padding: '0.9rem', borderRadius: '1rem', border: '1px solid var(--color-border)', background: 'transparent', fontWeight: '800', cursor: 'pointer', color: 'var(--color-text-dim)' }}
+              >
+                {t('close')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                style={{ flex: 1.4, padding: '0.9rem', borderRadius: '1rem', border: 'none', background: 'var(--color-primary)', color: '#fff', fontWeight: '900', cursor: 'pointer' }}
+              >
+                {t('confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const TIPOS = [
-  { id: 'evento', label: 'Evento', icon: <Calendar size={16} /> },
-  { id: 'reunion', label: 'Reunion', icon: <Users size={16} /> },
+  { id: 'evento',  labelKey: 'eventTypeEvent',   icon: <Calendar size={16} /> },
+  { id: 'reunion', labelKey: 'eventTypeMeeting',  icon: <Users size={16} /> },
 ];
 
 const buildInitialForm = ({ evento, prefill }) => {
@@ -125,12 +252,14 @@ const buildInitialForm = ({ evento, prefill }) => {
 };
 
 const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
+  const { t } = usePreferences();
   const [form, setForm] = useState(() => buildInitialForm({ evento, prefill }));
   const { usuario } = useAuth();
   const { showToast } = useToast();
   const [cargando, setCargando] = useState(false);
   const [usuarios, setUsuarios] = useState([]);
   const [disponibilidad, setDisponibilidad] = useState([]);
+  const [archivos, setArchivos] = useState([]);
 
   const esDuenio = !evento || evento.usuarioId === usuario?.id || evento.creadoPorId === usuario?.id;
   const esVirtual = form.modalidad === 'virtual';
@@ -178,7 +307,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
     e.preventDefault();
 
     if (form.es_recurrente && form.recur_dias.length === 0) {
-      showToast('Selecciona al menos un dia de la semana para el evento recurrente.', 'error');
+      showToast(t('eventRecurringNoDay'), 'error');
       return;
     }
 
@@ -190,12 +319,12 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
       else if (form.tipo === 'dia_completo') fFin = new Date(`${form.fecha_fin}T23:59:59`);
 
       if (Number.isNaN(fInicio.getTime()) || (fFin && Number.isNaN(fFin.getTime()))) {
-        showToast('Revisa la fecha y hora del evento.', 'error');
+        showToast(t('eventInvalidDateTime'), 'error');
         return;
       }
 
       if (fFin && fFin <= fInicio) {
-        showToast('La fecha y hora de fin deben ser posteriores al inicio.', 'error');
+        showToast(t('eventEndAfterStart'), 'error');
         return;
       }
 
@@ -203,7 +332,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
         try {
           new URL(form.url_reunion);
         } catch {
-          showToast('El enlace de reunion no es valido.', 'error');
+          showToast(t('eventInvalidMeetingLink'), 'error');
           return;
         }
       }
@@ -226,8 +355,19 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
         fecha_fin_recurrencia: form.fecha_fin_recurrencia || null,
       };
 
-      if (evento) await agendaService.editar(evento.id, payload);
-      else await agendaService.crear(payload);
+      let eventoGuardado = evento;
+      if (evento) {
+        const res = await agendaService.editar(evento.id, payload);
+        eventoGuardado = res.evento || evento;
+      } else {
+        const res = await agendaService.crear(payload);
+        eventoGuardado = res.evento;
+      }
+
+      if (archivos.length > 0 && eventoGuardado?.id) {
+        await adjuntosService.subir(eventoGuardado.id, archivos, 'agenda');
+        setArchivos([]);
+      }
 
       onSave();
     } catch (error) {
@@ -255,7 +395,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
       <div className="card" style={{ width: '100%', maxWidth: '760px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: '2rem', borderRadius: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.75rem', fontWeight: '900', letterSpacing: '-0.02em' }}>
-            {!evento ? 'Nuevo Evento' : esDuenio ? 'Editar Evento' : 'Detalles del Evento'}
+            {!evento ? t('eventNew') : esDuenio ? t('eventEdit') : t('eventDetails')}
           </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={24} /></button>
         </div>
@@ -263,16 +403,16 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>TITULO DEL EVENTO</label>
+              <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventTitleLabel').toUpperCase()}</label>
               {esDuenio ? (
-                <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required placeholder="De que trata el evento?" />
+                <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required placeholder={t('eventTitlePlaceholder')} />
               ) : (
                 <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--color-text)', padding: '0.5rem 0' }}>{form.titulo}</div>
               )}
             </div>
             {esDuenio && (
               <div className="form-group">
-                <label className="form-label" style={{ letterSpacing: '0.05em' }}>CATEGORIA</label>
+                <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventCategory').toUpperCase()}</label>
                 <select
                   className="form-input form-select"
                   style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }}
@@ -280,88 +420,88 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   onChange={(e) => setForm({ ...form, tipo: e.target.value, color: getColorCategoria(e.target.value) })}
                   disabled={!esDuenio}
                 >
-                  {TIPOS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  {TIPOS.map((tipo) => <option key={tipo.id} value={tipo.id}>{t(tipo.labelKey)}</option>)}
                 </select>
               </div>
             )}
           </div>
 
           <div className="form-group">
-            <label className="form-label" style={{ letterSpacing: '0.05em' }}>DESCRIPCION</label>
+            <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('taskDescription').toUpperCase()}</label>
             {esDuenio ? (
               <textarea
                 className="form-input"
                 style={{ minHeight: '96px', resize: 'vertical', padding: '1rem 1.25rem' }}
                 value={form.descripcion}
                 onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-                placeholder="Agenda, contexto o puntos a tratar"
+                placeholder={t('eventDescriptionPlaceholder')}
               />
             ) : (
               <div style={{ fontSize: '0.95rem', color: 'var(--color-text-dim)', lineHeight: 1.5 }}>
-                {form.descripcion || 'Sin descripcion'}
+                {form.descripcion || t('taskNoDescription')}
               </div>
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>COMIENZA</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DIA</span>
-                  {esDuenio ? (
-                    <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_inicio} onChange={(e) => setForm({ ...form, fecha_inicio: e.target.value })} required />
-                  ) : (
-                    <div style={{ fontWeight: '700' }}>{new Date(form.fecha_inicio).toLocaleDateString()}</div>
-                  )}
+              <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventDuration').toUpperCase()}</label>
+              {esDuenio ? (
+                <RangeDatePicker
+                  from={toPickerDate(form.fecha_inicio, form.hora_inicio || '12:00')}
+                  to={toPickerDate(form.fecha_fin, form.hora_fin || form.hora_inicio || '12:00')}
+                  placeholder={t('eventDatePlaceholder')}
+                  title={t('eventDatePlaceholder')}
+                  onChange={(range) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      fecha_inicio: range?.from ? range.from.toISOString().slice(0, 10) : '',
+                      fecha_fin: range?.to ? range.to.toISOString().slice(0, 10) : (range?.from ? range.from.toISOString().slice(0, 10) : ''),
+                    }));
+                  }}
+                />
+              ) : (
+                <div style={{
+                  padding: '1rem 1.25rem',
+                  borderRadius: '1rem',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface-2)',
+                  fontWeight: '800',
+                  color: 'var(--color-text)'
+                }}>
+                  {new Date(form.fecha_inicio).toLocaleDateString()} - {new Date(form.fecha_fin || form.fecha_inicio).toLocaleDateString()}
                 </div>
-                {form.tipo !== 'dia_completo' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
-                    {esDuenio ? (
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
-                        <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_inicio} onChange={(e) => setForm({ ...form, hora_inicio: e.target.value })} disabled={!esDuenio} />
-                        <Clock size={14} color="var(--color-text-dim)" />
-                      </div>
-                    ) : (
-                      <div style={{ fontWeight: '700' }}>{form.hora_inicio}</div>
-                    )}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
-            <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>TERMINA</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>DIA</span>
-                  {esDuenio ? (
-                    <input type="date" className="form-input" style={{ flex: 1 }} value={form.fecha_fin} onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })} />
-                  ) : (
-                    <div style={{ fontWeight: '700' }}>{new Date(form.fecha_fin).toLocaleDateString()}</div>
-                  )}
-                </div>
-                {form.tipo !== 'dia_completo' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '40px', color: 'var(--color-text-dim)' }}>HORA</span>
-                    {esDuenio ? (
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-surface-2)', borderRadius: '12px', border: '1px solid var(--color-border)', paddingRight: '0.75rem' }}>
-                        <input type="time" className="form-input" style={{ border: 'none', background: 'transparent' }} value={form.hora_fin} onChange={(e) => setForm({ ...form, hora_fin: e.target.value })} disabled={!esDuenio} />
-                        <Clock size={14} color="var(--color-text-dim)" />
-                      </div>
-                    ) : (
-                      <div style={{ fontWeight: '700' }}>{form.hora_fin}</div>
-                    )}
+            {form.tipo !== 'dia_completo' && (
+              <div className="form-group">
+                <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventSelectTime').toUpperCase()}</label>
+                {esDuenio ? (
+                  <TimeRangePicker
+                    start={form.hora_inicio}
+                    end={form.hora_fin}
+                    onChange={({ start, end }) => setForm((prev) => ({ ...prev, hora_inicio: start, hora_fin: end }))}
+                  />
+                ) : (
+                  <div style={{
+                    padding: '1rem 1.25rem',
+                    borderRadius: '1rem',
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-surface-2)',
+                    fontWeight: '800',
+                    color: 'var(--color-text)'
+                  }}>
+                    {form.hora_inicio} - {form.hora_fin}
                   </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>MODALIDAD</label>
+              <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventModality').toUpperCase()}</label>
               {esDuenio ? (
                 <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--color-bg-base)', padding: '0.4rem', borderRadius: '14px', border: '1px solid var(--color-border)' }}>
                   <button
@@ -379,7 +519,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                       color: !esVirtual ? '#fff' : 'var(--color-text-dim)',
                     }}
                   >
-                    PRESENCIAL
+                    {t('eventInPerson').toUpperCase()}
                   </button>
                   <button
                     type="button"
@@ -396,18 +536,18 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                       color: esVirtual ? '#fff' : 'var(--color-text-dim)',
                     }}
                   >
-                    VIRTUAL
+                    {t('eventRemote').toUpperCase()}
                   </button>
                 </div>
               ) : (
-                <div style={{ fontWeight: '700' }}>{esVirtual ? 'Virtual' : 'Presencial'}</div>
+                <div style={{ fontWeight: '700' }}>{esVirtual ? t('eventRemote') : t('eventInPerson')}</div>
               )}
             </div>
 
             <div className="form-group">
               <label className="form-label" style={{ letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 {esVirtual ? <Link2 size={14} /> : <MapPin size={14} />}
-                {esVirtual ? 'ENLACE DE REUNION' : 'UBICACION'}
+                {esVirtual ? t('eventLinkLabel').toUpperCase() : t('eventLocation').toUpperCase()}
               </label>
               {esDuenio ? (
                 esVirtual ? (
@@ -415,19 +555,19 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     className="form-input"
                     value={form.url_reunion}
                     onChange={(e) => setForm({ ...form, url_reunion: e.target.value })}
-                    placeholder="https://meet.google.com/... o enlace interno"
+                    placeholder={t('eventLinkPlaceholder')}
                   />
                 ) : (
                   <input
                     className="form-input"
                     value={form.ubicacion}
                     onChange={(e) => setForm({ ...form, ubicacion: e.target.value })}
-                    placeholder="Sala Creativa, Oficina Norte, etc."
+                    placeholder={t('eventLocationPlaceholder')}
                   />
                 )
               ) : (
                 <div style={{ fontWeight: '700', wordBreak: 'break-word' }}>
-                  {esVirtual ? (form.url_reunion || 'Sin enlace') : (form.ubicacion || 'Sin ubicacion')}
+                  {esVirtual ? (form.url_reunion || t('taskNoDescription')) : (form.ubicacion || t('taskNoDescription'))}
                 </div>
               )}
             </div>
@@ -436,7 +576,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
               <label className="form-label" style={{ letterSpacing: '0.05em' }}>
-                {esVirtual ? 'INSTRUCCIONES DE ACCESO' : 'NOTAS LOGISTICAS'}
+                {esVirtual ? t('eventInstructions').toUpperCase() : t('eventLogistics').toUpperCase()}
               </label>
               {esDuenio ? (
                 <textarea
@@ -444,11 +584,11 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   style={{ minHeight: '90px', resize: 'vertical', padding: '1rem 1.25rem' }}
                   value={form.instrucciones_acceso}
                   onChange={(e) => setForm({ ...form, instrucciones_acceso: e.target.value })}
-                  placeholder={esVirtual ? 'Codigo de acceso, camara opcional, etc.' : 'Recepcion, edificio, materiales, etc.'}
+                  placeholder={esVirtual ? t('eventVirtualAccessPlaceholder') : t('eventInPersonAccessPlaceholder')}
                 />
               ) : (
                 <div style={{ fontSize: '0.95rem', color: 'var(--color-text-dim)', lineHeight: 1.5 }}>
-                  {form.instrucciones_acceso || 'Sin instrucciones adicionales'}
+                  {form.instrucciones_acceso || t('taskNoDescription')}
                 </div>
               )}
             </div>
@@ -457,17 +597,28 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               <div className="form-group">
                 <label className="form-label" style={{ letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Video size={14} />
-                  ENLACE REMOTO OPCIONAL
+                  {t('eventOptionalLink').toUpperCase()}
                 </label>
                 <input
                   className="form-input"
                   value={form.url_reunion}
                   onChange={(e) => setForm({ ...form, url_reunion: e.target.value })}
-                  placeholder="Si tambien tendra acceso remoto, pega el enlace aqui"
+                  placeholder={t('eventOptionalRemotePlaceholder')}
                 />
               </div>
             )}
           </div>
+
+          <TaskAttachments
+            tareaId={evento?.id}
+            type="agenda"
+            title="Documentos del evento"
+            pendingFiles={archivos}
+            onPendingFilesChange={setArchivos}
+            showUploader={esDuenio}
+            showExisting={Boolean(evento?.id)}
+            uploadLabel={evento ? 'Agregar archivos' : 'Seleccionar archivos'}
+          />
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--color-border-light)', margin: '0.5rem 0' }} />
 
@@ -478,8 +629,8 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   <Users size={22} color="var(--color-primary)" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.01em' }}>Colaboracion</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>Define quien puede ver este evento</div>
+                  <div style={{ fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.01em' }}>{t('eventCollaboration')}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>{t('eventCollaborationDesc')}</div>
                 </div>
               </div>
               <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px' }}>
@@ -511,7 +662,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     boxShadow: form.es_global ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
                   }}
                 >
-                  TODO EL EQUIPO
+                  {t('eventAllTeam').toUpperCase()}
                 </button>
                 <button
                   type="button"
@@ -530,17 +681,17 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     boxShadow: !form.es_global ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
                   }}
                 >
-                  MIEMBROS ESPECIFICOS
+                  {t('eventSpecificMembers').toUpperCase()}
                 </button>
               </div>
 
               {!form.es_global ? (
                 <>
                   <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--color-primary)', letterSpacing: '0.05em' }}>SELECCIONAR MIEMBROS DEL EQUIPO</label>
+                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--color-primary)', letterSpacing: '0.05em' }}>{t('eventSelectMembers').toUpperCase()}</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', padding: '0.75rem', background: 'var(--color-bg-base)', borderRadius: '1.25rem', border: '1px solid var(--color-border)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
                       {usuarios.length === 0 ? (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dim)', textAlign: 'center', padding: '2rem' }}>No hay otros miembros disponibles</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dim)', textAlign: 'center', padding: '2rem' }}>{t('eventNoMembers')}</div>
                       ) : (
                         usuarios
                           .filter((u) => u.id !== usuario?.id)
@@ -594,12 +745,12 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   {form.invitados_ids.length > 0 && disponibilidad.length > 0 && (
                     <div style={{ padding: '1rem', background: 'rgba(245, 158, 11, 0.05)', borderRadius: '1rem', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
                       <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                        <AlertTriangle size={16} /> Conflictos detectados ({disponibilidad.length})
+                        <AlertTriangle size={16} /> {t('eventConflicts')} ({disponibilidad.length})
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                         {disponibilidad.slice(0, 3).map((d, idx) => (
                           <div key={`disp-${d.id || idx}`} style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: '600', paddingLeft: '0.5rem', borderLeft: '2px solid #b45309' }}>
-                            Ocupado de {new Date(d.fechaInicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} a {new Date(d.fechaFin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {t('eventBusyFrom')} {new Date(d.fechaInicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {new Date(d.fechaFin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         ))}
                       </div>
@@ -612,9 +763,9 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     <Globe size={18} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: '900', marginBottom: '0.2rem' }}>Evento publico</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: '900', marginBottom: '0.2rem' }}>{t('eventPublicLabel')}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', opacity: 0.8, fontWeight: '500', lineHeight: 1.4 }}>
-                      Este evento aparecera automaticamente en el calendario de todos los miembros del CRM.
+                      {t('eventPublicDesc')}
                     </div>
                   </div>
                 </div>
@@ -641,11 +792,11 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               onMouseOver={(e) => { e.currentTarget.style.background = 'var(--color-surface-3)'; e.currentTarget.style.color = 'var(--color-text)'; }}
               onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-dim)'; }}
             >
-              {esDuenio ? 'CANCELAR' : 'CERRAR'}
+              {esDuenio ? t('cancel').toUpperCase() : t('close').toUpperCase()}
             </button>
             {esDuenio && (
               <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 2, padding: '1rem', fontSize: '0.95rem', letterSpacing: '0.02em' }}>
-                <Save size={20} /> {cargando ? 'GUARDANDO...' : evento ? 'ACTUALIZAR EVENTO' : 'CREAR EVENTO'}
+                <Save size={20} /> {cargando ? t('saving').toUpperCase() : evento ? t('eventUpdateButton').toUpperCase() : t('eventCreateButton').toUpperCase()}
               </button>
             )}
           </div>

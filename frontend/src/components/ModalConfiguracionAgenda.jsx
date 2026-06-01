@@ -297,8 +297,8 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
               <div style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)', border: '1px solid var(--color-border)', borderRadius: '1.5rem', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.75rem' }}>
                   <div>
-                    <div style={{ fontSize: '0.78rem', fontWeight: '900', letterSpacing: '0.08em', color: '#334155' }}>GOOGLE CALENDAR</div>
-                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0f172a', marginTop: '0.25rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: '900', letterSpacing: '0.08em', color: 'var(--color-text-dim)' }}>GOOGLE CALENDAR</div>
+                    <div style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--color-text)', marginTop: '0.25rem' }}>
                       {googleCalendar.connected ? 'Cuenta conectada' : 'Sincronización desactivada'}
                     </div>
                   </div>

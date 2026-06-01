@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,6 +23,7 @@ import {
 import { agendaService, tareasService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import ModalEvento from '../components/ModalEvento';
 import ModalConfiguracionAgenda from '../components/ModalConfiguracionAgenda';
 
@@ -45,41 +47,43 @@ const cargarGoogleIdentityScript = () => {
 };
 
 const VISTAS = [
-  { id: 'MES', label: 'Mes', icon: <LayoutGrid size={16} /> },
-  { id: 'SEMANA', label: 'Semana', icon: <Columns size={16} /> },
-  { id: 'DIA', label: 'Dia', icon: <List size={16} /> },
+  { id: 'MES',    labelKey: 'agendaMonth', icon: <LayoutGrid size={16} /> },
+  { id: 'SEMANA', labelKey: 'agendaWeek',  icon: <Columns size={16} /> },
+  { id: 'DIA',    labelKey: 'agendaDay',   icon: <List size={16} /> },
 ];
 
 const FILTROS_AGENDA = [
-  { id: 'todo', label: 'Todo', color: '#0f172a', bg: '#f8fafc' },
-  { id: 'proyecto', label: 'Proyectos', color: '#2563eb', bg: '#eff6ff' },
-  { id: 'tarea', label: 'Tareas', color: '#16a34a', bg: '#f0fdf4' },
-  { id: 'evento', label: 'Eventos', color: '#7c3aed', bg: '#f5f3ff' },
-  { id: 'reunion', label: 'Reuniones', color: '#db2777', bg: '#fdf2f8' },
+  { id: 'todo', labelKey: 'agendaAllTypes', color: '#0f172a', bg: 'var(--color-surface-3)' },
+  { id: 'proyecto', labelKey: 'agendaProjects', color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
+  { id: 'tarea',   labelKey: 'agendaTasks',    color: '#16a34a', bg: 'rgba(22,163,74,0.10)' },
+  { id: 'evento',  labelKey: 'agendaEvents',   color: '#7c3aed', bg: 'rgba(124,58,237,0.10)' },
+  { id: 'reunion', labelKey: 'agendaMeetings', color: '#db2777', bg: 'rgba(219,39,119,0.10)' },
 ];
 
-const DIAS_SEMANA = [
-  'Lunes',
-  'Martes',
-  'Miercoles',
-  'Jueves',
-  'Viernes',
-  'Sabado',
-  'Domingo',
-];
+const getDiasSemana = (locale) => {
+  // Semana empieza Lunes. Ref: 2024-01-01 es Lunes.
+  const base = new Date(2024, 0, 1);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(base);
+    d.setDate(1 + i);
+    return d.toLocaleDateString(locale, { weekday: 'long' });
+  }).map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+};
 
 const LABORALES_DEFAULT = [1, 2, 3, 4, 5];
 const TIPOS_NO_LABORALES = ['festivo', 'vacacion', 'permiso'];
 const COLOR_TAREA = '#16a34a';
 
-const formatFechaLarga = (date) =>
-  date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric', day: 'numeric' });
+const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
 
-const formatMesAnio = (date) =>
-  date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+const formatFechaLarga = (date, locale) =>
+  date.toLocaleDateString(locale || getLocale(), { month: 'long', year: 'numeric', day: 'numeric' });
 
-const formatHora = (value) =>
-  new Date(value).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+const formatMesAnio = (date, locale) =>
+  date.toLocaleDateString(locale || getLocale(), { month: 'long', year: 'numeric' });
+
+const formatHora = (value, locale) =>
+  new Date(value).toLocaleTimeString(locale || getLocale(), { hour: '2-digit', minute: '2-digit' });
 
 const inicioDelDia = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
 const finDelDia = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
@@ -397,8 +401,10 @@ const moverItemAgendaLocal = (item, dias) => ({
 });
 
 const AgendaPage = () => {
+  const { t, locale } = usePreferences();
   const { showToast } = useToast();
   const { usuario } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('MES');
@@ -479,6 +485,16 @@ const AgendaPage = () => {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  useEffect(() => {
+    const fechaParam = searchParams.get('fecha');
+    if (!fechaParam) return;
+
+    const fechaDestino = new Date(fechaParam);
+    if (Number.isNaN(fechaDestino.getTime())) return;
+
+    setCurrentDate(fechaDestino);
+  }, [searchParams]);
+
   const cargarDatos = useCallback(async () => {
     try {
       setCargando(true);
@@ -521,6 +537,31 @@ const AgendaPage = () => {
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
+
+  useEffect(() => {
+    const eventoIdParam = searchParams.get('evento');
+    if (!eventoIdParam || !eventos.length) return;
+
+    const eventoObjetivo = eventos.find((evento) => evento.id === eventoIdParam || evento.eventoBaseId === eventoIdParam);
+    if (!eventoObjetivo) return;
+
+    setSelectedEvent(eventoObjetivo);
+    setPrefillData(null);
+    setModalOpen(true);
+  }, [eventos, searchParams]);
+
+  const cerrarModalEvento = useCallback(() => {
+    setModalOpen(false);
+    setSelectedEvent(null);
+    setPrefillData(null);
+
+    if (searchParams.get('evento') || searchParams.get('fecha')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('evento');
+      nextParams.delete('fecha');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let timeoutId = null;
@@ -622,7 +663,12 @@ const AgendaPage = () => {
         )
       );
 
-      showToast(`Se movieron ${tareasAMover.size} tarea${tareasAMover.size === 1 ? '' : 's'} ${dias} dia${dias === 1 ? '' : 's'}.`);
+      showToast(t('agendaTaskMoveSuccess', {
+        count: tareasAMover.size,
+        taskLabel: tareasAMover.size === 1 ? t('projectTaskSingular') : t('projectTaskPlural'),
+        days: dias,
+        dayLabel: dias === 1 ? t('taskDaySingular') : t('taskDayPlural'),
+      }));
       await cargarDatos();
       return true;
     } catch (error) {
@@ -730,8 +776,13 @@ const AgendaPage = () => {
           itemAgendaOcurreEnFecha(evento, destino, configLaboral, diasEspeciales)
         )
       ),
-      mensajeExito: `Se movieron ${tareasAMover.length} tarea${tareasAMover.length === 1 ? '' : 's'} ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`,
-      mensajeError: 'No se pudieron mover las tareas.',
+      mensajeExito: t('agendaTaskMoveSuccess', {
+        count: tareasAMover.length,
+        taskLabel: tareasAMover.length === 1 ? t('projectTaskSingular') : t('projectTaskPlural'),
+        days: Math.abs(dias),
+        dayLabel: Math.abs(dias) === 1 ? t('taskDaySingular') : t('taskDayPlural'),
+      }),
+      mensajeError: t('agendaTaskMoveError'),
     });
   }, [aplicarCambioOptimistaAgenda, configLaboral, diasEspeciales, moverTareaAgenda, obtenerBloqueTareasDesdeFecha]);
 
@@ -759,7 +810,7 @@ const AgendaPage = () => {
         itemAgendaOcurreEnFecha(evento, destino, configLaboral, diasEspeciales)
       ),
       mensajeExito: `${item.tipoVista === 'tarea' ? 'Tarea' : item.tipoVista === 'reunion' ? 'Reunion' : 'Evento'} movido ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}.`,
-      mensajeError: 'No se pudo mover el elemento.',
+      mensajeError: t('agendaElementMoveError'),
     });
   }, [aplicarCambioOptimistaAgenda, configLaboral, diasEspeciales, moverEventoAgenda, moverTareaAgenda]);
 
@@ -786,7 +837,7 @@ const AgendaPage = () => {
     });
 
     if (!itemsDelDia.length) {
-      showToast('No se encontraron elementos para mover.', 'info');
+      showToast(t('agendaItemMoveNone'), 'info');
       return false;
     }
 
@@ -804,8 +855,11 @@ const AgendaPage = () => {
           itemAgendaOcurreEnFecha(evento, destino, configLaboral, diasEspeciales)
         )
       ),
-      mensajeExito: `Se movieron ${itemsDelDia.length} elemento${itemsDelDia.length === 1 ? '' : 's'} al nuevo dia.`,
-      mensajeError: 'No se pudo mover el bloque.',
+      mensajeExito: t('agendaItemMoveSuccess', {
+        count: itemsDelDia.length,
+        itemLabel: itemsDelDia.length === 1 ? t('agendaItemEventSingular') : t('agendaItemEventPlural'),
+      }),
+      mensajeError: t('agendaItemMoveError'),
     });
   }, [aplicarCambioOptimistaAgenda, configLaboral, diasEspeciales, eventos, handleMoverBloqueTareasDelta, moverEventoAgenda]);
 
@@ -841,7 +895,7 @@ const AgendaPage = () => {
                 connected: true,
                 email: res.email || prev.email,
               }));
-              showToast('Google Calendar conectado correctamente');
+              showToast(t('agendaGoogleConnected'));
               resolve();
             } catch (error) {
               reject(error);
@@ -853,7 +907,7 @@ const AgendaPage = () => {
         client.requestCode();
       });
     } catch (error) {
-      showToast(error.message || 'No se pudo conectar Google Calendar', 'error');
+      showToast(error.message || t('agendaGoogleConnectError'), 'error');
     } finally {
       setGoogleLoading(false);
     }
@@ -868,9 +922,9 @@ const AgendaPage = () => {
         connected: false,
         email: null,
       }));
-      showToast('Google Calendar desconectado');
+      showToast(t('agendaGoogleDisconnected'));
     } catch (error) {
-      showToast(error.message || 'No se pudo desconectar Google Calendar', 'error');
+      showToast(error.message || t('agendaGoogleDisconnectError'), 'error');
     } finally {
       setGoogleLoading(false);
     }
@@ -892,7 +946,7 @@ const AgendaPage = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '2rem', flexWrap: isMobile ? 'wrap' : 'nowrap', flexShrink: 0 }}>
           <h1 style={{ fontSize: isMobile ? '1.5rem' : '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0, width: isMobile ? 'auto' : '380px', whiteSpace: 'nowrap' }}>
-            {view === 'MES' ? formatMesAnio(currentDate).toUpperCase() : formatFechaLarga(currentDate)}
+            {view === 'MES' ? formatMesAnio(currentDate, locale).toUpperCase() : formatFechaLarga(currentDate, locale)}
           </h1>
           <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
             <div style={{ display: 'flex', gap: '2px' }}>
@@ -901,7 +955,7 @@ const AgendaPage = () => {
                 onClick={nav.hoy}
                 style={{ padding: '0 0.8rem', fontSize: '0.7rem', fontWeight: '800', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)' }}
               >
-                HOY
+                {t('agendaToday')}
               </button>
               <button onClick={nav.next} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronRight size={16} /></button>
             </div>
@@ -915,8 +969,8 @@ const AgendaPage = () => {
             disabled={googleLoading || !googleCalendar.configured}
             title={
               googleCalendar.connected
-                ? `Conectado con ${googleCalendar.email || 'Google Calendar'}`
-                : 'Conectar Google Calendar'
+                ? t('agendaGoogleConnectedWith', { email: googleCalendar.email || 'Google Calendar' })
+                : t('agendaGoogleConnectTitle')
             }
             style={{
               display: 'flex',
@@ -937,10 +991,10 @@ const AgendaPage = () => {
           >
             <Globe size={16} />
             {googleLoading
-              ? (googleCalendar.connected ? 'Desconectando...' : 'Conectando...')
+              ? (googleCalendar.connected ? t('projectsDisconnecting') : t('projectsConnecting'))
               : googleCalendar.connected
-                ? (isMobile ? 'Google' : 'Google conectado')
-                : (isMobile ? 'Google' : 'Conectar Google')}
+                ? (isMobile ? 'Google' : t('projectsConnectedGoogle'))
+                : (isMobile ? 'Google' : t('projectsConnectGoogle'))}
           </button>
 
           <button
@@ -983,7 +1037,7 @@ const AgendaPage = () => {
                   color: view === vista.id ? '#ffffff' : 'var(--color-text-muted)',
                 }}
               >
-                {vista.icon} {!isMobile && vista.label}
+                {vista.icon} {!isMobile && t(vista.labelKey)}
               </button>
             ))}
           </div>
@@ -997,7 +1051,7 @@ const AgendaPage = () => {
             className="btn-primary"
             style={{ padding: '0.6rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
           >
-            <Plus size={18} /> {!isMobile && 'Nuevo evento'}
+            <Plus size={18} /> {!isMobile && t('eventNew')}
           </button>
         </div>
       </div>
@@ -1005,23 +1059,23 @@ const AgendaPage = () => {
       {showInvitaciones && (
         <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: isMobile ? '100%' : '400px', background: 'var(--color-surface)', boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', zIndex: 1100, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontWeight: '900', fontSize: '1.5rem' }}>Invitaciones</h2>
+            <h2 style={{ fontWeight: '900', fontSize: '1.5rem' }}>{t('agendaInvitations')}</h2>
             <button onClick={() => setShowInvitaciones(false)} className="btn-icon-sm"><X size={20} /></button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {invitaciones.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--color-text-dim)', marginTop: '2rem' }}>No tienes invitaciones pendientes</p>
+              <p style={{ textAlign: 'center', color: 'var(--color-text-dim)', marginTop: '2rem' }}>{t('notificationsEmpty')}</p>
             ) : (
               invitaciones.map((inv) => (
                 <div key={inv.id} style={{ padding: '1.25rem', background: 'var(--color-surface-2)', borderRadius: '1.25rem', border: '1px solid var(--color-border)' }}>
                   <div style={{ fontWeight: '800', marginBottom: '0.25rem' }}>{inv.evento.titulo}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginBottom: '1rem' }}>
-                    Organiza: <b>{inv.evento.creador?.nombre}</b><br />
-                    {new Date(inv.evento.fechaInicio).toLocaleString('es-MX')}
+                    {t('agendaOrganizer')} <b>{inv.evento.creador?.nombre}</b><br />
+                    {new Date(inv.evento.fechaInicio).toLocaleString(locale)}
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => handleResponder(inv.evento.id, 'aceptado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: 'none', background: 'var(--color-success)', color: '#fff', fontWeight: '800', cursor: 'pointer', fontSize: '0.75rem' }}>ACEPTAR</button>
-                    <button onClick={() => handleResponder(inv.evento.id, 'rechazado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-dim)', fontWeight: '800', cursor: 'pointer', fontSize: '0.75rem' }}>RECHAZAR</button>
+                    <button onClick={() => handleResponder(inv.evento.id, 'aceptado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: 'none', background: 'var(--color-success)', color: '#fff', fontWeight: '800', cursor: 'pointer', fontSize: '0.75rem' }}>{t('agendaAcceptInvitation').toUpperCase()}</button>
+                    <button onClick={() => handleResponder(inv.evento.id, 'rechazado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-dim)', fontWeight: '800', cursor: 'pointer', fontSize: '0.75rem' }}>{t('agendaRejectInvitation').toUpperCase()}</button>
                   </div>
                 </div>
               ))
@@ -1036,19 +1090,19 @@ const AgendaPage = () => {
           padding: isMobile ? '0.9rem' : '1.1rem 1.25rem',
           marginBottom: '1.25rem',
           borderRadius: '1.35rem',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--color-border)',
           boxShadow: '0 16px 38px rgba(15,23,42,0.05)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: '0.72rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>
-              Filtros del calendario
+            <div style={{ fontSize: '0.72rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
+              {t('agendaCalendarFilters')}
             </div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--color-text)', marginTop: '0.2rem' }}>
               {agendaProjectFilter === 'todos'
-                ? 'Primero elige que tipo de elementos quieres ver.'
-                : `Contexto: ${agendaProjectOptions.find((project) => project.id === agendaProjectFilter)?.nombre || 'proyecto seleccionado'}`}
+                ? t('agendaFilterFirstDesc')
+                : t('agendaShowingContext', { project: agendaProjectOptions.find((project) => project.id === agendaProjectFilter)?.nombre || '' })}
             </div>
           </div>
 
@@ -1075,7 +1129,7 @@ const AgendaPage = () => {
                     boxShadow: active ? `0 10px 22px ${filter.color}22` : 'none',
                   }}
                 >
-                  {filter.label}
+                  {t(filter.labelKey)}
                 </button>
               );
             })}
@@ -1086,15 +1140,15 @@ const AgendaPage = () => {
           <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eef2f7' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               <div>
-                <div style={{ fontSize: '0.68rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>
-                  Proyecto
+                <div style={{ fontSize: '0.68rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
+                  {t('agendaProjectFilterLabel')}
                 </div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', marginTop: '0.12rem' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--color-text-dim)', marginTop: '0.12rem' }}>
                   {agendaFilterType === 'proyecto'
-                    ? 'Escoge un proyecto para ver solo su rango en el calendario.'
+                    ? t('agendaChooseProjectRange')
                     : agendaFilterType === 'tarea'
-                      ? 'Escoge un proyecto para ver solo sus tareas.'
-                      : 'Este proyecto queda como contexto para los filtros.'}
+                      ? t('agendaChooseProjectTasks')
+                      : t('agendaProjectFilterContext')}
                 </div>
               </div>
               {agendaProjectFilter !== 'todos' && (
@@ -1102,9 +1156,9 @@ const AgendaPage = () => {
                   type="button"
                   onClick={() => setAgendaProjectFilter('todos')}
                   style={{
-                    border: '1px solid #e2e8f0',
-                    background: '#fff',
-                    color: '#64748b',
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text-muted)',
                     borderRadius: '999px',
                     padding: '0.45rem 0.75rem',
                     fontSize: '0.68rem',
@@ -1113,7 +1167,7 @@ const AgendaPage = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  Limpiar proyecto
+                  {t('agendaClearProject')}
                 </button>
               )}
             </div>
@@ -1125,9 +1179,9 @@ const AgendaPage = () => {
                 style={{
                   flexShrink: 0,
                   border: '1px solid',
-                  borderColor: agendaProjectFilter === 'todos' ? '#0f172a' : '#dbe3ef',
-                  background: agendaProjectFilter === 'todos' ? '#0f172a' : '#fff',
-                  color: agendaProjectFilter === 'todos' ? '#fff' : '#475569',
+                  borderColor: agendaProjectFilter === 'todos' ? 'var(--color-text)' : '#dbe3ef',
+                  background: agendaProjectFilter === 'todos' ? 'var(--color-text)' : 'var(--color-surface)',
+                  color: agendaProjectFilter === 'todos' ? 'var(--color-surface)' : 'var(--color-text-dim)',
                   borderRadius: '999px',
                   padding: '0.55rem 0.85rem',
                   fontSize: '0.72rem',
@@ -1136,7 +1190,7 @@ const AgendaPage = () => {
                   whiteSpace: 'nowrap',
                 }}
               >
-                Todos los proyectos
+                {t('agendaAllProjectsFilter')}
               </button>
               {agendaProjectOptions.map((project) => {
                 const active = agendaProjectFilter === project.id;
@@ -1149,8 +1203,8 @@ const AgendaPage = () => {
                       flexShrink: 0,
                       border: '1px solid',
                       borderColor: active ? '#2563eb' : '#dbe3ef',
-                      background: active ? '#eff6ff' : '#fff',
-                      color: active ? '#2563eb' : '#475569',
+                      background: active ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
+                      color: active ? 'var(--color-primary)' : 'var(--color-text-dim)',
                       borderRadius: '999px',
                       padding: '0.55rem 0.85rem',
                       fontSize: '0.72rem',
@@ -1237,9 +1291,9 @@ const AgendaPage = () => {
             key={eventoParaEditar?.id || 'nuevo'}
             evento={eventoParaEditar}
             prefill={prefillData}
-            onClose={() => setModalOpen(false)}
+            onClose={cerrarModalEvento}
             onSave={() => {
-              setModalOpen(false);
+              cerrarModalEvento();
               cargarDatos();
             }}
             onDelete={handleEliminar}
@@ -1269,24 +1323,24 @@ const AgendaSkeleton = () => (
   <div className="page-container" style={{ padding: '2rem' }}>
     <div className="animate-pulse" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '2rem', alignItems: 'center' }}>
       <div>
-        <div style={{ width: '280px', height: '40px', borderRadius: '10px', background: '#e2e8f0', marginBottom: '0.75rem' }} />
-        <div style={{ width: '180px', height: '18px', borderRadius: '8px', background: '#edf2f7' }} />
+        <div style={{ width: '280px', height: '40px', borderRadius: '10px', background: 'var(--color-border)', marginBottom: '0.75rem' }} />
+        <div style={{ width: '180px', height: '18px', borderRadius: '8px', background: 'var(--color-surface-3)' }} />
       </div>
       <div style={{ display: 'flex', gap: '0.75rem' }}>
-        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#e2e8f0' }} />
-        <div style={{ width: '180px', height: '44px', borderRadius: '12px', background: '#e2e8f0' }} />
+        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--color-border)' }} />
+        <div style={{ width: '180px', height: '44px', borderRadius: '12px', background: 'var(--color-border)' }} />
       </div>
     </div>
 
     <div className="card animate-pulse" style={{ padding: 0, borderRadius: '2rem', overflow: 'hidden', border: 'none', boxShadow: 'var(--shadow-xl)' }}>
       <div className="grid grid-cols-7">
         {Array.from({ length: 7 }).map((_, i) => (
-          <div key={`head-${i}`} style={{ height: '58px', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', borderRight: i < 6 ? '1px solid #f1f5f9' : 'none' }} />
+          <div key={`head-${i}`} style={{ height: '58px', background: 'var(--color-surface-3)', borderBottom: '1px solid var(--color-border-light)', borderRight: i < 6 ? '1px solid var(--color-border-light)' : 'none' }} />
         ))}
         {Array.from({ length: 35 }).map((_, i) => (
-          <div key={i} style={{ minHeight: '120px', padding: '0.75rem', background: '#fff', borderRight: (i + 1) % 7 ? '1px solid #f8fafc' : 'none', borderBottom: '1px solid #f8fafc' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#e2e8f0', marginBottom: '1.5rem' }} />
-            <div style={{ width: '70%', height: '10px', borderRadius: '999px', background: '#edf2f7', marginBottom: '0.5rem' }} />
+          <div key={i} style={{ minHeight: '120px', padding: '0.75rem', background: 'var(--color-surface)', borderRight: (i + 1) % 7 ? '1px solid var(--color-border-light)' : 'none', borderBottom: '1px solid var(--color-border-light)' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--color-border)', marginBottom: '1.5rem' }} />
+            <div style={{ width: '70%', height: '10px', borderRadius: '999px', background: 'var(--color-surface-3)', marginBottom: '0.5rem' }} />
             <div style={{ width: '46%', height: '10px', borderRadius: '999px', background: '#f1f5f9' }} />
           </div>
         ))}
@@ -1296,6 +1350,8 @@ const AgendaSkeleton = () => (
 );
 
 const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, onSelectEvent, onSelectDate, onMoveItem, onMoveGroup, ocultarBloquesProyecto = false }) => {
+  const { t, locale } = usePreferences();
+  const diasSemana = getDiasSemana(locale);
   const [expandedDay, setExpandedDay] = useState(null);
   const [activeTaskMenu, setActiveTaskMenu] = useState(null);
   const [movingTasks, setMovingTasks] = useState(false);
@@ -1339,7 +1395,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
 
   return (
     <div className="grid grid-cols-7 gap-2.5 lg:gap-4">
-      {DIAS_SEMANA.map((diaSemana) => (
+      {diasSemana.map((diaSemana) => (
         <div key={diaSemana} className="pb-1 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
           {isMobile ? diaSemana.charAt(0) : diaSemana}
         </div>
@@ -1377,34 +1433,34 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
         const todosLosItems = dia ? [
           ...(proyectosModal.length > 0 ? [{
             id: 'proyectos-group',
-            text: `${proyectosModal.length} Proyecto${proyectosModal.length > 1 ? 's' : ''}`,
+            text: `${proyectosModal.length} ${proyectosModal.length > 1 ? t('teamProjectPlural') : t('teamProjectSingular')}`,
             count: proyectosModal.length,
             color: '#2563eb',
-            bg: '#eaf1ff',
+            bg: 'rgba(37,99,235,0.10)',
             type: 'proyecto-group',
           }] : []),
           ...(tareasModal.length > 0 ? [{
             id: 'tareas-group',
-            text: `${tareasModal.length} Tarea${tareasModal.length > 1 ? 's' : ''}`,
+            text: `${tareasModal.length} ${tareasModal.length > 1 ? t('projectTaskPlural') : t('projectTaskSingular')}`,
             count: tareasModal.length,
             color: '#16a34a',
-            bg: '#dcfce7',
+            bg: 'rgba(22,163,74,0.10)',
             type: 'tarea-group',
           }] : []),
           ...(eventosModal.length > 0 ? [{
             id: 'eventos-group',
-            text: `${eventosModal.length} Evento${eventosModal.length > 1 ? 's' : ''}`,
+            text: `${eventosModal.length} ${eventosModal.length > 1 ? t('agendaEvents') : t('eventTypeEvent')}`,
             count: eventosModal.length,
             color: '#7c3aed',
-            bg: '#f3e8ff',
+            bg: 'rgba(124,58,237,0.10)',
             type: 'evento-group',
           }] : []),
           ...(reunionesModal.length > 0 ? [{
             id: 'reuniones-group',
-            text: `${reunionesModal.length} Reunion${reunionesModal.length > 1 ? 'es' : ''}`,
+            text: `${reunionesModal.length} ${reunionesModal.length > 1 ? t('agendaMeetings') : t('eventTypeMeeting')}`,
             count: reunionesModal.length,
             color: '#db2777',
-            bg: '#fce7f3',
+            bg: 'rgba(219,39,119,0.10)',
             type: 'reunion-group',
           }] : []),
         ] : [];
@@ -1459,8 +1515,8 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
             `}
             style={{
               background: dia
-                ? (!esLaboral ? 'rgba(248, 250, 252, 0.9)' : '#fff')
-                : 'rgba(248, 250, 252, 0.7)',
+                ? (!esLaboral ? 'var(--color-surface-3)' : 'var(--color-surface)')
+                : 'var(--color-surface-3)',
               boxShadow: esHoy
                 ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)'
                 : (diaProyectos.length ? 'inset 0 0 0 1px rgba(37, 99, 235, 0.05)' : undefined),
@@ -1541,7 +1597,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             title={item.text}
                           >
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</span>
-                            <span style={{ flexShrink: 0 }}>{item.type === 'proyecto-group' ? 'Ver mas' : 'Arrastrar'}</span>
+                            <span style={{ flexShrink: 0 }}>{item.type === 'proyecto-group' ? t('agendaSeeMore') : t('agendaDrag')}</span>
                           </div>
                         ))}
 
@@ -1564,7 +1620,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                               cursor: 'pointer',
                             }}
                           >
-                            +{ocultos} m&aacute;s
+                            {t('agendaMoreItems', { count: ocultos })}
                           </button>
                         )}
                       </>
@@ -1586,13 +1642,13 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
           }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
         >
-          <div style={{ width: '100%', maxWidth: '540px', maxHeight: '80vh', overflow: 'hidden', background: '#fff', borderRadius: '28px', boxShadow: '0 24px 70px rgba(15,23,42,0.22)' }}>
-            <div style={{ padding: '1.35rem 1.6rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', background: '#f8fafc' }}>
+          <div style={{ width: '100%', maxWidth: '540px', maxHeight: '80vh', overflow: 'hidden', background: 'var(--color-surface)', borderRadius: '28px', boxShadow: '0 24px 70px rgba(15,23,42,0.22)' }}>
+            <div style={{ padding: '1.35rem 1.6rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', background: 'var(--color-surface-3)' }}>
               <div>
-                <h4 style={{ fontSize: '1.08rem', fontWeight: '900', color: '#0f172a' }}>
-                  {expandedDay.date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+                <h4 style={{ fontSize: '1.08rem', fontWeight: '900', color: 'var(--color-text)' }}>
+                  {expandedDay.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
                 </h4>
-                <p style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: '800' }}>{expandedDay.items.length} elementos programados</p>
+                <p style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>{t('agendaScheduled', { count: expandedDay.items.length })}</p>
               </div>
               <button type="button" onClick={() => { setActiveTaskMenu(null); setExpandedDay(null); }} className="btn-icon-sm"><X size={16} /></button>
             </div>
@@ -1614,10 +1670,10 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                       setExpandedDay(null);
                       if (item.tipoVista !== 'tarea' && item.tipoVista !== 'proyecto') onSelectEvent(item);
                     }}
-                    style={{ width: '100%', textAlign: 'left', padding: '0.95rem 1rem', borderRadius: '16px', border: '1px solid #e2e8f0', background: '#fff', cursor: item.tipoVista === 'tarea' || item.tipoVista === 'proyecto' ? 'default' : 'pointer', position: 'relative' }}
+                    style={{ width: '100%', textAlign: 'left', padding: '0.95rem 1rem', borderRadius: '16px', border: '1px solid var(--color-border)', background: 'var(--color-surface)', cursor: item.tipoVista === 'tarea' || item.tipoVista === 'proyecto' ? 'default' : 'pointer', position: 'relative' }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', alignItems: 'flex-start' }}>
-                      <span style={{ fontWeight: '900', color: '#0f172a', lineHeight: 1.35, overflowWrap: 'anywhere', paddingRight: item.tipoVista === 'tarea' ? '0.5rem' : 0 }}>{item.tituloVista}</span>
+                      <span style={{ fontWeight: '900', color: 'var(--color-text)', lineHeight: 1.35, overflowWrap: 'anywhere', paddingRight: item.tipoVista === 'tarea' ? '0.5rem' : 0 }}>{item.tituloVista}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                         <span style={{ fontSize: '0.6rem', fontWeight: '900', textTransform: 'uppercase', color, background: `${color}14`, padding: '0.2rem 0.5rem', borderRadius: '999px' }}>{item.tipoVista}</span>
                         {(item.tipoVista === 'tarea' || item.tipoVista === 'evento' || item.tipoVista === 'reunion') && (
@@ -1629,25 +1685,25 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                             }}
                             disabled={movingTasks}
                             title="Mover solo este elemento"
-                            style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === item.id ? '#eff6ff' : '#fff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
+                            style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === item.id ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
                           >
                             <MoreHorizontal size={15} />
                           </button>
                         )}
                       </div>
                     </div>
-                    <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                       <span style={{ width: '7px', height: '7px', borderRadius: '999px', background: color }} />
-                      {item.proyecto?.nombre || (item.todoElDia ? 'Todo el dia' : `${formatHora(item.fechaInicio)} - ${formatHora(item.fechaFin || item.fechaInicio)}`)}
+                      {item.proyecto?.nombre || (item.todoElDia ? t('agendaAllDay') : `${formatHora(item.fechaInicio)} - ${formatHora(item.fechaFin || item.fechaInicio)}`)}
                     </div>
                     {(item.tipoVista === 'tarea' || item.tipoVista === 'evento' || item.tipoVista === 'reunion') && activeTaskMenu === item.id && (
                       <div
                         onClick={(ev) => ev.stopPropagation()}
-                        style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: '#fff', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
+                        style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: 'var(--color-surface)', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
                       >
-                        <button type="button" onClick={() => ejecutarMovimiento(item, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
-                        <button type="button" onClick={() => ejecutarMovimiento(item, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
-                        <button type="button" onClick={() => pedirMovimientoPersonalizadoItem(item)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
+                        <button type="button" onClick={() => ejecutarMovimiento(item, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
+                        <button type="button" onClick={() => ejecutarMovimiento(item, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
+                        <button type="button" onClick={() => pedirMovimientoPersonalizadoItem(item)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
                       </div>
                     )}
                   </div>
@@ -1662,6 +1718,8 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
 };
 
 const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, onSelectEvent, onSelectDate, ocultarBloquesProyecto = false }) => {
+  const { locale } = usePreferences();
+  const diasSemana = getDiasSemana(locale);
   const startOfWeek = useMemo(() => {
     const d = new Date(date);
     const day = d.getDay();
@@ -1714,7 +1772,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
 
           return (
             <div key={i} style={{ flex: 1, padding: '1rem', textAlign: 'center', borderRight: i < 6 ? '1px solid var(--color-border-light)' : 'none', background: headerBg, boxShadow: esHoy ? 'inset 0 -2px 0 rgba(37,99,235,0.35)' : 'none' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: '900', color: labelColor }}>{DIAS_SEMANA[i].toUpperCase()}</div>
+              <div style={{ fontSize: '0.7rem', fontWeight: '900', color: labelColor }}>{diasSemana[i]?.toUpperCase()}</div>
               <div style={{ width: '32px', height: '32px', margin: '0.4rem auto', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontSize: '1.1rem', fontWeight: '900', background: circleBg, color: circleColor }}>
                 {d.getDate()}
               </div>
@@ -2034,14 +2092,14 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
 
                   {evento.usuarioId !== currentUserId && (
                     <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem' }}>
-                      Organizado por: <b>{evento.creador?.nombre}</b>
+                      {t('agendaOrganizedBy')} <b>{evento.creador?.nombre}</b>
                     </div>
                   )}
 
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Clock size={12} />
                     {evento.todoElDia
-                      ? 'Todo el dia'
+                      ? t('agendaAllDay')
                       : `${formatHora(evento.fechaInicio)}${evento.fechaFin ? ` - ${formatHora(evento.fechaFin)}` : ''}`}
                   </div>
 
@@ -2093,6 +2151,4 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
 };
 
 export default AgendaPage;
-
-
 

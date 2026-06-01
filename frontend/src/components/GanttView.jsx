@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { usePreferences } from '../context/PreferencesContext';
 import {
   AlertTriangle,
   CalendarRange,
@@ -21,21 +22,21 @@ const AREA_COLORS = {
 
 const STATUS_CONF = {
   PENDIENTE: {
-    label: 'Por hacer',
+    labelKey: 'statusTodo',
     solid: '#94a3b8',
     soft: 'rgba(148,163,184,0.18)',
     glow: 'rgba(148,163,184,0.24)',
     icon: <Clock3 size={12} />,
   },
   EN_PROGRESO: {
-    label: 'En progreso',
+    labelKey: 'statusInProgress',
     solid: '#2563eb',
     soft: 'rgba(37,99,235,0.16)',
     glow: 'rgba(37,99,235,0.28)',
     icon: <Sparkles size={12} />,
   },
   HECHO: {
-    label: 'Hecho',
+    labelKey: 'statusDone',
     solid: '#16a34a',
     soft: 'rgba(22,163,74,0.16)',
     glow: 'rgba(22,163,74,0.24)',
@@ -44,16 +45,17 @@ const STATUS_CONF = {
 };
 
 const PRIORITY_CONF = {
-  BAJA: { label: 'Baja', solid: '#22c55e', soft: 'rgba(34,197,94,0.14)' },
-  MEDIA: { label: 'Media', solid: '#f59e0b', soft: 'rgba(245,158,11,0.14)' },
-  ALTA: { label: 'Alta', solid: '#ef4444', soft: 'rgba(239,68,68,0.14)' },
+  BAJA:  { labelKey: 'priorityLow',    solid: '#22c55e', soft: 'rgba(34,197,94,0.14)' },
+  MEDIA: { labelKey: 'priorityMedium', solid: '#f59e0b', soft: 'rgba(245,158,11,0.14)' },
+  ALTA:  { labelKey: 'priorityHigh',   solid: '#ef4444', soft: 'rgba(239,68,68,0.14)' },
 };
 
+const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
 const formatFecha = (value) =>
-  value ? new Date(value).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
+  value ? new Date(value).toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' }) : '—';
 
 const formatMes = (value) =>
-  new Date(value).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+  new Date(value).toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' });
 
 const startOfDay = (value) => {
   const date = new Date(value);
@@ -136,6 +138,7 @@ const Tooltip = ({ tarea, rect }) => {
 };
 
 const GanttView = ({ proyecto, tareas }) => {
+  const { t } = usePreferences();
   const [hoveredTask, setHoveredTask] = useState(null);
 
   const preparedTasks = useMemo(() => (
@@ -233,29 +236,29 @@ const GanttView = ({ proyecto, tareas }) => {
 
       <div
         style={{
-          background: 'linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(255,255,255,1) 18%)',
+          background: 'var(--color-surface)',
           borderRadius: '1.5rem',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--color-border)',
           overflow: 'hidden',
           boxShadow: '0 18px 40px rgba(15,23,42,0.08)',
         }}
       >
-        <div style={{ padding: '1.1rem 1.3rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ padding: '1.1rem 1.3rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: '0.75rem', fontWeight: '900', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#2563eb', marginBottom: '0.25rem' }}>
-              Lectura visual
+              {t('ganttVisualKey')}
             </div>
-            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#0f172a' }}>
-              Línea de tiempo con estado, prioridad y riesgo
+            <div style={{ fontSize: '1rem', fontWeight: '900', color: 'var(--color-text)' }}>
+              {t('ganttTimeline')}
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {[
-              { label: 'Total', value: metrics.total, color: '#0f172a', bg: '#f8fafc' },
-              { label: 'En progreso', value: metrics.enProgreso, color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-              { label: 'Hechas', value: metrics.hechas, color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
-              { label: 'Vencidas', value: metrics.vencidas, color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+              { label: t('ganttTotal'),      value: metrics.total,     color: 'var(--color-text)', bg: 'var(--color-surface-3)' },
+              { label: t('ganttInProgress'), value: metrics.enProgreso, color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
+              { label: t('ganttDone'),       value: metrics.hechas,     color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
+              { label: t('ganttOverdue'),    value: metrics.vencidas,   color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
             ].map((item) => (
               <div key={item.label} style={{ minWidth: '92px', padding: '0.55rem 0.75rem', borderRadius: '0.95rem', background: item.bg, color: item.color }}>
                 <div style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.82 }}>{item.label}</div>
@@ -265,22 +268,22 @@ const GanttView = ({ proyecto, tareas }) => {
           </div>
         </div>
 
-        <div style={{ padding: '0.9rem 1.3rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ padding: '0.9rem 1.3rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.76rem', fontWeight: '800', color: '#475569' }}>
             <Layers3 size={14} color="#2563eb" />
-            Estado de barra
+            {t('ganttBarStatus')}
           </div>
           {Object.entries(STATUS_CONF).map(([key, conf]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: '#64748b', fontWeight: '800' }}>
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
               <div style={{ width: '10px', height: '10px', borderRadius: '999px', background: conf.solid, boxShadow: `0 0 0 4px ${conf.soft}` }} />
-              {conf.label}
+              {t(conf.labelKey)}
             </div>
           ))}
-          <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }} />
+          <div style={{ width: '1px', height: '16px', background: 'var(--color-border)' }} />
           {Object.entries(PRIORITY_CONF).map(([key, conf]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: '#64748b', fontWeight: '800' }}>
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
               <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: conf.solid }} />
-              Prioridad {conf.label.toLowerCase()}
+              {t('projectPriority')} {t(conf.labelKey).toLowerCase()}
             </div>
           ))}
         </div>
@@ -292,17 +295,17 @@ const GanttView = ({ proyecto, tareas }) => {
                 style={{
                   width: `${NAME_WIDTH}px`,
                   padding: '1rem 1.2rem',
-                  borderRight: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  borderRight: '1px solid var(--color-border)',
+                  background: 'var(--color-surface-3)',
                   position: 'sticky',
                   left: 0,
                   zIndex: 30,
                 }}
               >
                 <div style={{ fontSize: '0.68rem', fontWeight: '900', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#94a3b8' }}>
-                  Tareas del proyecto
+                  {t('ganttProjectTasks')}
                 </div>
-                <div style={{ marginTop: '0.3rem', fontSize: '0.92rem', fontWeight: '900', color: '#0f172a' }}>{proyecto?.nombre}</div>
+                <div style={{ marginTop: '0.3rem', fontSize: '0.92rem', fontWeight: '900', color: 'var(--color-text)' }}>{proyecto?.nombre}</div>
               </div>
 
               <div className="flex-1">
@@ -318,7 +321,7 @@ const GanttView = ({ proyecto, tareas }) => {
                         fontWeight: '900',
                         color: '#2563eb',
                         textTransform: 'uppercase',
-                        borderRight: '1px solid #e2e8f0',
+                        borderRight: '1px solid var(--color-border)',
                       }}
                     >
                       {month.label}
@@ -388,7 +391,7 @@ const GanttView = ({ proyecto, tareas }) => {
                       style={{
                         width: `${NAME_WIDTH}px`,
                         padding: '0.95rem 1.2rem',
-                        borderRight: '1px solid #e2e8f0',
+                        borderRight: '1px solid var(--color-border)',
                         background: 'rgba(255,255,255,0.94)',
                         position: 'sticky',
                         left: 0,
@@ -397,21 +400,21 @@ const GanttView = ({ proyecto, tareas }) => {
                     >
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.2, textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none', opacity: tarea.estado === 'HECHO' ? 0.62 : 1 }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: '900', color: 'var(--color-text)', lineHeight: 1.2, textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none', opacity: tarea.estado === 'HECHO' ? 0.62 : 1 }}>
                             {tarea.titulo}
                           </div>
                           <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: status.soft, color: status.solid, fontSize: '0.68rem', fontWeight: '900' }}>
                               {status.icon}
-                              {status.label}
+                              {t(status.labelKey)}
                             </span>
                             <span style={{ padding: '0.22rem 0.45rem', borderRadius: '999px', background: priority.soft, color: priority.solid, fontSize: '0.68rem', fontWeight: '900' }}>
-                              {priority.label}
+                              {t(priority.labelKey)}
                             </span>
                             {tarea.overdue && (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', fontSize: '0.68rem', fontWeight: '900' }}>
                                 <AlertTriangle size={11} />
-                                Vencida
+                                {t('taskOverdue')}
                               </span>
                             )}
                           </div>
@@ -420,17 +423,17 @@ const GanttView = ({ proyecto, tareas }) => {
                         <div style={{ width: '10px', height: '10px', borderRadius: '999px', background: area.solid, boxShadow: `0 0 0 5px ${area.soft}`, marginTop: '0.25rem', flexShrink: 0 }} />
                       </div>
 
-                      <div style={{ marginTop: '0.7rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.45rem 0.75rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '800' }}>
+                      <div style={{ marginTop: '0.7rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.45rem 0.75rem', fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
                           <User size={12} color={area.solid} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.asignado?.nombre || 'Sin asignar'}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.asignado?.nombre || t('ganttUnassigned')}</span>
                         </span>
                         <span>{tarea.durationDays} día{tarea.durationDays === 1 ? '' : 's'}</span>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                           <Flag size={12} color={priority.solid} />
                           {formatFecha(tarea.end)}
                         </span>
-                        <span>{tarea.asignado?.area || 'Área general'}</span>
+                        <span>{tarea.asignado?.area || t('ganttGeneralArea')}</span>
                       </div>
                     </div>
 
@@ -505,9 +508,9 @@ const GanttView = ({ proyecto, tareas }) => {
         </div>
       </div>
 
-      <div style={{ marginTop: '0.9rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', fontSize: '0.76rem', color: '#64748b', fontWeight: '800' }}>
-        <span>Mostrando {preparedTasks.length} tarea{preparedTasks.length === 1 ? '' : 's'} en un rango de {days.length} días.</span>
-        <span>{metrics.sinAsignar} sin asignar · {metrics.vencidas} vencida{metrics.vencidas === 1 ? '' : 's'}</span>
+      <div style={{ marginTop: '0.9rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', fontSize: '0.76rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
+        <span>{t('ganttShowingTasks', { count: preparedTasks.length, tasks: preparedTasks.length === 1 ? t('projectTaskSingular') : t('projectTaskPlural'), days: days.length })}</span>
+        <span>{t('ganttUnassignedCount', { count: metrics.sinAsignar })} · {metrics.vencidas === 1 ? t('ganttOverdueCount', { count: metrics.vencidas }) : t('ganttOverdueCountPlural', { count: metrics.vencidas })}</span>
       </div>
     </div>
   );

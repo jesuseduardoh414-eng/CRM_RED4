@@ -64,6 +64,147 @@ const resumenPorProyecto = (...grupos) => {
   return [...proyectos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
 };
 
+const perfilUsuarioSelect = {
+  id: true,
+  nombre: true,
+  email: true,
+  telefono: true,
+  puesto: true,
+  biografia: true,
+  fotoPerfilUrl: true,
+  area: true,
+  rol: true,
+  estado: true,
+  creadoEn: true,
+  googleCalendarEmail: true,
+  proyectosMiembro: {
+    select: {
+      id: true,
+      nombre: true,
+      estado: true,
+      area: true,
+      fechaInicio: true,
+      fechaFin: true,
+    },
+    orderBy: { nombre: 'asc' }
+  },
+  proyectosCreados: {
+    select: {
+      id: true,
+      nombre: true,
+      estado: true,
+      area: true,
+      fechaInicio: true,
+      fechaFin: true,
+    },
+    orderBy: { nombre: 'asc' }
+  },
+};
+
+const perfilUsuarioSelectBasico = {
+  id: true,
+  nombre: true,
+  email: true,
+  area: true,
+  rol: true,
+  estado: true,
+  creadoEn: true,
+  googleCalendarEmail: true,
+  proyectosMiembro: {
+    select: {
+      id: true,
+      nombre: true,
+      estado: true,
+      area: true,
+      fechaInicio: true,
+      fechaFin: true,
+    },
+    orderBy: { nombre: 'asc' }
+  },
+  proyectosCreados: {
+    select: {
+      id: true,
+      nombre: true,
+      estado: true,
+      area: true,
+      fechaInicio: true,
+      fechaFin: true,
+    },
+    orderBy: { nombre: 'asc' }
+  },
+};
+
+const leerExtrasPerfil = async (usuarioId) => {
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT
+        telefono,
+        puesto,
+        biografia,
+        foto_perfil_url AS "fotoPerfilUrl"
+      FROM usuarios
+      WHERE id = ${usuarioId}
+      LIMIT 1
+    `;
+    return rows?.[0] || {};
+  } catch (_error) {
+    return {};
+  }
+};
+
+const actualizarExtrasPerfil = async (usuarioId, extras) => {
+  try {
+    await prisma.$executeRaw`
+      UPDATE usuarios
+      SET
+        telefono = ${extras.telefono ?? null},
+        puesto = ${extras.puesto ?? null},
+        biografia = ${extras.biografia ?? null},
+        foto_perfil_url = ${extras.fotoPerfilUrl ?? null}
+      WHERE id = ${usuarioId}
+    `;
+    return true;
+  } catch (error) {
+    console.error('[usuarios.actualizarExtrasPerfil]', error);
+    return false;
+  }
+};
+
+const completarPerfilBasico = (usuario) => ({
+  ...usuario,
+  telefono: usuario.telefono ?? null,
+  puesto: usuario.puesto ?? null,
+  biografia: usuario.biografia ?? null,
+  fotoPerfilUrl: usuario.fotoPerfilUrl ?? null,
+});
+
+const obtenerPerfilUsuarioSeguro = async (usuarioId) => {
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: perfilUsuarioSelect,
+    });
+    return usuario ? completarPerfilBasico(usuario) : null;
+  } catch (_error) {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: perfilUsuarioSelectBasico,
+    });
+    if (!usuario) return null;
+    const extras = await leerExtrasPerfil(usuarioId);
+    return completarPerfilBasico({ ...usuario, ...extras });
+  }
+};
+
+const normalizarPerfil = (usuario, extra = {}) => ({
+  ...usuario,
+  resumen: {
+    proyectosActivos: usuario.proyectosMiembro.filter((proyecto) => proyecto.estado === 'ACTIVO').length,
+    proyectosCreados: usuario.proyectosCreados.length,
+    ...extra,
+  },
+});
+
 const obtenerActividadUsuario = async (usuarioId) => {
   // Esta función se mantiene para compatibilidad con el endpoint individual /actividad
   const ahora = new Date();
@@ -151,6 +292,7 @@ const listar = async (req, res) => {
         id:     true,
         nombre: true,
         email:  true,
+        fotoPerfilUrl: true,
         area:   true,
         rol:    true,
         creadoEn: true,
@@ -245,6 +387,7 @@ const listarParaProyectos = async (_req, res) => {
         id: true,
         nombre: true,
         email: true,
+        fotoPerfilUrl: true,
         area: true,
         rol: true,
         estado: true
@@ -255,6 +398,153 @@ const listarParaProyectos = async (_req, res) => {
   } catch (error) {
     console.error('[usuarios.listarParaProyectos]', error);
     return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const obtenerPerfil = async (req, res) => {
+  try {
+    const [usuario, tareasAsignadas, tareasCreadas, notificacionesPendientes] = await Promise.all([
+      obtenerPerfilUsuarioSeguro(req.usuario.id),
+      prisma.tarea.count({ where: { asignadoId: req.usuario.id } }),
+      prisma.tarea.count({ where: { creadorId: req.usuario.id } }),
+      prisma.notificacion.count({ where: { usuarioId: req.usuario.id, leida: false } }),
+    ]);
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    return res.json({
+      perfil: normalizarPerfil(usuario, {
+        tareasAsignadas,
+        tareasCreadas,
+        notificacionesPendientes,
+      }),
+    });
+  } catch (error) {
+    console.error('[usuarios.obtenerPerfil]', error);
+    return res.status(500).json({ error: 'Error al obtener el perfil' });
+  }
+};
+
+const actualizarPerfil = async (req, res) => {
+  const { nombre, email, telefono, puesto, biografia, removeFoto } = req.body;
+
+  try {
+    const emailNormalizado = email?.toLowerCase().trim();
+    if (!nombre || !emailNormalizado) {
+      return res.status(400).json({ error: 'Nombre y correo son obligatorios' });
+    }
+
+    const emailExistente = await prisma.usuario.findFirst({
+      where: {
+        email: emailNormalizado,
+        id: { not: req.usuario.id },
+      },
+      select: { id: true },
+    });
+
+    if (emailExistente) {
+      return res.status(409).json({ error: 'Ese correo ya está en uso' });
+    }
+
+    const data = {
+      nombre: nombre.trim(),
+      email: emailNormalizado,
+    };
+
+    try {
+      data.telefono = telefono?.trim() || null;
+      data.puesto = puesto?.trim() || null;
+      data.biografia = biografia?.trim() || null;
+
+      if (removeFoto === 'true') {
+        data.fotoPerfilUrl = null;
+      }
+
+      if (req.file?.filename) {
+        data.fotoPerfilUrl = `/uploads/${req.file.filename}`;
+      }
+    } catch (_error) {
+      // Compatibilidad temporal mientras el cliente Prisma y la BD no tengan los nuevos campos.
+    }
+
+    let usuario;
+    let guardadoParcial = false;
+    let fotoPerfilObjetivo;
+    try {
+      usuario = await prisma.usuario.update({
+        where: { id: req.usuario.id },
+        data,
+        select: perfilUsuarioSelect,
+      });
+      fotoPerfilObjetivo = usuario.fotoPerfilUrl ?? null;
+    } catch (_error) {
+      const fotoPerfilUrl = req.file?.filename
+        ? `/uploads/${req.file.filename}`
+        : (removeFoto === 'true' ? null : undefined);
+      fotoPerfilObjetivo = fotoPerfilUrl;
+
+      usuario = await prisma.usuario.update({
+        where: { id: req.usuario.id },
+        data: {
+          nombre: data.nombre,
+          email: data.email,
+        },
+        select: perfilUsuarioSelectBasico,
+      });
+
+      const extrasActualizados = await actualizarExtrasPerfil(req.usuario.id, {
+        telefono: telefono?.trim() || null,
+        puesto: puesto?.trim() || null,
+        biografia: biografia?.trim() || null,
+        fotoPerfilUrl,
+      });
+
+      const extras = await leerExtrasPerfil(req.usuario.id);
+      usuario = { ...usuario, ...extras };
+
+      guardadoParcial = !extrasActualizados;
+    }
+
+    const perfilFinal = completarPerfilBasico(usuario);
+    const telefonoObjetivo = telefono?.trim() || null;
+    const puestoObjetivo = puesto?.trim() || null;
+    const biografiaObjetivo = biografia?.trim() || null;
+    const fotoEsperada = fotoPerfilObjetivo === undefined ? perfilFinal.fotoPerfilUrl ?? null : fotoPerfilObjetivo;
+
+    const perfilIncompleto = (
+      perfilFinal.telefono !== telefonoObjetivo ||
+      perfilFinal.puesto !== puestoObjetivo ||
+      perfilFinal.biografia !== biografiaObjetivo ||
+      perfilFinal.fotoPerfilUrl !== fotoEsperada
+    );
+
+    if (guardadoParcial || perfilIncompleto) {
+      return res.status(500).json({
+        error: 'No se pudieron guardar todos los datos del perfil. Reinicia el backend y verifica que la migracion del perfil este aplicada.',
+      });
+    }
+
+    const [tareasAsignadas, tareasCreadas, notificacionesPendientes] = await Promise.all([
+      prisma.tarea.count({ where: { asignadoId: req.usuario.id } }),
+      prisma.tarea.count({ where: { creadorId: req.usuario.id } }),
+      prisma.notificacion.count({ where: { usuarioId: req.usuario.id, leida: false } }),
+    ]);
+
+    cacheUsuarios = null;
+
+    return res.json({
+      mensaje: 'Perfil actualizado',
+      perfil: normalizarPerfil(perfilFinal, {
+        tareasAsignadas,
+        tareasCreadas,
+        notificacionesPendientes,
+      }),
+    });
+  } catch (error) {
+    console.error('[usuarios.actualizarPerfil]', error);
+    return res.status(500).json({ error: 'Error al actualizar el perfil' });
   }
 };
 
@@ -504,4 +794,4 @@ const actividad = async (req, res) => {
   }
 };
 
-module.exports = { listar, listarParaProyectos, crear, editar, eliminar, toggleEstado, actividad };
+module.exports = { listar, listarParaProyectos, obtenerPerfil, actualizarPerfil, crear, editar, eliminar, toggleEstado, actividad };

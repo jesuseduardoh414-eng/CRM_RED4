@@ -12,6 +12,10 @@ model Usuario {
   nombre                   String
   email                    String         @unique
   password                 String
+  telefono                 String?
+  puesto                   String?
+  biografia                String?
+  fotoPerfilUrl            String?        @map("foto_perfil_url")
   area                     Area
   rol                      Rol            @default(MIEMBRO)
   creadoEn                 DateTime       @default(now())
@@ -78,6 +82,7 @@ model Proyecto {
   actividades LogActividad[]
   creador     Usuario        @relation("CreadorProyecto", fields: [creadorId], references: [id])
   tareas      Tarea[]
+  notificaciones Notificacion[]
   miembros    Usuario[]      @relation("ProyectoMiembro")
   eventos     Evento[]
   plantillasBase PlantillaProyecto[] @relation("ProyectoFuentePlantillas")
@@ -140,6 +145,7 @@ model Tarea {
   dependeDe   Tarea?       @relation("Dependencia", fields: [dependeDeId], references: [id])
   bloqueaA    Tarea[]      @relation("Dependencia")
   proyecto    Proyecto     @relation(fields: [proyectoId], references: [id])
+  notificaciones Notificacion[]
 
   @@index([asignadoId])
   @@index([creadorId])
@@ -149,14 +155,20 @@ model Tarea {
 }
 
 model Notificacion {
-  id        Int      @id @default(autoincrement())
-  mensaje   String
-  tipo      String
-  leida     Boolean  @default(false)
-  creadaEn  DateTime @default(now())
-  usuarioId Int
-  tareaId   Int?
-  usuario   Usuario  @relation("DestinatarioNotificacion", fields: [usuarioId], references: [id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  mensaje    String
+  tipo       String
+  leida      Boolean  @default(false)
+  creadaEn   DateTime @default(now())
+  usuarioId  Int
+  tareaId    Int?
+  proyectoId Int?
+  eventoId   String?  @db.Uuid
+  actorNombre String?
+  usuario    Usuario  @relation("DestinatarioNotificacion", fields: [usuarioId], references: [id], onDelete: Cascade)
+  tarea      Tarea?   @relation(fields: [tareaId], references: [id], onDelete: SetNull)
+  proyecto   Proyecto? @relation(fields: [proyectoId], references: [id], onDelete: SetNull)
+  evento     Evento?  @relation(fields: [eventoId], references: [id], onDelete: SetNull)
 
   @@map("notificaciones")
 }
@@ -200,8 +212,10 @@ model Adjunto {
   usuarioId  Int
   tareaId    Int?
   proyectoId Int?
+  eventoId   String?   @db.Uuid
   proyecto   Proyecto? @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
   tarea      Tarea?    @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+  evento     Evento?   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
   usuario    Usuario   @relation("AutorAdjunto", fields: [usuarioId], references: [id])
 
   @@map("adjuntos")
@@ -234,6 +248,8 @@ model Evento {
   creadoPorId    Int?     @map("creado_por_id")
   creador        Usuario?  @relation("EventosCreados", fields: [creadoPorId], references: [id], onDelete: SetNull)
   invitados         EventoInvitado[]
+  adjuntos          Adjunto[]
+  notificaciones    Notificacion[]
 
   // Recurrencia
   esRecurrente      Boolean   @default(false) @map("es_recurrente")

@@ -1,10 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  // Escanear todos los archivos React para purgar clases no usadas
   content: [
     './index.html',
     './src/**/*.{js,jsx}',
   ],
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {},
   },

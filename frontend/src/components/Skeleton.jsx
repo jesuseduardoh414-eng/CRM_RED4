@@ -79,9 +79,9 @@ export const PageSkeleton = ({ cards = 3, showSidebar = true }) => (
 );
 
 export const AuthSkeleton = ({ compact = false }) => (
-  <div style={{ minHeight: compact ? '320px' : '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', background: compact ? 'transparent' : '#f8fafc' }}>
+  <div style={{ minHeight: compact ? '320px' : '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', background: compact ? 'transparent' : 'var(--color-bg-base)' }}>
     <style>{`@keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
-    <div style={{ width: '100%', maxWidth: compact ? '440px' : '520px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '28px', padding: compact ? '2rem' : '2.5rem', boxShadow: '0 20px 45px -12px rgba(15,23,42,0.08)' }}>
+    <div style={{ width: '100%', maxWidth: compact ? '440px' : '520px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '28px', padding: compact ? '2rem' : '2.5rem', boxShadow: '0 20px 45px -12px rgba(15,23,42,0.08)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
         <SkeletonBlock width="72px" height={72} radius={24} />
         <SkeletonBlock width="240px" height={26} radius={14} />
