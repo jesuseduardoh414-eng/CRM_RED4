@@ -351,15 +351,40 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
     scrollRestoreRef.current = Object.keys(snapshot).length > 0 ? snapshot : null;
   };
 
+  const aplicarMovimientoOptimista = (tareaActual, nuevoEstado) => {
+    if (!tareaActual || tareaActual.estado === nuevoEstado) return;
+
+    setOptimisticMoves((prev) => ({
+      ...prev,
+      [Number(tareaActual.id)]: {
+        previousEstado: tareaActual.estado,
+        estado: nuevoEstado,
+        completadoEn: nuevoEstado === 'HECHO' ? new Date().toISOString() : null,
+      },
+    }));
+
+    setLimites((prev) => ({
+      ...prev,
+      [nuevoEstado]: Math.max(prev[nuevoEstado], tareasConEstadoLocal.filter((item) => item.estado === nuevoEstado).length + 1),
+    }));
+  };
+
   const handleCambiarEstadoKanban = async (id, nuevoEstado) => {
     const tareaActual = tareasConEstadoLocal.find(x => x.id === Number(id));
     if (!tareaActual || tareaActual.estado === nuevoEstado) return;
 
+    aplicarMovimientoOptimista(tareaActual, nuevoEstado);
     registrarSnapshotScroll(tareaActual.estado, nuevoEstado);
     scrollFocusRef.current = nuevoEstado === 'HECHO'
       ? { column: 'HECHO', behavior: 'top' }
       : null;
-    await onCambiarEstado(Number(id), nuevoEstado);
+    setActualizando(Number(id));
+
+    try {
+      await onCambiarEstado(Number(id), nuevoEstado);
+    } finally {
+      setActualizando(null);
+    }
   };
 
   const handleDrop = async (e, colKey) => {
@@ -367,24 +392,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
     if (!id) return;
     const t = tareasConEstadoLocal.find(x => x.id === Number(id));
     if (t && t.estado !== colKey) {
-      setOptimisticMoves((prev) => ({
-        ...prev,
-        [Number(id)]: {
-          previousEstado: t.estado,
-          estado: colKey,
-          completadoEn: colKey === 'HECHO' ? new Date().toISOString() : null,
-        },
-      }));
-      setLimites((prev) => ({
-        ...prev,
-        [colKey]: Math.max(prev[colKey], (tareasConEstadoLocal.filter((item) => item.estado === colKey).length || 0) + 1),
-      }));
-      setActualizando(Number(id));
-      try {
-        await handleCambiarEstadoKanban(Number(id), colKey);
-      } finally {
-        setActualizando(null);
-      }
+      await handleCambiarEstadoKanban(Number(id), colKey);
     }
     dragId.current = null;
   };
