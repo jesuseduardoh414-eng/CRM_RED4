@@ -225,11 +225,21 @@ button {
    Many components use Tailwind light-mode classes directly. These rules remap
    them to the CSS-variable palette when data-theme="dark" is set on <html>. */
 [data-theme="dark"] .bg-white { background-color: var(--color-surface) !important; }
+[data-theme="dark"] .bg-white\/50 { background-color: color-mix(in srgb, var(--color-surface) 50%, transparent) !important; }
+[data-theme="dark"] .bg-white\/80 { background-color: color-mix(in srgb, var(--color-surface) 80%, transparent) !important; }
+[data-theme="dark"] .bg-white\/10 { background-color: color-mix(in srgb, var(--color-surface) 10%, transparent) !important; }
 [data-theme="dark"] .bg-slate-50 { background-color: var(--color-surface-3) !important; }
+[data-theme="dark"] .bg-slate-50\/50 { background-color: color-mix(in srgb, var(--color-surface-3) 50%, transparent) !important; }
+[data-theme="dark"] .bg-slate-50\/60 { background-color: color-mix(in srgb, var(--color-surface-3) 60%, transparent) !important; }
+[data-theme="dark"] .bg-slate-50\/70 { background-color: color-mix(in srgb, var(--color-surface-3) 70%, transparent) !important; }
 [data-theme="dark"] .bg-slate-100 { background-color: var(--color-surface-3) !important; }
 [data-theme="dark"] .bg-slate-200 { background-color: var(--color-border) !important; }
+[data-theme="dark"] .bg-slate-800 { background-color: var(--color-surface-3) !important; }
+[data-theme="dark"] .bg-slate-900 { background-color: var(--color-sidebar) !important; }
 [data-theme="dark"] .bg-gray-50 { background-color: var(--color-surface-3) !important; }
 [data-theme="dark"] .bg-gray-100 { background-color: var(--color-surface-3) !important; }
+[data-theme="dark"] .bg-gray-200 { background-color: var(--color-border) !important; }
+[data-theme="dark"] .bg-gray-900 { background-color: var(--color-sidebar) !important; }
 
 [data-theme="dark"] .text-black { color: var(--color-text) !important; }
 [data-theme="dark"] .text-slate-900,
@@ -238,13 +248,16 @@ button {
 [data-theme="dark"] .text-slate-600 { color: var(--color-text-dim) !important; }
 [data-theme="dark"] .text-slate-500,
 [data-theme="dark"] .text-slate-400,
-[data-theme="dark"] .text-slate-300 { color: var(--color-text-muted) !important; }
+[data-theme="dark"] .text-slate-300,
+[data-theme="dark"] .text-slate-200 { color: var(--color-text-muted) !important; }
 [data-theme="dark"] .text-gray-900,
 [data-theme="dark"] .text-gray-800 { color: var(--color-text) !important; }
 [data-theme="dark"] .text-gray-700,
 [data-theme="dark"] .text-gray-600 { color: var(--color-text-dim) !important; }
 [data-theme="dark"] .text-gray-500,
-[data-theme="dark"] .text-gray-400 { color: var(--color-text-muted) !important; }
+[data-theme="dark"] .text-gray-400,
+[data-theme="dark"] .text-gray-300 { color: var(--color-text-muted) !important; }
+[data-theme="dark"] .text-white { color: #f8fbff !important; }
 
 [data-theme="dark"] .border-slate-50,
 [data-theme="dark"] .border-slate-100 { border-color: var(--color-border-light) !important; }
@@ -252,8 +265,20 @@ button {
 [data-theme="dark"] .border-slate-300 { border-color: var(--color-border) !important; }
 [data-theme="dark"] .border-gray-200,
 [data-theme="dark"] .border-gray-300 { border-color: var(--color-border) !important; }
+[data-theme="dark"] .border-white { border-color: var(--color-border-light) !important; }
 
 [data-theme="dark"] .divide-slate-200 > * + * { border-color: var(--color-border) !important; }
 
 [data-theme="dark"] .shadow-slate-200\/50,
 [data-theme="dark"] .shadow-slate-100 { box-shadow: var(--shadow-md) !important; }
+[data-theme="dark"] .shadow-sm,
+[data-theme="dark"] .shadow-lg,
+[data-theme="dark"] .shadow-xl { box-shadow: var(--shadow-md) !important; }
+
+[data-theme="dark"] .hover\:bg-white:hover { background-color: var(--color-surface) !important; }
+[data-theme="dark"] .hover\:bg-slate-50:hover { background-color: var(--color-surface-3) !important; }
+[data-theme="dark"] .hover\:bg-slate-100:hover { background-color: var(--color-surface-3) !important; }
+[data-theme="dark"] .hover\:text-slate-600:hover,
+[data-theme="dark"] .hover\:text-slate-700:hover { color: var(--color-text) !important; }
+[data-theme="dark"] .hover\:border-slate-300:hover,
+[data-theme="dark"] .hover\:border-slate-400:hover { border-color: var(--color-primary-light) !important; }

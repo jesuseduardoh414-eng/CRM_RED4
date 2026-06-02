@@ -1923,6 +1923,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
 };
 
 const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUserId, isMobile, onSelectEvent, onSelectDate, onEliminar, ocultarBloquesProyecto = false }) => {
+  const { t, locale } = usePreferences();
   const { inicio: hStart, fin: hEnd } = getRangoHorasVisible(configLaboral, eventos, [date]);
   const horas = getHoras(hStart, hEnd);
   const { esLaboral, diaEspecial } = getEstadoLaboral(date, configLaboral, diasEspeciales);
@@ -2035,7 +2036,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                   {evento.titulo}
                 </div>
                 <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                  {formatHora(start)} - {formatHora(end)}
+                  {formatHora(start, locale)} - {formatHora(end, locale)}
                 </div>
               </div>
             );
@@ -2049,7 +2050,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
             {date.getDate()}
           </div>
           <div>
-            <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{formatFechaLarga(date)}</div>
+            <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{formatFechaLarga(date, locale)}</div>
             <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>
               {esLaboral ? 'DIA LABORAL' : diaEspecial?.descripcion || 'DIA DE DESCANSO'}
             </div>
@@ -2100,7 +2101,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                     <Clock size={12} />
                     {evento.todoElDia
                       ? t('agendaAllDay')
-                      : `${formatHora(evento.fechaInicio)}${evento.fechaFin ? ` - ${formatHora(evento.fechaFin)}` : ''}`}
+                      : `${formatHora(evento.fechaInicio, locale)}${evento.fechaFin ? ` - ${formatHora(evento.fechaFin, locale)}` : ''}`}
                   </div>
 
                   {evento.descripcion && (
@@ -2151,4 +2152,3 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
 };
 
 export default AgendaPage;
-
