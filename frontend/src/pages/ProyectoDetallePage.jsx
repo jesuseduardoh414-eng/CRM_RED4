@@ -360,11 +360,11 @@ const ProyectoDetallePage = () => {
 
   const tareasListaFiltradas = useMemo(() => sortTareasLista(tareasFiltradasAvanzadas), [tareasFiltradasAvanzadas]);
 
-  const handleEliminar = async (t) => {
-    if (!window.confirm(t('taskDeleteConfirm', { name: t.titulo }))) return;
+  const handleEliminar = async (tarea) => {
+    if (!window.confirm(t('taskDeleteConfirm', { name: tarea.titulo }))) return;
     try {
-      await tareasService.eliminar(t.id);
-      setTareas(prev => prev.filter(x => x.id !== t.id));
+      await tareasService.eliminar(tarea.id);
+      setTareas(prev => prev.filter(x => x.id !== tarea.id));
       showToast(t('taskDeleted'));
     } catch (err) { showToast(err.message, 'error'); }
   };
