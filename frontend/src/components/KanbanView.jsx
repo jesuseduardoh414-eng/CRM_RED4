@@ -92,6 +92,14 @@ const getScrollSnapshot = (el, count) => {
   };
 };
 
+const sortKanbanColumnTasks = (tareas = [], columna) => {
+  if (columna !== 'HECHO') return tareas;
+
+  return [...tareas].sort((a, b) => {
+    return new Date(b.completadoEn || b.creadoEn || 0).getTime() - new Date(a.completadoEn || a.creadoEn || 0).getTime();
+  });
+};
+
 // ── Tarjeta Kanban (Material Style) ──────────────────────────────────────────
 const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart }) => {
   const { t } = usePreferences();
@@ -409,9 +417,18 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
     : tareasConEstadoLocal;
 
   const tareasPorColumna = useMemo(() => ({
-    PENDIENTE: tareasFiltradas.filter(t => t.estado === 'PENDIENTE'),
-    EN_PROGRESO: tareasFiltradas.filter(t => t.estado === 'EN_PROGRESO'),
-    HECHO: tareasFiltradas.filter(t => t.estado === 'HECHO'),
+    PENDIENTE: sortKanbanColumnTasks(
+      tareasFiltradas.filter(t => t.estado === 'PENDIENTE'),
+      'PENDIENTE'
+    ),
+    EN_PROGRESO: sortKanbanColumnTasks(
+      tareasFiltradas.filter(t => t.estado === 'EN_PROGRESO'),
+      'EN_PROGRESO'
+    ),
+    HECHO: sortKanbanColumnTasks(
+      tareasFiltradas.filter(t => t.estado === 'HECHO'),
+      'HECHO'
+    ),
   }), [tareasFiltradas]);
 
   useLayoutEffect(() => {
