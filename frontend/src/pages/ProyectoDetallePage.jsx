@@ -14,6 +14,7 @@ import { PageSkeleton } from '../components/Skeleton';
 import ModalImportar from '../components/ModalImportar';
 import RangeDatePicker from '../components/RangeDatePicker';
 import TaskAttachments from '../components/TaskAttachments';
+import TaskComments from '../components/TaskComments';
 import { sortTareas, sortTareasLista } from '../utils/sorters';
 import { 
   Target, 
@@ -422,6 +423,50 @@ const ProyectoDetallePage = () => {
     } catch (err) { showToast(err.message, 'error'); }
   };
 
+  const handleGuardarTarea = useCallback(({ tarea, creada = false } = {}) => {
+    if (!tarea) {
+      cerrarModalTarea();
+      return;
+    }
+
+    setTareas((prev) => {
+      const existe = prev.some((item) => item.id === tarea.id);
+      const siguientes = existe
+        ? prev.map((item) => (item.id === tarea.id ? { ...item, ...tarea } : item))
+        : [tarea, ...prev];
+
+      return sortTareas(siguientes);
+    });
+
+    setTareaEditando((prev) => (prev?.id === tarea.id ? { ...prev, ...tarea } : prev));
+    cerrarModalTarea();
+    showToast(creada ? t('taskCreated') : t('taskUpdated'));
+  }, [cerrarModalTarea, showToast, t]);
+
+  const handleSincronizarTarea = useCallback((tareaId, cambios = {}) => {
+    if (!tareaId || !cambios || Object.keys(cambios).length === 0) return;
+
+    setTareas((prev) => sortTareas(
+      prev.map((tarea) => (tarea.id === tareaId ? { ...tarea, ...cambios } : tarea))
+    ));
+    setTareaEditando((prev) => (prev?.id === tareaId ? { ...prev, ...cambios } : prev));
+  }, []);
+
+  const handleImportado = useCallback((resultado = {}) => {
+    const tareasImportadas = Array.isArray(resultado.tareas) ? resultado.tareas : [];
+
+    if (tareasImportadas.length > 0) {
+      setTareas((prev) => {
+        const existentes = new Set(prev.map((tarea) => tarea.id));
+        const nuevas = tareasImportadas.filter((tarea) => !existentes.has(tarea.id));
+        return sortTareas([...prev, ...nuevas]);
+      });
+    }
+
+    setModalImportar(false);
+    showToast(t('taskImportSuccess', { count: resultado.creadas || tareasImportadas.length || 0 }));
+  }, [showToast, t]);
+
   const handleExportar = (tipo) => {
     try {
       tareasService.exportarProyecto(id, tipo);
@@ -662,7 +707,8 @@ const ProyectoDetallePage = () => {
           usuarioActual={usuario}
           usuarios={usuarios} 
           onClose={cerrarModalTarea} 
-          onGuardar={() => { cerrarModalTarea(); cargar(); }} 
+          onGuardar={handleGuardarTarea} 
+          onTareaMutada={handleSincronizarTarea}
           onEliminar={handleEliminar}
         />
       )}
@@ -672,7 +718,7 @@ const ProyectoDetallePage = () => {
           usuarios={usuarios} 
           usuarioActual={usuario}
           onClose={() => setModalImportar(false)} 
-          onImportado={() => { setModalImportar(false); cargar(); }} 
+          onImportado={handleImportado} 
         />
       )}
       {modalExportar && (
@@ -694,7 +740,7 @@ const ProyectoDetallePage = () => {
 };
 
 // ── Modal de Tarea (Simplified & Professional) ──────────────────────────────
-const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGuardar, onEliminar }) => {
+const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGuardar, onTareaMutada, onEliminar }) => {
   const { t } = usePreferences();
   const creadorEsUsuarioActual = tarea?.creador?.id === usuarioActual?.id
     || (!tarea?.creador?.id && (getTaskAssignees(tarea).length === 0 || isTaskAssignedToUser(tarea, usuarioActual?.id)));
@@ -711,12 +757,18 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
   const [cargando, setCargando] = useState(false);
   const [archivos, setArchivos] = useState([]);
 
+  const sincronizarTarea = useCallback((cambios = {}) => {
+    if (!tarea?.id) return;
+    onTareaMutada?.(tarea.id, cambios);
+  }, [onTareaMutada, tarea?.id]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setCargando(true);
     try {
       if (tarea) {
-        await tareasService.editar(tarea.id, form);
+        const response = await tareasService.editar(tarea.id, form);
+        onGuardar({ tarea: response.tarea, creada: false });
       } else {
         const fd = new FormData();
         Object.entries(form).forEach(([k,v]) => {
@@ -727,9 +779,9 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
           fd.append(k,v);
         });
         archivos.forEach((file) => fd.append('archivos', file));
-        await tareasService.crear(proyectoId, fd);
+        const response = await tareasService.crear(proyectoId, fd);
+        onGuardar({ tarea: response.tarea, creada: true });
       }
-      onGuardar();
     } catch (err) { alert(err.message); }
     finally { setCargando(false); }
   };
@@ -859,11 +911,22 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
               title={t('taskSupportDocuments')}
               pendingFiles={archivos}
               onPendingFilesChange={setArchivos}
+              onAttachmentsChange={(adjuntos) => sincronizarTarea({ adjuntos })}
               showUploader
               showExisting={Boolean(tarea?.id)}
               uploadLabel={tarea ? t('taskAddFiles') : t('taskSelectFiles')}
             />
           </form>
+
+          {tarea?.id && (
+            <div className="mt-8 border-t border-[var(--color-border)] pt-6">
+              <TaskComments
+                tareaId={tarea.id}
+                type="tareas"
+                onCommentsChange={(comentarios) => sincronizarTarea({ comentarios })}
+              />
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}

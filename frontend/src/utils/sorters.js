@@ -29,9 +29,6 @@ const getNumeroActividadRank = (tarea) => {
 };
 
 export const compareTareas = (a, b) => {
-  const porNumeroActividad = getNumeroActividadRank(a) - getNumeroActividadRank(b);
-  if (porNumeroActividad !== 0) return porNumeroActividad;
-
   const aHecha = a.estado === 'HECHO';
   const bHecha = b.estado === 'HECHO';
 
@@ -44,6 +41,9 @@ export const compareTareas = (a, b) => {
 
     return compareText(a.titulo, b.titulo);
   }
+
+  const porNumeroActividad = getNumeroActividadRank(a) - getNumeroActividadRank(b);
+  if (porNumeroActividad !== 0) return porNumeroActividad;
 
   if (aHecha !== bHecha) {
     return aHecha ? -1 : 1;
@@ -67,11 +67,21 @@ export const compareTareas = (a, b) => {
 export const sortTareas = (tareas = []) => [...tareas].sort(compareTareas);
 
 export const compareTareasLista = (a, b) => {
-  const porNumeroActividad = getNumeroActividadRank(a) - getNumeroActividadRank(b);
-  if (porNumeroActividad !== 0) return porNumeroActividad;
-
   const aHecha = a.estado === 'HECHO';
   const bHecha = b.estado === 'HECHO';
+
+  if (aHecha && bHecha) {
+    const porCompletado = getDateMs(b.completadoEn, 0) - getDateMs(a.completadoEn, 0);
+    if (porCompletado !== 0) return porCompletado;
+
+    const porCreacion = getDateMs(b.creadoEn, 0) - getDateMs(a.creadoEn, 0);
+    if (porCreacion !== 0) return porCreacion;
+
+    return compareText(a.titulo, b.titulo);
+  }
+
+  const porNumeroActividad = getNumeroActividadRank(a) - getNumeroActividadRank(b);
+  if (porNumeroActividad !== 0) return porNumeroActividad;
 
   if (aHecha !== bHecha) {
     return aHecha ? 1 : -1;

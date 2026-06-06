@@ -4,6 +4,17 @@ const prisma = require('../lib/prisma');
 const ESTADOS_VALIDOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 const PRIORIDADES_VALIDAS = ['BAJA', 'MEDIA', 'ALTA'];
 const COLUMNAS_EXCEL = ['numeroActividad', 'titulo', 'descripcion', 'estado', 'prioridad', 'fechaInicio', 'venceEn', 'asignadoEmail'];
+const IMPORT_TASK_INCLUDE = {
+  asignado: {
+    select: { id: true, nombre: true, area: true },
+  },
+  asignados: {
+    select: { id: true, nombre: true, area: true },
+  },
+  creador: {
+    select: { id: true, nombre: true, area: true },
+  },
+};
 
 const normalizarEstado = (value) => {
   const raw = String(value || '').trim().toUpperCase();
@@ -289,11 +300,18 @@ const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, us
   }
 
   let creadas = 0;
+  let tareasCreadas = [];
   if (tareasACrear.length > 0) {
-    await prisma.$transaction(
+    const tareasInsertadas = await prisma.$transaction(
       tareasACrear.map((tarea) => prisma.tarea.create({ data: tarea }))
     );
     creadas = tareasACrear.length;
+    const tareasCreadasIds = tareasInsertadas.map((tarea) => tarea.id);
+
+    tareasCreadas = await prisma.tarea.findMany({
+      where: { id: { in: tareasCreadasIds } },
+      include: IMPORT_TASK_INCLUDE,
+    });
 
     await registrarActividad(
       usuarioId,
@@ -303,7 +321,7 @@ const procesarFilas = async (filas, proyectoId, miembros, registrarActividad, us
     );
   }
 
-  return { creadas, errores };
+  return { creadas, errores, tareas: tareasCreadas };
 };
 
 const procesarJSON = async (fileSource, proyectoId, miembros, registrarActividad, usuarioId, asignadoPorDefecto = null) => {

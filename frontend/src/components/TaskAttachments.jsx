@@ -191,6 +191,7 @@ const TaskAttachments = ({
   title,
   pendingFiles = [],
   onPendingFilesChange,
+  onAttachmentsChange,
   showUploader = true,
   showExisting = true,
   uploadLabel = 'Subir archivos',
@@ -227,7 +228,9 @@ const TaskAttachments = ({
 
     try {
       const data = await adjuntosService.listar(tareaId, type);
-      setAdjuntos(data.adjuntos || []);
+      const nextAdjuntos = data.adjuntos || [];
+      setAdjuntos(nextAdjuntos);
+      onAttachmentsChange?.(nextAdjuntos);
     } catch (error) {
       console.error('Error al cargar adjuntos:', error);
     } finally {
@@ -248,7 +251,11 @@ const TaskAttachments = ({
       try {
         const data = await adjuntosService.subir(tareaId, files, type);
         const nuevosAdjuntos = data.adjuntos || (data.adjunto ? [data.adjunto] : []);
-        setAdjuntos((prev) => [...nuevosAdjuntos, ...prev]);
+        setAdjuntos((prev) => {
+          const nextAdjuntos = [...nuevosAdjuntos, ...prev];
+          onAttachmentsChange?.(nextAdjuntos);
+          return nextAdjuntos;
+        });
       } catch (error) {
         alert(error.message);
       } finally {
@@ -265,7 +272,11 @@ const TaskAttachments = ({
     if (!confirm('Eliminar este archivo?')) return;
     try {
       await adjuntosService.eliminar(id);
-      setAdjuntos((prev) => prev.filter((a) => a.id !== id));
+      setAdjuntos((prev) => {
+        const nextAdjuntos = prev.filter((a) => a.id !== id);
+        onAttachmentsChange?.(nextAdjuntos);
+        return nextAdjuntos;
+      });
     } catch (error) {
       alert(error.message);
     }

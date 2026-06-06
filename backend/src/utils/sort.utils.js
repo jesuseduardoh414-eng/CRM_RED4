@@ -31,9 +31,6 @@ const getNumeroActividadRank = (tarea) => {
 };
 
 const compareTareas = (a, b) => {
-  const porNumeroActividad = getNumeroActividadRank(a) - getNumeroActividadRank(b);
-  if (porNumeroActividad !== 0) return porNumeroActividad;
-
   const aHecha = a.estado === 'HECHO';
   const bHecha = b.estado === 'HECHO';
 
@@ -46,6 +43,9 @@ const compareTareas = (a, b) => {
 
     return compareStrings(a.titulo, b.titulo);
   }
+
+  const porNumeroActividad = getNumeroActividadRank(a) - getNumeroActividadRank(b);
+  if (porNumeroActividad !== 0) return porNumeroActividad;
 
   if (aHecha !== bHecha) {
     return aHecha ? -1 : 1;

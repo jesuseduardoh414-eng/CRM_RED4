@@ -563,7 +563,22 @@ const eliminar = async (req, res) => {
       }
     }
 
-    await prisma.tarea.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.tarea.updateMany({
+        where: { dependeDeId: id },
+        data: { dependeDeId: null },
+      });
+
+      await tx.comentario.deleteMany({ where: { tareaId: id } });
+      await tx.adjunto.deleteMany({ where: { tareaId: id } });
+      await tx.logActividad.deleteMany({ where: { tareaId: id } });
+      await tx.notificacion.updateMany({
+        where: { tareaId: id },
+        data: { tareaId: null },
+      });
+
+      await tx.tarea.delete({ where: { id } });
+    });
 
     // Registrar en el Log de Actividad
     await registrarActividad(

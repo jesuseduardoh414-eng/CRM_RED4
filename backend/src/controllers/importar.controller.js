@@ -160,6 +160,7 @@ const importar = async (req, res) => {
     return res.status(200).json({
       creadas: resultado.creadas,
       errores: resultado.errores,
+      tareas: resultado.tareas || [],
     });
 
   } catch (error) {

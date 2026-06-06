@@ -278,7 +278,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
       const data = await tareasService.confirmarImportacion(proyectoId, payload, modo, asignadoId);
       setResultado(data);
       setPreviewRows([]);
-      if (data.creadas > 0 && onImportado) onImportado();
+      if (data.creadas > 0 && onImportado) onImportado(data);
     } catch (err) {
       setErrorGlobal(err.message);
     } finally {

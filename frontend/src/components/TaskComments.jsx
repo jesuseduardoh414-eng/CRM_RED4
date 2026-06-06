@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { MessageSquare, Trash2, Send } from 'lucide-react';
 import { PanelSkeleton } from './Skeleton';
 
-const TaskComments = ({ tareaId, type = 'tareas' }) => {
+const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
   const { usuario } = useAuth();
   const [comentarios, setComentarios] = useState([]);
   const [nuevo, setNuevo] = useState('');
@@ -15,7 +15,9 @@ const TaskComments = ({ tareaId, type = 'tareas' }) => {
   const fetchComentarios = async () => {
     try {
       const data = await comentariosService.listar(tareaId, type);
-      setComentarios(data.comentarios);
+      const nextComentarios = data.comentarios || [];
+      setComentarios(nextComentarios);
+      onCommentsChange?.(nextComentarios);
     } catch (error) {
       console.error('Error al cargar comentarios:', error);
     } finally {
@@ -41,7 +43,11 @@ const TaskComments = ({ tareaId, type = 'tareas' }) => {
     setEnviando(true);
     try {
       const data = await comentariosService.crear(tareaId, nuevo, type);
-      setComentarios(prev => [...prev, data.comentario]);
+      setComentarios(prev => {
+        const nextComentarios = [...prev, data.comentario];
+        onCommentsChange?.(nextComentarios);
+        return nextComentarios;
+      });
       setNuevo('');
     } catch (error) {
       alert(error.message);
@@ -54,7 +60,11 @@ const TaskComments = ({ tareaId, type = 'tareas' }) => {
     if (!confirm('¿Eliminar este comentario?')) return;
     try {
       await comentariosService.eliminar(id);
-      setComentarios(prev => prev.filter(c => c.id !== id));
+      setComentarios(prev => {
+        const nextComentarios = prev.filter(c => c.id !== id);
+        onCommentsChange?.(nextComentarios);
+        return nextComentarios;
+      });
     } catch (error) {
       alert(error.message);
     }
