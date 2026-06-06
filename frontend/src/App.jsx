@@ -14,14 +14,38 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyAccountPage from './pages/VerifyAccountPage';
 import { AuthSkeleton, PageSkeleton } from './components/Skeleton';
 
-const InvitationPage = lazy(() => import('./pages/InvitationPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const ProyectosPage = lazy(() => import('./pages/ProyectosPage'));
-const ProyectoDetallePage = lazy(() => import('./pages/ProyectoDetallePage'));
-const EquipoPage = lazy(() => import('./pages/EquipoPage'));
-const UsuariosPage = lazy(() => import('./pages/UsuariosPage'));
-const AgendaPage = lazy(() => import('./pages/AgendaPage'));
-const PerfilPage = lazy(() => import('./pages/PerfilPage'));
+const lazyRetry = (importer, key) => lazy(async () => {
+  const storageKey = `crm_lazy_retry_${key}`;
+
+  try {
+    const module = await importer();
+    sessionStorage.removeItem(storageKey);
+    return module;
+  } catch (error) {
+    const yaRecargo = sessionStorage.getItem(storageKey) === '1';
+    const esChunkStale = error?.name === 'ChunkLoadError'
+      || /Failed to fetch dynamically imported module/i.test(error?.message || '')
+      || /Importing a module script failed/i.test(error?.message || '');
+
+    if (esChunkStale && !yaRecargo) {
+      sessionStorage.setItem(storageKey, '1');
+      window.location.reload();
+      return new Promise(() => {});
+    }
+
+    sessionStorage.removeItem(storageKey);
+    throw error;
+  }
+});
+
+const InvitationPage = lazyRetry(() => import('./pages/InvitationPage'), 'invitation');
+const DashboardPage = lazyRetry(() => import('./pages/DashboardPage'), 'dashboard');
+const ProyectosPage = lazyRetry(() => import('./pages/ProyectosPage'), 'proyectos');
+const ProyectoDetallePage = lazyRetry(() => import('./pages/ProyectoDetallePage'), 'proyecto_detalle');
+const EquipoPage = lazyRetry(() => import('./pages/EquipoPage'), 'equipo');
+const UsuariosPage = lazyRetry(() => import('./pages/UsuariosPage'), 'usuarios');
+const AgendaPage = lazyRetry(() => import('./pages/AgendaPage'), 'agenda');
+const PerfilPage = lazyRetry(() => import('./pages/PerfilPage'), 'perfil');
 
 // Redirige al dashboard si ya hay sesion activa (evita volver al login)
 const RutaPublica = ({ children }) => {
