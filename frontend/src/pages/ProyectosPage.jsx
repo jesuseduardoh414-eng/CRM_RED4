@@ -605,7 +605,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                         disabled={esAdminArea && k !== usuarioActual?.area}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all ${selected ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/15' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-white'} ${esAdminArea && k !== usuarioActual?.area ? 'opacity-40 cursor-not-allowed hover:bg-slate-50' : ''}`}
                       >
-                        <span>{AREA_CONF[k].label}</span>
+                        <span>{t(AREA_CONF[k]?.labelKey || 'areaGeneral')}</span>
                         <span>{selected ? t('statusActive') : esAdminArea && k !== usuarioActual?.area ? '—' : t('add')}</span>
                       </button>
                     );
