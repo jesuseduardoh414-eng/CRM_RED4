@@ -430,11 +430,17 @@ export const adjuntosService = {
     });
     return handleResponse(res);
   },
-  getPreviewUrl: (filename) => (
-    `${API_URL}/tareas/adjuntos/ver/${filename}?token=${localStorage.getItem('crm_token')}`
-  ),
+  getPreviewUrl: (filename) => {
+    // Los adjuntos nuevos guardan la URL absoluta de Vercel Blob; los antiguos, solo el nombre.
+    if (/^https?:\/\//i.test(filename)) return filename;
+    return `${API_URL}/tareas/adjuntos/ver/${filename}?token=${localStorage.getItem('crm_token')}`;
+  },
   descargar: (filename) => {
     // Abrir en nueva pestaña para descargar
+    if (/^https?:\/\//i.test(filename)) {
+      window.open(filename, '_blank');
+      return;
+    }
     window.open(`${API_URL}/tareas/adjuntos/descargar/${filename}?token=${localStorage.getItem('crm_token')}`, '_blank');
   }
 };

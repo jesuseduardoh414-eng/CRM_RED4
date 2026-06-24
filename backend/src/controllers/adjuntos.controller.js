@@ -2,7 +2,12 @@ const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
 const path = require('path');
 const fs = require('fs');
+const { put, del } = require('@vercel/blob');
 const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
+
+// Detecta si una "url" guardada es una URL absoluta de Vercel Blob
+// (los adjuntos antiguos guardaban solo el nombre de archivo en disco).
+const esUrlAbsoluta = (valor) => /^https?:\/\//i.test(valor || '');
 
 const getEntityType = (req) => {
   if (req.baseUrl.includes('agenda')) return 'agenda';
@@ -174,10 +179,17 @@ const subir = async (req, res) => {
 
     const createdAdjuntos = [];
     for (const file of files) {
+      const ext = path.extname(file.originalname);
+      const blobName = `adjuntos/${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      const blob = await put(blobName, file.buffer, {
+        access: 'public',
+        contentType: file.mimetype,
+      });
+
       const adjunto = await prisma.adjunto.create({
         data: {
           nombre: file.originalname,
-          url: file.filename,
+          url: blob.url,
           tipo: file.mimetype,
           tamano: file.size,
           usuarioId: req.usuario.id,
@@ -254,9 +266,19 @@ const eliminar = async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este archivo' });
     }
 
-    const filePath = path.join(__dirname, '../../uploads', adjunto.url);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (esUrlAbsoluta(adjunto.url)) {
+      // Archivo en Vercel Blob
+      try {
+        await del(adjunto.url);
+      } catch (_error) {
+        // Si el blob ya no existe, continuamos con el borrado en BD igualmente.
+      }
+    } else {
+      // Compatibilidad con adjuntos antiguos guardados en disco
+      const filePath = path.join(__dirname, '../../uploads', adjunto.url);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
 
     await prisma.adjunto.delete({ where: { id: Number(id) } });
