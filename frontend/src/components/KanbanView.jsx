@@ -1,4 +1,5 @@
 import { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
+import UserAvatar from './UserAvatar';
 import {
   Plus,
   ListTodo,
@@ -179,12 +180,15 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
         paddingTop: '0.75rem', borderTop: '1px solid var(--color-border-light)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ 
-            width: '24px', height: '24px', borderRadius: '50%', background: 'var(--color-surface-3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '700', color: 'var(--color-primary-light)'
-          }}>
-            {getTaskAssignees(tarea)[0]?.nombre?.charAt(0) || '?'}
-          </div>
+          <UserAvatar
+            usuario={getTaskAssignees(tarea)[0]}
+            size={24}
+            radius={999}
+            fontSize="0.65rem"
+            color="var(--color-primary-light)"
+            background="var(--color-surface-3)"
+            borderColor="var(--color-border)"
+          />
           <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--color-text-muted)' }}>
             {getTaskAssignees(tarea).map((asignado) => asignado.nombre?.split(' ')[0]).filter(Boolean).join(', ') || 'S/A'}
           </span>
@@ -254,11 +258,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
           rounded-2xl p-2 flex flex-col gap-4 transition-all duration-200 h-[70vh] min-h-[70vh] max-h-[70vh] overflow-y-auto
           ${dragOver ? 'bg-slate-50 border-2 border-dashed' : 'bg-transparent border-2 border-transparent'}
         `}
-        style={{ 
-          borderColor: dragOver ? col.color : 'transparent',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(0,0,0,0.1) transparent'
-        }}
+        style={{ borderColor: dragOver ? col.color : 'transparent' }}
       >
         {tareasVisibles.map(t => (
           <KanbanCard 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { logsService } from '../services/api';
+import UserAvatar from './UserAvatar';
 import { 
   PlusCircle, 
   Pencil, 
@@ -126,9 +127,15 @@ const ProjectActivityLog = ({ proyectoId }) => {
                     {log.descripcion}
                   </p>
                   <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--color-primary)', color: '#fff', fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800' }}>
-                      {log.usuario.nombre.charAt(0).toUpperCase()}
-                    </div>
+                    <UserAvatar
+                      usuario={log.usuario}
+                      size={16}
+                      radius={999}
+                      fontSize="0.6rem"
+                      color="#fff"
+                      background="var(--color-primary)"
+                      borderColor="transparent"
+                    />
                     {log.usuario.nombre} • {log.usuario.area}
                   </div>
                 </div>

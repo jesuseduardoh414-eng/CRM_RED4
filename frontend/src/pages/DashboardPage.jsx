@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { proyectosService, statsService } from '../services/api';
 import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
+import Modal from '../components/Modal';
 import {
   Layers,
   CheckCircle2,
@@ -1425,26 +1426,14 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
       {content}
 
       {expandedDay && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setActiveTaskMenu(null);
-              setExpandedDay(null);
-            }
-          }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
-        >
-          <div style={{ width: '100%', maxWidth: '500px', background: 'var(--color-surface)', borderRadius: '32px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-            <div style={{ padding: '1.75rem 2rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-surface-3)' }}>
-              <div>
-                <h4 style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--color-text)' }}>{expandedDay.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
-                <p style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--color-text-muted)' }}>Agenda de {selectedMember?.nombre}</p>
-              </div>
-              <button onClick={() => { setActiveTaskMenu(null); setExpandedDay(null); }} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-slate-100">
-                <ChevronDown size={20} style={{ transform: 'rotate(90deg)' }} />
-              </button>
-            </div>
-            <div style={{ padding: '1.5rem 2rem 2rem', maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <Modal
+            open
+            onClose={() => { setActiveTaskMenu(null); setExpandedDay(null); }}
+            maxWidth="500px"
+            title={expandedDay.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+            subtitle={`Agenda de ${selectedMember?.nombre}`}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {expandedDay.tasks.filter((t) => ['proyecto', 'tarea', 'evento', 'reunion'].includes(t.tipo)).map(t => {
                 const isProject = t.tipo === 'proyecto';
                 const isTask = t.tipo === 'tarea';
@@ -1501,8 +1490,7 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
                 </div>
               );})}
             </div>
-          </div>
-        </div>
+          </Modal>
       )}
     </div>
   );

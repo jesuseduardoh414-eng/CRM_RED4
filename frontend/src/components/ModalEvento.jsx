@@ -14,6 +14,8 @@ import {
   Link2,
 } from 'lucide-react';
 import { agendaService, adjuntosService, usuariosService } from '../services/api';
+import UserAvatar from './UserAvatar';
+import Modal from './Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferences } from '../context/PreferencesContext';
@@ -388,18 +390,12 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
   };
 
   return (
-    <div
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+    <Modal
+      open
+      onClose={onClose}
+      maxWidth="760px"
+      title={!evento ? t('eventNew') : esDuenio ? t('eventEdit') : t('eventDetails')}
     >
-      <div className="card" style={{ width: '100%', maxWidth: '760px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: '2rem', borderRadius: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: '900', letterSpacing: '-0.02em' }}>
-            {!evento ? t('eventNew') : esDuenio ? t('eventEdit') : t('eventDetails')}
-          </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={24} /></button>
-        </div>
-
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
@@ -713,9 +709,16 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                                 boxShadow: form.invitados_ids.includes(u.id) ? 'var(--shadow-sm)' : 'none',
                               }}
                             >
-                              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary) 0%, #4338ca 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.8rem', fontWeight: '900', boxShadow: '0 4px 6px -1px rgba(99,102,241,0.2)' }}>
-                                {u.nombre.charAt(0).toUpperCase()}
-                              </div>
+                              <UserAvatar
+                                usuario={u}
+                                size={36}
+                                radius={999}
+                                fontSize="0.8rem"
+                                color="#fff"
+                                background="linear-gradient(135deg, var(--color-primary) 0%, #4338ca 100%)"
+                                borderColor="transparent"
+                                shadow="0 4px 6px -1px rgba(99,102,241,0.2)"
+                              />
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: '0.9rem', fontWeight: '800', color: form.invitados_ids.includes(u.id) ? 'var(--color-primary)' : 'var(--color-text)' }}>{u.nombre}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>{u.email}</div>
@@ -801,8 +804,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
             )}
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

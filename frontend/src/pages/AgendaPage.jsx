@@ -24,6 +24,7 @@ import { agendaService, tareasService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
+import Modal from '../components/Modal';
 import ModalEvento from '../components/ModalEvento';
 import ModalConfiguracionAgenda from '../components/ModalConfiguracionAgenda';
 
@@ -1633,26 +1634,14 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
         );
       })}
       {expandedDay && (
-        <div
-          onClick={(ev) => {
-            if (ev.target === ev.currentTarget) {
-              setActiveTaskMenu(null);
-              setExpandedDay(null);
-            }
-          }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
+        <Modal
+          open
+          onClose={() => { setActiveTaskMenu(null); setExpandedDay(null); }}
+          maxWidth="540px"
+          title={expandedDay.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+          subtitle={t('agendaScheduled', { count: expandedDay.items.length })}
         >
-          <div style={{ width: '100%', maxWidth: '540px', maxHeight: '80vh', overflow: 'hidden', background: 'var(--color-surface)', borderRadius: '28px', boxShadow: '0 24px 70px rgba(15,23,42,0.22)' }}>
-            <div style={{ padding: '1.35rem 1.6rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', background: 'var(--color-surface-3)' }}>
-              <div>
-                <h4 style={{ fontSize: '1.08rem', fontWeight: '900', color: 'var(--color-text)' }}>
-                  {expandedDay.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
-                </h4>
-                <p style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>{t('agendaScheduled', { count: expandedDay.items.length })}</p>
-              </div>
-              <button type="button" onClick={() => { setActiveTaskMenu(null); setExpandedDay(null); }} className="btn-icon-sm"><X size={16} /></button>
-            </div>
-            <div style={{ padding: '1.2rem 1.6rem 1.6rem', maxHeight: 'calc(80vh - 92px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {expandedDay.items.map((item) => {
                 const color = item.tipoVista === 'proyecto'
                   ? '#2563eb'
@@ -1710,8 +1699,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                 );
               })}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

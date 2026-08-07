@@ -41,6 +41,10 @@
   --color-success:      var(--color-accent-success);
   --color-warning:      var(--color-accent-warning);
   --color-info:         var(--color-primary);
+
+  /* ── Scrollbar ─────────────────────────────────────────── */
+  --color-scrollbar:       #cbd5e1;
+  --color-scrollbar-hover: #94a3b8;
 }
 
 :root[data-theme="dark"] {
@@ -69,6 +73,62 @@
   --shadow-md: 0 12px 24px rgb(0 0 0 / 0.22);
   --shadow-lg: 0 20px 40px rgb(0 0 0 / 0.28);
   --shadow-xl: 0 30px 80px rgba(0,0,0,0.38);
+
+  --color-scrollbar:       #2a3a58;
+  --color-scrollbar-hover: #3d5480;
+}
+
+/* ── Puente de tokens shadcn/ui ──────────────────────────────────────────────
+   shadcn espera sus tokens como tripletas HSL sin funcion (ej. "221.2 83.2% 53.3%")
+   para poder aplicar modificadores de opacidad (bg-primary/50). Aqui se replican
+   los valores de la paleta --color-* de arriba, ya convertidos a HSL.
+
+   IMPORTANTE: si cambias un --color-* tienes que actualizar tambien su token de
+   abajo, o el tema claro/oscuro quedara desincronizado en los componentes shadcn. */
+:root {
+  --background:            210 40% 98%;        /* --color-bg-base   #f8fafc */
+  --foreground:            222.2 47.4% 11.2%;  /* --color-text      #0f172a */
+  --card:                  0 0% 100%;          /* --color-surface   #ffffff */
+  --card-foreground:       222.2 47.4% 11.2%;
+  --popover:               0 0% 100%;          /* --color-surface   #ffffff */
+  --popover-foreground:    222.2 47.4% 11.2%;
+  --primary:               221.2 83.2% 53.3%;  /* --color-primary   #2563eb */
+  --primary-foreground:    0 0% 100%;
+  --secondary:             210 40% 96.1%;      /* --color-surface-3 #f1f5f9 */
+  --secondary-foreground:  222.2 47.4% 11.2%;
+  --muted:                 210 40% 96.1%;
+  --muted-foreground:      215.4 16.3% 46.9%;  /* --color-text-muted #64748b */
+  --accent:                210 40% 96.1%;
+  --accent-foreground:     222.2 47.4% 11.2%;
+  --destructive:           0 84.2% 60.2%;      /* --color-accent-error #ef4444 */
+  --destructive-foreground: 0 0% 100%;
+  --border:                214.3 31.8% 91.4%;  /* --color-border    #e2e8f0 */
+  --input:                 214.3 31.8% 91.4%;
+  --ring:                  221.2 83.2% 53.3%;
+
+  --radius: 0.85rem; /* igual al radio de .btn-primary / .form-input */
+}
+
+:root[data-theme="dark"] {
+  --background:            215 63.2% 7.5%;     /* --color-bg-base   #07111f */
+  --foreground:            215.5 73.3% 94.1%;  /* --color-text      #e5eefb */
+  --card:                  217.2 56.9% 10%;    /* --color-surface   #0b1628 */
+  --card-foreground:       215.5 73.3% 94.1%;
+  --popover:               217.1 53.1% 12.5%;  /* --color-surface-2 #0f1c31 */
+  --popover-foreground:    215.5 73.3% 94.1%;
+  --primary:               213.1 93.9% 67.8%;  /* --color-primary   #60a5fa */
+  --primary-foreground:    215 63.2% 7.5%;
+  --secondary:             218.5 47% 16.3%;    /* --color-surface-3 #16243d */
+  --secondary-foreground:  215.5 73.3% 94.1%;
+  --muted:                 218.5 47% 16.3%;
+  --muted-foreground:      217.8 31.4% 66.3%;  /* --color-text-muted #8ea2c4 */
+  --accent:                218.5 47% 16.3%;
+  --accent-foreground:     215.5 73.3% 94.1%;
+  --destructive:           0 90.6% 70.8%;      /* --color-accent-error #f87171 */
+  --destructive-foreground: 215 63.2% 7.5%;
+  --border:                219.1 38.7% 21.8%;  /* --color-border    #22314d */
+  --input:                 219.1 38.7% 21.8%;
+  --ring:                  213.1 93.9% 67.8%;
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -93,11 +153,33 @@ body {
   }
 }
 
-/* Scrollbars Modernos */
-::-webkit-scrollbar { width: 8px; height: 8px; }
+/* ── Scrollbars ──────────────────────────────────────────────────────────────
+   Estilo unico para toda la app. Antes el thumb usaba --color-surface-3, que en
+   tema claro es casi del color del fondo (invisible), y en hover saltaba a
+   --color-text-dim (demasiado oscuro). Ademas habia reglas sueltas repetidas
+   inline en Kanban, comentarios y detalle de proyecto. */
+* {
+  scrollbar-width: thin;                                   /* Firefox */
+  scrollbar-color: var(--color-scrollbar) transparent;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-surface-3); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-dim); }
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-scrollbar);
+  border: 2px solid transparent;   /* aire entre el thumb y el borde del contenedor */
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover { background-color: var(--color-scrollbar-hover); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Utilidad para ocultar el scrollbar sin perder el scroll.
+   Ya se usaba en ProyectosPage pero nunca habia estado definida. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 select,
 input,

@@ -8,6 +8,7 @@ import { PreferencesProvider } from './context/PreferencesContext';
 import { ToastProvider } from './context/ToastContext';
 import RutaProtegida from './components/RutaProtegida';
 import Layout from './components/Layout';
+import { TooltipProvider } from './components/ui/tooltip';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -104,7 +105,10 @@ const App = () => (
     <PreferencesProvider>
       <AuthProvider>
         <ToastProvider>
-          <AppRoutes />
+          {/* Requerido por los Tooltip de shadcn/Radix en toda la app */}
+          <TooltipProvider delayDuration={200}>
+            <AppRoutes />
+          </TooltipProvider>
         </ToastProvider>
       </AuthProvider>
     </PreferencesProvider>

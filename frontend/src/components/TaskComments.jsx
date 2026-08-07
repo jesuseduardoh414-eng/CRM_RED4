@@ -3,6 +3,7 @@ import { comentariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { MessageSquare, Trash2, Send } from 'lucide-react';
 import { PanelSkeleton } from './Skeleton';
+import UserAvatar from './UserAvatar';
 
 const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
   const { usuario } = useAuth();
@@ -87,9 +88,8 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
       <div 
         ref={scrollRef}
         style={{ 
-          display: 'flex', flexDirection: 'column', gap: '1rem', 
-          maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem',
-          scrollbarWidth: 'thin', scrollbarColor: 'var(--color-border) transparent'
+          display: 'flex', flexDirection: 'column', gap: '1rem',
+          maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem'
         }}
       >
         {comentarios.length === 0 ? (
@@ -110,15 +110,17 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
               }}>
                 {/* Avatar */}
                 <div style={{
-                  width: '32px', height: '32px', borderRadius: '10px',
-                  background: esMio ? 'var(--color-primary)' : 'var(--color-surface-3)', 
-                  border: '1px solid var(--color-border)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.85rem', fontWeight: '800', flexShrink: 0,
-                  color: esMio ? '#fff' : 'var(--color-primary)',
-                  marginTop: '4px'
+                  marginTop: '4px', flexShrink: 0
                 }}>
-                  {c.autor.nombre.charAt(0).toUpperCase()}
+                  <UserAvatar
+                    usuario={c.autor}
+                    size={32}
+                    radius={10}
+                    fontSize="0.85rem"
+                    color={esMio ? '#fff' : 'var(--color-primary)'}
+                    background={esMio ? 'var(--color-primary)' : 'var(--color-surface-3)'}
+                    borderColor="var(--color-border)"
+                  />
                 </div>
 
                 {/* Burbuja */}

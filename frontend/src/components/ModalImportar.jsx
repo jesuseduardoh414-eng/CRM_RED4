@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { tareasService } from '../services/api';
+import Modal from './Modal';
 import {
   AlertTriangle,
   Braces,
@@ -14,28 +15,8 @@ import {
   UploadCloud,
   User,
   Users,
-  X,
   XCircle,
 } from 'lucide-react';
-
-const overlay = {
-  position: 'fixed', inset: 0,
-  background: 'rgba(0,0,0,0.6)',
-  backdropFilter: 'blur(4px)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  zIndex: 1000, padding: '1rem',
-};
-
-const card = {
-  background: 'var(--color-surface-2)',
-  border: '1px solid var(--color-border)',
-  borderRadius: '1.25rem',
-  padding: '2rem',
-  width: '100%', maxWidth: '1100px',
-  maxHeight: '92vh',
-  overflowY: 'auto',
-  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-};
 
 const FORMAT_INFO = {
   excel: {
@@ -305,22 +286,18 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
   };
 
   return (
-    <div style={overlay} onClick={(e) => e.target === e.currentTarget && handleCerrar()}>
-      <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-          <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <Download size={22} strokeWidth={2.5} color="var(--color-primary)" />
-              Importar tareas
-            </h2>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem' }}>
-              Revisa el archivo antes de guardar y corrige cualquier fila aquí mismo.
-            </p>
-          </div>
-          <button onClick={handleCerrar} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <X size={24} />
-          </button>
-        </div>
+    <Modal
+      open
+      onClose={handleCerrar}
+      maxWidth="1100px"
+      title={(
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <Download size={22} strokeWidth={2.5} color="var(--color-primary)" />
+          Importar tareas
+        </span>
+      )}
+      subtitle="Revisa el archivo antes de guardar y corrige cualquier fila aquí mismo."
+    >
 
         {!resultado && (
           <div style={{ marginBottom: '1.25rem' }}>
@@ -726,8 +703,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

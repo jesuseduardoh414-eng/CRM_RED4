@@ -8,6 +8,7 @@ import { proyectosService, tareasService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { useToast } from '../context/ToastContext';
+import Modal from '../components/Modal';
 import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
 import { PageSkeleton } from '../components/Skeleton';
@@ -658,11 +659,9 @@ const ProyectoDetallePage = () => {
               display: 'flex', 
               flexDirection: 'column', 
               gap: '0.75rem', 
-              maxHeight: '70vh', 
+              maxHeight: '70vh',
               overflowY: 'auto',
-              paddingRight: '0.5rem',
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'var(--color-border) transparent'
+              paddingRight: '0.5rem'
             }}>
               {tareasListaFiltradas.length === 0 ? (
                 <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
@@ -787,20 +786,34 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
   };
 
   return (
-    <div 
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4 transition-all"
-    >
-      <div className="bg-[var(--color-surface)] w-full max-w-2xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
-        {/* Modal Header */}
-        <div className="px-8 py-6 border-b border-[var(--color-border)] flex justify-between items-center bg-[var(--color-surface-3)]">
-          <h2 className="text-xl lg:text-2xl font-black text-[var(--color-text)] tracking-tight">{tarea ? t('taskEditTitle') : t('taskNewTitle')}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-white rounded-xl text-slate-400 transition-colors border border-transparent hover:border-slate-100">
-            <Zap size={20} className="rotate-45" />
+    <Modal
+      open
+      onClose={onClose}
+      maxWidth="672px"
+      title={tarea ? t('taskEditTitle') : t('taskNewTitle')}
+      footer={(
+        <div className="flex flex-col-reverse lg:flex-row gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all uppercase tracking-widest"
+          >
+            {t('cancel')}
+          </button>
+          {tarea && (
+            <button
+              type="button"
+              onClick={() => { onEliminar(tarea); onClose(); }}
+              className="flex-1 px-6 py-4 bg-red-50 text-red-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all"
+            >
+              {t('delete')}
+            </button>
+          )}
+          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
+            {cargando ? t('saving') : t('save')}
           </button>
         </div>
-        
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+      )}
+    >
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskTitle').toUpperCase()}</label>
@@ -927,47 +940,26 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
               />
             </div>
           )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="px-8 py-6 border-t border-[var(--color-border)] bg-[var(--color-surface-3)] flex flex-col-reverse lg:flex-row gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all uppercase tracking-widest"
-          >
-            {t('cancel')}
-          </button>
-          {tarea && (
-            <button
-              type="button"
-              onClick={() => { onEliminar(tarea); onClose(); }}
-              className="flex-1 px-6 py-4 bg-red-50 text-red-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all"
-            >
-              {t('delete')}
-            </button>
-          )}
-          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
-            {cargando ? t('saving') : t('save')}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
 const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => {
   const { t } = usePreferences();
   return (
-  <div
-    onClick={(e) => e.target === e.currentTarget && onClose()}
-    className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
+  <Modal
+    open
+    onClose={onClose}
+    maxWidth="448px"
+    title={t('taskExportTitle')}
+    subtitle={proyecto?.nombre}
+    footer={(
+      <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-all">
+        {t('close')}
+      </button>
+    )}
   >
-    <div className="bg-[var(--color-surface)] w-full max-w-md rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
-      <div className="px-8 py-6 border-b border-[var(--color-border)] bg-[var(--color-surface-3)]">
-        <h2 className="text-xl font-black text-[var(--color-text)]">{t('taskExportTitle')}</h2>
-        <p className="text-sm text-[var(--color-text-muted)] font-medium mt-1">{proyecto?.nombre}</p>
-      </div>
-      <div className="px-8 py-6 space-y-3">
+      <div className="space-y-3">
         <button
           onClick={() => onExportar('excel')}
           className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-all"
@@ -983,13 +975,7 @@ const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => {
           <span className="text-xs font-black text-[var(--color-text-muted)] uppercase tracking-widest">.json</span>
         </button>
       </div>
-      <div className="px-8 py-5 border-t border-[var(--color-border)] bg-[var(--color-surface-3)]">
-        <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-all">
-          {t('close')}
-        </button>
-      </div>
-    </div>
-  </div>
+  </Modal>
   );
 };
 
@@ -1012,15 +998,13 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
   };
 
   return (
-    <div
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
+    <Modal
+      open
+      onClose={onClose}
+      maxWidth="512px"
+      title={t('projectSaveTemplate')}
     >
-      <div className="bg-[var(--color-surface)] w-full max-w-lg rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden">
-        <div className="px-8 py-6 border-b border-[var(--color-border)] bg-[var(--color-surface-3)]">
-          <h2 className="text-xl font-black text-[var(--color-text)]">{t('projectSaveTemplate')}</h2>
-        </div>
-        <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldName')}</label>
             <input
@@ -1047,8 +1031,7 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

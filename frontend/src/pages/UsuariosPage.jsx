@@ -7,6 +7,8 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
+import UserAvatar from '../components/UserAvatar';
+import Modal from '../components/Modal';
 import { 
   Pencil, 
   Trash2, 
@@ -394,9 +396,15 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
             <tr className="hover:bg-slate-50/50 transition-colors">
               <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                    {u.nombre.charAt(0).toUpperCase()}
-                  </div>
+                  <UserAvatar
+                    usuario={u}
+                    size={40}
+                    radius={12}
+                    fontSize="0.9rem"
+                    color="var(--color-primary)"
+                    background="rgba(37,99,235,0.08)"
+                    borderColor="rgba(37,99,235,0.18)"
+                  />
                   <div>
                     <div className="font-bold text-slate-900">{u.nombre}</div>
                     <div className="text-xs text-slate-400">{u.email}</div>
@@ -485,9 +493,15 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
           <div key={u.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
-                  {u.nombre.charAt(0).toUpperCase()}
-                </div>
+                <UserAvatar
+                  usuario={u}
+                  size={40}
+                  radius={12}
+                  fontSize="0.9rem"
+                  color="#ffffff"
+                  background="var(--color-primary)"
+                  borderColor="transparent"
+                />
                 <div>
                   <div className="font-black text-slate-900">{u.nombre}</div>
                   <div className="text-[10px] text-slate-400 font-bold uppercase">{u.email}</div>
@@ -708,20 +722,21 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
   };
 
   return (
-    <div 
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-    >
-      <div className="bg-[var(--color-surface)] rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-[var(--color-border)]">
-        <div className="p-8 pb-0">
-          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4">
+    <Modal
+      open
+      onClose={onClose}
+      maxWidth="448px"
+      title={(
+        <span className="flex items-center gap-3">
+          <span className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
             <Mail size={20} />
-          </div>
-          <h2 className="text-xl font-black text-[var(--color-text)] tracking-tight">{t('usersInviteTitle')}</h2>
-          <p className="text-[var(--color-text-muted)] text-xs mt-1">{t('usersInviteSubtitle')}</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-8 space-y-4">
+          </span>
+          {t('usersInviteTitle')}
+        </span>
+      )}
+      subtitle={t('usersInviteSubtitle')}
+    >
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('usersInviteNameLabel')}</label>
             <input
@@ -783,8 +798,7 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
@@ -816,17 +830,14 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
   };
 
   return (
-    <div 
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    <Modal
+      open
+      onClose={onClose}
+      maxWidth="448px"
+      title={t('usersEditTitle')}
+      subtitle={t('usersEditSubtitle')}
     >
-      <div className="bg-[var(--color-surface)] rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-[var(--color-border)]">
-        <div className="p-8 pb-0">
-          <h2 className="text-xl font-black text-[var(--color-text)] tracking-tight">{t('usersEditTitle')}</h2>
-          <p className="text-[var(--color-text-muted)] text-xs mt-1">{t('usersEditSubtitle')}</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-8 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldName')}</label>
             <input
@@ -877,8 +888,7 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

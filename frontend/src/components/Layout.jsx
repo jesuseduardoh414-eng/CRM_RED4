@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { useToast } from '../context/ToastContext';
 import NotificationCenter from './NotificationCenter';
-import { agendaService, getPublicAssetUrl } from '../services/api';
+import UserAvatar from './UserAvatar';
+import { agendaService } from '../services/api';
 import {
   Calendar,
   ChevronLeft,
@@ -28,15 +29,6 @@ const IconLogout = () => <LogOut size={18} strokeWidth={2.5} />;
 const IconMenu = () => <Menu size={24} strokeWidth={2.5} />;
 const IconAgenda = () => <Calendar size={20} strokeWidth={2.5} />;
 
-const getInitials = (nombre = '') => (
-  nombre
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((chunk) => chunk.charAt(0).toUpperCase())
-    .join('') || 'U'
-);
-
 const navLinks = [
   { to: '/dashboard', labelKey: 'home', Icon: IconDashboard },
   { to: '/proyectos', labelKey: 'projects', Icon: IconProyectos },
@@ -54,12 +46,20 @@ const Layout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('crm_sidebar_collapsed') === 'true');
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
   const [, setRecordatoriosCount] = useState(0);
+  const contenidoRef = useRef(null);
 
   useEffect(() => {
     const onResize = () => setIsDesktop(window.innerWidth >= 1024);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Al cambiar de pagina, volver al inicio del contenido. El scroll no lo lleva
+  // window sino el contenedor del <main>, por eso no basta con window.scrollTo.
+  useEffect(() => {
+    contenidoRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!usuario) return;
@@ -237,14 +237,18 @@ const Layout = ({ children }) => {
             <button
               type="button"
               onClick={() => navigate('/perfil')}
-              className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center font-black text-white border-2 border-white/10 transition-all hover:scale-105"
+              className="rounded-full transition-all hover:scale-105"
               title={collapsed ? usuario?.nombre : undefined}
             >
-              {usuario?.fotoPerfilUrl ? (
-                <img src={getPublicAssetUrl(usuario.fotoPerfilUrl)} alt={usuario?.nombre} className="h-full w-full object-cover" />
-              ) : (
-                getInitials(usuario?.nombre)
-              )}
+              <UserAvatar
+                usuario={usuario}
+                size={40}
+                radius={999}
+                fontSize="0.85rem"
+                color="#ffffff"
+                background="rgba(255,255,255,0.12)"
+                borderColor="rgba(255,255,255,0.16)"
+              />
             </button>
 
             {!collapsed && (
@@ -319,19 +323,23 @@ const Layout = ({ children }) => {
             <button
               type="button"
               onClick={() => navigate('/perfil')}
-              className="hidden lg:flex w-9 h-9 rounded-full overflow-hidden bg-[var(--color-surface-3)] border border-[var(--color-border)] shadow-sm items-center justify-center text-[11px] font-black text-[var(--color-text-dim)] transition-all hover:border-blue-300 hover:scale-105"
+              className="hidden lg:flex rounded-full shadow-sm transition-all hover:scale-105"
               title={t('goToProfile')}
             >
-              {usuario?.fotoPerfilUrl ? (
-                <img src={getPublicAssetUrl(usuario.fotoPerfilUrl)} alt={usuario?.nombre} className="h-full w-full object-cover" />
-              ) : (
-                getInitials(usuario?.nombre)
-              )}
+              <UserAvatar
+                usuario={usuario}
+                size={36}
+                radius={999}
+                fontSize="0.7rem"
+                color="var(--color-text-dim)"
+                background="var(--color-surface-3)"
+                borderColor="var(--color-border)"
+              />
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8 xl:p-12 max-w-[1600px] w-full mx-auto">
+        <div ref={contenidoRef} className="flex-1 overflow-y-auto p-4 lg:p-8 xl:p-12 max-w-[1600px] w-full mx-auto">
           {children}
         </div>
       </main>

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  X,
   Save,
   Clock,
   Coffee,
@@ -13,7 +12,9 @@ import {
   Gift,
 } from 'lucide-react';
 import { agendaService } from '../services/api';
+import { usePreferences } from '../context/PreferencesContext';
 import RangeDatePicker from './RangeDatePicker';
+import Modal from './Modal';
 
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const TIPOS_DIA = [
@@ -60,6 +61,7 @@ const cargarGoogleIdentityScript = () => {
 };
 
 const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) => {
+  const { t } = usePreferences();
   const [tab, setTab] = useState('HORARIO');
   const [cargando, setCargando] = useState(false);
   const [cargandoInicial, setCargandoInicial] = useState(true);
@@ -222,18 +224,18 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
   };
 
   return (
-    <div
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
-    >
-      <div className="card" style={{ width: '100%', maxWidth: '600px', background: 'var(--color-surface)', padding: '0', borderRadius: '2rem', overflow: 'hidden', boxShadow: 'var(--shadow-xl)' }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)' }}>
-          <button onClick={() => setTab('HORARIO')} style={{ flex: 1, padding: '1.5rem', border: 'none', background: tab === 'HORARIO' ? 'var(--color-surface)' : 'var(--color-surface-2)', fontSize: '0.9rem', fontWeight: '800', color: tab === 'HORARIO' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'HORARIO' ? '3px solid var(--color-primary)' : 'none' }}>HORARIO LABORAL</button>
-          <button onClick={() => setTab('DIAS')} style={{ flex: 1, padding: '1.5rem', border: 'none', background: tab === 'DIAS' ? 'var(--color-surface)' : 'var(--color-surface-2)', fontSize: '0.9rem', fontWeight: '800', color: tab === 'DIAS' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'DIAS' ? '3px solid var(--color-primary)' : 'none' }}>DIAS ESPECIALES</button>
-          <button onClick={onClose} style={{ padding: '1rem', border: 'none', background: 'var(--color-surface-2)', cursor: 'pointer' }}><X size={20} /></button>
+    <Modal
+      open
+      onClose={onClose}
+      maxWidth="600px"
+      title={t('agendaSettingsTitle')}
+      subHeader={(
+        <div style={{ display: 'flex' }}>
+          <button onClick={() => setTab('HORARIO')} style={{ flex: 1, padding: '1rem', border: 'none', background: 'transparent', fontSize: '0.9rem', fontWeight: '800', color: tab === 'HORARIO' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'HORARIO' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>HORARIO LABORAL</button>
+          <button onClick={() => setTab('DIAS')} style={{ flex: 1, padding: '1rem', border: 'none', background: 'transparent', fontSize: '0.9rem', fontWeight: '800', color: tab === 'DIAS' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'DIAS' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>DIAS ESPECIALES</button>
         </div>
-
-        <div style={{ padding: '2.5rem' }}>
+      )}
+    >
           {cargandoInicial ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-dim)', fontWeight: '700' }}>
               Cargando configuración...
@@ -419,9 +421,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -18,4 +18,13 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Componentes generados por shadcn/ui. Se editan poco y a proposito exportan
+    // sus variantes (buttonVariants, badgeVariants) junto al componente, cosa que
+    // react-refresh marca como error. Es codigo de terceros, no se reescribe.
+    files: ['src/components/ui/**/*.{js,jsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

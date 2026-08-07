@@ -6,6 +6,8 @@ import { useToast } from '../context/ToastContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { agendaService, proyectosService, usuariosService } from '../services/api';
 import { PageSkeleton } from '../components/Skeleton';
+import UserAvatar from '../components/UserAvatar';
+import Modal from '../components/Modal';
 import TaskAttachments from '../components/TaskAttachments';
 import { sortProyectos } from '../utils/sorters';
 import { 
@@ -278,9 +280,15 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
 
       <div className="flex justify-between items-center pt-4 border-t border-slate-50 mt-auto">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500">
-            {proyecto.creador?.nombre?.charAt(0)}
-          </div>
+          <UserAvatar
+            usuario={proyecto.creador}
+            size={28}
+            radius={8}
+            fontSize="0.62rem"
+            color="var(--color-text-muted)"
+            background="var(--color-surface-3)"
+            borderColor="var(--color-border)"
+          />
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{total} {t('projectTaskPlural').toUpperCase()}</span>
         </div>
         
@@ -474,20 +482,25 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
   };
 
   return (
-    <div 
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[1000] flex items-end lg:items-center justify-center p-0 lg:p-4"
-    >
-      <div className="bg-[var(--color-surface)] w-full max-w-xl rounded-t-3xl lg:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] lg:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10">
-        {/* Header */}
-        <div className="px-8 py-6 border-b border-[var(--color-border)] flex justify-between items-center bg-[var(--color-surface-3)]">
-          <h2 className="text-xl lg:text-2xl font-black text-[var(--color-text)] tracking-tight">{proyecto ? t('projectEditTitle') : t('projectNewModalTitle')}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <Plus size={24} className="rotate-45" />
+    <Modal
+      open
+      onClose={onClose}
+      maxWidth="576px"
+      title={proyecto ? t('projectEditTitle') : t('projectNewModalTitle')}
+      footer={(
+        <div className="flex flex-col-reverse lg:flex-row gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all"
+          >
+            {t('cancel')}
+          </button>
+          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
+            {cargando ? t('saving') : t('projectSaveButton')}
           </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+      )}
+    >
           <form onSubmit={handleSubmit} className="space-y-6">
             {!proyecto && (
               <div className="hidden space-y-3">
@@ -883,22 +896,7 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
               )}
             </div>
           </form>
-        </div>
-
-        {/* Footer */}
-        <div className="px-8 py-6 border-t border-[var(--color-border)] bg-[var(--color-surface-3)] flex flex-col-reverse lg:flex-row gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all"
-          >
-            {t('cancel')}
-          </button>
-          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
-            {cargando ? t('saving') : t('projectSaveButton')}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
