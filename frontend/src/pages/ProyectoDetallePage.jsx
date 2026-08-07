@@ -18,6 +18,7 @@ import RangeDatePicker from '../components/RangeDatePicker';
 import TaskAttachments from '../components/TaskAttachments';
 import TaskComments from '../components/TaskComments';
 import { sortTareas, sortTareasLista } from '../utils/sorters';
+import { getEstadoProyecto, estaListoParaRevision } from '../utils/estadosProyecto';
 import { 
   Target, 
   ListTodo, 
@@ -38,7 +39,10 @@ import {
   AlertTriangle,
   Search,
   User2,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Archive,
+  ArchiveRestore,
+  BadgeCheck
 } from 'lucide-react';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
@@ -320,6 +324,13 @@ const ProyectoDetallePage = () => {
   }, [tareas, usuario?.id]);
 
   const progresoGeneral = stats.pct;
+  const estadoProyecto = getEstadoProyecto(proyecto?.estado);
+  // El progreso se calcula aqui, asi que se arma el objeto que espera el helper
+  const listoParaRevision = usuario?.rol === 'ADMIN' && estaListoParaRevision({
+    estado: proyecto?.estado,
+    progresoGeneral: stats.pct,
+    _count: { tareas: stats.total },
+  });
   const progresoMiembro = stats.pctMiembro;
   const totalGeneral = stats.total;
   const totalMiembro = stats.totalMiembro;
@@ -490,6 +501,21 @@ const ProyectoDetallePage = () => {
     }
   };
 
+  // Terminar / reactivar / archivar desde el detalle, igual que en la tarjeta
+  const handleCambiarEstadoProyecto = async (nuevoEstado) => {
+    const anterior = proyecto?.estado;
+    setProyecto((prev) => (prev ? { ...prev, estado: nuevoEstado } : prev));
+    try {
+      const formData = new FormData();
+      formData.append('estado', nuevoEstado);
+      await proyectosService.editar(id, formData);
+      showToast(t(getEstadoProyecto(nuevoEstado).labelKey));
+    } catch (err) {
+      setProyecto((prev) => (prev ? { ...prev, estado: anterior } : prev));
+      showToast(err.message, 'error');
+    }
+  };
+
   if (cargando) return <PageSkeleton cards={4} />;
 
   return (
@@ -508,6 +534,22 @@ const ProyectoDetallePage = () => {
           <h1 className="text-2xl lg:text-5xl font-black text-[var(--color-text)] tracking-tight leading-tight mb-2">
             {proyecto?.nombre}
           </h1>
+
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span
+              className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md"
+              style={{ color: estadoProyecto.color, background: estadoProyecto.bg }}
+            >
+              {t(estadoProyecto.labelKey)}
+            </span>
+            {/* Mismo aviso que en la tarjeta: 100% de tareas pero sin visto bueno */}
+            {listoParaRevision && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md text-amber-700 bg-amber-100">
+                <BadgeCheck size={12} /> {t('projectReadyForReview')}
+              </span>
+            )}
+          </div>
+
           <p className="text-sm lg:text-base text-[var(--color-text-dim)] font-medium max-w-2xl">{proyecto?.descripcion}</p>
         </div>
 
@@ -527,6 +569,20 @@ const ProyectoDetallePage = () => {
               { label: t('projectExport'), icon: <Download size={15} />, onSelect: () => setModalExportar(true) },
               usuario?.rol === 'ADMIN' && { separator: true },
               usuario?.rol === 'ADMIN' && { label: t('projectSaveTemplate'), icon: <Save size={15} />, onSelect: () => setModalPlantilla(true) },
+              usuario?.rol === 'ADMIN' && { separator: true },
+              usuario?.rol === 'ADMIN' && estadoProyecto.value !== 'TERMINADO' && estadoProyecto.value !== 'ARCHIVADO' && {
+                label: t('projectMarkFinished'),
+                icon: <BadgeCheck size={15} />,
+                onSelect: () => handleCambiarEstadoProyecto('TERMINADO'),
+              },
+              usuario?.rol === 'ADMIN' && estadoProyecto.value !== 'ACTIVO' && {
+                label: t('projectReactivate'),
+                icon: <RotateCcw size={15} />,
+                onSelect: () => handleCambiarEstadoProyecto('ACTIVO'),
+              },
+              usuario?.rol === 'ADMIN' && (estadoProyecto.value === 'ARCHIVADO'
+                ? { label: t('projectUnarchive'), icon: <ArchiveRestore size={15} />, onSelect: () => handleCambiarEstadoProyecto('ACTIVO') }
+                : { label: t('projectArchive'), icon: <Archive size={15} />, onSelect: () => handleCambiarEstadoProyecto('ARCHIVADO') }),
             ]}
           />
         </div>

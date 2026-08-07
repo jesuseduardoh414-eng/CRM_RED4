@@ -8,6 +8,7 @@ import { proyectosService } from '../services/api';
 import { PageSkeleton } from '../components/Skeleton';
 import UserAvatar from '../components/UserAvatar';
 import { usePreferences } from '../context/PreferencesContext';
+import { getEstadoProyecto } from '../utils/estadosProyecto';
 import { 
   Code2, 
   BarChart3, 
@@ -32,11 +33,8 @@ const ROL_CONF = {
   MIEMBRO: { labelKey: 'roleMember',  color: '#94a3b8', bg: 'rgba(148,163,184,0.08)' },
 };
 
-const ESTADO_COLOR = {
-  ACTIVO:   '#34d399',
-  EN_PAUSA: '#f59e0b',
-  CERRADO:  '#94a3b8',
-};
+// Los colores salen del catalogo compartido (utils/estadosProyecto)
+const getColorEstado = (estado) => getEstadoProyecto(estado).color;
 
 // —— Tarjeta de miembro —————————————————————————————————————————————————————
 const MiembroCard = ({ miembro }) => {
@@ -146,7 +144,7 @@ const MiembroCard = ({ miembro }) => {
 const ProyectoEquipo = ({ proyecto, equipoData }) => {
   const { t } = usePreferences();
   const [open, setOpen] = useState(true);
-  const estadoColor = ESTADO_COLOR[proyecto.estado] || '#94a3b8';
+  const estadoColor = getColorEstado(proyecto.estado);
   const areaConf    = AREA_CONF[proyecto.creador?.area] || AREA_CONF.DESARROLLO;
 
   return (

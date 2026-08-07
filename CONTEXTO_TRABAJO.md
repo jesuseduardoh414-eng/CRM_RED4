@@ -281,6 +281,27 @@ Archivo: [AgendaPage.jsx](frontend/src/pages/AgendaPage.jsx) (2154 líneas). Ir 
 
 ---
 
+## 5-ter. Estados de proyecto — cómo quedó
+
+**Catálogo:** `ACTIVO` · `INACTIVO` · `TERMINADO` · `ARCHIVADO`. Definido en **dos** archivos que hay que mantener sincronizados:
+[backend/src/utils/estados.utils.js](backend/src/utils/estados.utils.js) y [frontend/src/utils/estadosProyecto.js](frontend/src/utils/estadosProyecto.js).
+
+**Nombres viejos:** `EN_PAUSA/PAUSA/PAUSADO/PENDIENTE → INACTIVO` y `CERRADO/FINALIZADO/HECHO → TERMINADO`. Los alias se dejaron **a propósito y de forma permanente**: protegen contra registros sin migrar y contra clientes que no se han recargado.
+
+> ⚠️ **`CERRADO` no era solo una etiqueta.** El backend lo usaba para *filtrar* en tres consultas: [agenda.controller.js:221](backend/src/controllers/agenda.controller.js#L221) y [:680](backend/src/controllers/agenda.controller.js#L680) (ocupación de la gente) y [stats.controller.js:192](backend/src/controllers/stats.controller.js#L192) (números del inicio). Se cambiaron a `notIn: ESTADOS_PROYECTO_OCULTOS`, que incluye los nombres nuevos **y** los viejos. Si solo se hubiera renombrado la etiqueta, esos filtros habrían dejado de filtrar en silencio y los proyectos terminados habrían empezado a aparecer en la agenda de todos.
+
+**Flujo de "terminado" (definido por el usuario):** un proyecto **no** se marca solo al llegar al 100%. Se le muestra al admin el distintivo *"Listo para revisión"* (`estaListoParaRevision`: 100% de tareas + al menos 1 tarea + estado `ACTIVO`) y él decide. Si luego hay cambios, puede reactivarlo.
+
+**Validación:** el backend rechaza estados fuera del catálogo con 400. Antes aceptaba cualquier texto.
+
+### ⏳ Pendiente de este bloque
+
+- **Migrar los 2 proyectos con `EN_PAUSA` a `INACTIVO`.** Hay que hacerlo **después** de publicar, no antes: el frontend desplegado todavía no conoce `INACTIVO` y los mostraría como "Activo". Con el código nuevo ya publicado, la migración es segura. Al 2026-08-07 la base tenía 29 proyectos: 27 `ACTIVO`, 2 `EN_PAUSA`, 0 `CERRADO`.
+- **P8** aún no incluye "agregar documentos" en el menú de la tarjeta — eso llega con el Bloque 4.
+- **D10** (que el Inicio muestre solo activos y sin terminar) es del Bloque 7; el modelo de datos que necesita ya está listo.
+
+---
+
 ## 5-bis. Bugs preexistentes encontrados de paso
 
 | Archivo | Problema | Estado |
@@ -316,6 +337,8 @@ Anotadas, no bloqueantes. El usuario pidió: *"si no entiendes aún qué hacer e
 | 2026-08-07 | **0 · G1** | ✅ **Scrollbar rediseñado.** Antes el thumb era `--color-surface-3` (casi invisible en claro) y en hover saltaba a `--color-text-dim` (demasiado oscuro). Ahora usa `--color-scrollbar` / `-hover` por tema, con `background-clip: content-box` y soporte Firefox. Quitados 3 scrollbars inline duplicados. **Definida la clase `.no-scrollbar`, que se usaba en `ProyectosPage` sin existir** (bug latente). | `src/index.css`, `KanbanView.jsx`, `TaskComments.jsx`, `ProyectoDetallePage.jsx` |
 | 2026-08-07 | **0 · G3** | ✅ **Scroll heredado arreglado.** `useEffect` sobre `location.pathname` que resetea el contenedor del `<main>`. Clave: **el scroll no lo lleva `window`** sino el `div.flex-1.overflow-y-auto` del Layout, por eso `window.scrollTo` solo no bastaba. | `Layout.jsx` |
 | 2026-08-07 | **0 · G4** | ✅ **Avatares.** Causa raíz: `UserAvatar` solo se usaba en `EquipoPage`; los otros 13 lugares dibujaban iniciales a mano con fondos de color fijos (incl. el **gradiente naranja** del sidebar). `UserAvatar` ahora usa fondo neutro cuando hay foto y cae a iniciales si la URL está rota (`onError`). Migrados 9 sitios. | `UserAvatar.jsx`, `Layout.jsx` (×2), `KanbanView.jsx`, `TaskComments.jsx`, `ProjectActivityLog.jsx`, `UsuariosPage.jsx` (×2), `ModalEvento.jsx`, `ProyectosPage.jsx` |
+| 2026-08-07 | **Bloque 1 (detalle)** | ✅ El detalle del proyecto también muestra el **estado** y el aviso **"Listo para revisión"**, y su menú de 3 puntitos incluye terminar / reactivar / archivar / desarchivar. Antes solo estaba en la tarjeta del listado. | `ProyectoDetallePage.jsx` |
+| 2026-08-07 | **Bloque 1 · P3/P5/P6/P8/D10** | ✅ **Modelo de estados de proyecto rehecho.** `ACTIVO / INACTIVO / TERMINADO / ARCHIVADO`. Catálogo único en `backend/src/utils/estados.utils.js` y `frontend/src/utils/estadosProyecto.js` (antes estaba duplicado en 3 archivos del front, cada uno con sus colores). El backend ahora **valida** el estado (era texto libre) y normaliza al guardar. Switch activo/inactivo en el formulario; terminar/reactivar/archivar/desarchivar desde el menú de la tarjeta. Distintivo **"Listo para revisión"** cuando un proyecto activo llega al 100% de tareas. El filtro "Todos" deja fuera los archivados. | `estados.utils.js` (nuevo), `estadosProyecto.js` (nuevo), `proyectos.controller.js`, `agenda.controller.js`, `stats.controller.js`, `sort.utils.js`, `ProyectosPage.jsx`, `DashboardPage.jsx`, `EquipoPage.jsx`, `PreferencesContext.jsx` |
 | 2026-08-07 | **M2 + D6** | ✅ **Quitada la actividad del usuario de Gestión de Usuarios** (panel desplegable, columnas hechas/en progreso/vencen, resumen por proyecto) **y el bloque "Top productividad" de Inicio**. Iban juntos: *Top productividad* era lo único que enlazaba a ese panel vía `/usuarios?actividad=<id>`. Se borraron `UserActivityPanel`, `ActivityColumn`, `ProjectSummary`, `TaskMini`, `actividadVacia`, `actividadDesdeTareas`, `ordenarPorFecha`, el estado `actividadAbierta` y el manejo del parámetro `?actividad=`. **El endpoint `usuariosService.actividad` y su ruta en el backend se dejaron intactos** por si se reusan en otro módulo. | `UsuariosPage.jsx` (−149 líneas), `DashboardPage.jsx` |
 | 2026-08-07 | **0 · G2 (parte 3)** | ✅ **Menú extendido y Kanban recolocado.** El usuario ajustó la regla: aplicarlo también con **exactamente 2** acciones, no solo con 3+. Convertidos: fila de tarea del detalle, tarjeta de proyecto, evento de la agenda, tarjeta de Usuarios en móvil. En el Kanban, los 3 puntitos se movieron junto a la fecha y la fila de "Avanzar" ya solo se renderiza si la tarea puede avanzar — antes una tarea completada dejaba el botón suelto en una fila vacía. | `KanbanView.jsx`, `ProyectoDetallePage.jsx`, `ProyectosPage.jsx`, `AgendaPage.jsx`, `UsuariosPage.jsx` |
 | 2026-08-07 | **0 · G2 (parte 2)** | ✅ **Menú de 3 puntitos.** El usuario aclaró que G2 no era solo poner etiquetas: con más de 2 botones en un componente hay que agruparlos. Creado `ActionMenu.jsx` (Radix DropdownMenu) y aplicado en 4 sitios. Decisión suya: la acción principal queda **fuera** del menú. Ver "Regla de acciones por componente". | `ActionMenu.jsx` (nuevo), `KanbanView.jsx`, `UsuariosPage.jsx` (×2), `ProyectoDetallePage.jsx`, `PreferencesContext.jsx` (`moreOptions`) |

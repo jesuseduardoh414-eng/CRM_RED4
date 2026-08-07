@@ -7,6 +7,7 @@ const {
   syncEventoToGoogle,
   deleteEventoFromGoogle,
 } = require('../services/google-calendar.service');
+const { ESTADOS_PROYECTO_OCULTOS } = require('../utils/estados.utils');
 
 const DIAS_LABORALES_DEFAULT = [1, 2, 3, 4, 5];
 const TIPOS_NO_LABORALES = ['festivo', 'vacacion', 'permiso'];
@@ -218,7 +219,7 @@ const listar = async (req, res) => {
       prisma.proyecto.findMany({
         where: {
           AND: [
-            { estado: { not: 'CERRADO' } },
+            { estado: { notIn: ESTADOS_PROYECTO_OCULTOS } },
             { fechaInicio: { lte: hasta } },
             {
               OR: [
@@ -677,7 +678,7 @@ const consultarDisponibilidad = async (req, res) => {
       prisma.proyecto.findMany({
         where: {
           id: excluir_proyecto_id ? { not: parseInt(excluir_proyecto_id) } : undefined,
-          estado: { not: 'CERRADO' },
+          estado: { notIn: ESTADOS_PROYECTO_OCULTOS },
           miembros: { some: { id: { in: ids } } },
           fechaInicio: { lt: end },
           OR: [

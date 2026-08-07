@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const { sortTareas } = require('../utils/sort.utils');
 const { buildScopeProyectoParaAdmin, esAdminDeArea } = require('../utils/permissions.utils');
+const { ESTADOS_PROYECTO_OCULTOS } = require('../utils/estados.utils');
 
 const finDelDia = (fecha) => {
   const d = new Date(fecha);
@@ -189,7 +190,7 @@ const getActividadMiembros = async (usuario) => {
     }),
     prisma.proyecto.findMany({
       where: {
-        estado: { not: 'CERRADO' },
+        estado: { notIn: ESTADOS_PROYECTO_OCULTOS },
         OR: [
           { miembros: { some: { id: { in: memberIds } } } },
           { creadorId: { in: memberIds } },

@@ -7,6 +7,7 @@ const { registrarActividad } = require('../utils/logger');
 const { sortProyectos } = require('../utils/sort.utils');
 const { addDays, buildTemplateTasksFromProject } = require('../utils/plantillas.utils');
 const { esAdmin, buildScopeProyectoParaAdmin, puedeAdministrarProyecto, puedeGestionarArea } = require('../utils/permissions.utils');
+const { ESTADOS_PROYECTO, ESTADO_PROYECTO_DEFAULT, normalizarEstadoProyecto, esEstadoProyectoValido } = require('../utils/estados.utils');
 
 // Campos comunes del include
 const INCLUDE_PROYECTO = {
@@ -390,6 +391,10 @@ const crear = async (req, res) => {
     return res.status(400).json({ error: 'El nombre del proyecto es requerido' });
   }
 
+  if (estado && !esEstadoProyectoValido(estado)) {
+    return res.status(400).json({ error: `Estado inválido. Valores permitidos: ${ESTADOS_PROYECTO.join(', ')}` });
+  }
+
   try {
     // Procesar IDs de miembros (pueden venir como string JSON en multipart)
     const ids = normalizarIds(parseJsonArray(miembrosIds));
@@ -430,7 +435,7 @@ const crear = async (req, res) => {
         data: {
           nombre:      nombre.trim(),
           descripcion: descripcion?.trim() || null,
-          estado:      estado || 'ACTIVO',
+          estado:      estado ? normalizarEstadoProyecto(estado) : ESTADO_PROYECTO_DEFAULT,
           area:        areaProyecto,
           fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date(),
           fechaFin:    fechaFin ? new Date(fechaFin) : null,
@@ -499,6 +504,10 @@ const editar = async (req, res) => {
   const { nombre, descripcion, estado, area, fechaInicio, fechaFin, miembrosIds } = req.body;
   if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
 
+  if (estado && !esEstadoProyectoValido(estado)) {
+    return res.status(400).json({ error: `Estado inválido. Valores permitidos: ${ESTADOS_PROYECTO.join(', ')}` });
+  }
+
   try {
     const existente = await prisma.proyecto.findUnique({
       where: { id },
@@ -515,7 +524,7 @@ const editar = async (req, res) => {
     let dataUpdate = {
       ...(nombre      && { nombre: nombre.trim() }),
       ...(descripcion !== undefined && { descripcion: descripcion?.trim() || null }),
-      ...(estado      && { estado }),
+      ...(estado      && { estado: normalizarEstadoProyecto(estado) }),
       ...(area        && { area }),
       ...(fechaInicio && { fechaInicio: new Date(fechaInicio) }),
       ...(fechaFin !== undefined && { fechaFin: fechaFin ? new Date(fechaFin) : null }),

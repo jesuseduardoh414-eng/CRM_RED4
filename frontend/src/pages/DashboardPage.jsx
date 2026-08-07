@@ -7,6 +7,7 @@ import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
 import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
+import { getEstadoProyecto } from '../utils/estadosProyecto';
 import {
   Layers,
   CheckCircle2,
@@ -158,13 +159,6 @@ const PROJECT_TIMELINE_COLORS = [
   { solid: '#b45309', soft: 'rgba(180,83,9,0.16)', accent: '#fbbf24' },
 ];
 
-const PROJECT_STATUS_CONF = {
-  ACTIVO:    { labelKey: 'statusActive', color: '#2563eb', bg: 'rgba(37,99,235,0.10)',  icon: 'live' },
-  PAUSA:     { labelKey: 'statusPaused', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', icon: 'pause' },
-  PAUSADO:   { labelKey: 'statusPaused', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', icon: 'pause' },
-  TERMINADO: { labelKey: 'statusDone',   color: '#16a34a', bg: 'rgba(22,163,74,0.10)',  icon: 'done' },
-  CERRADO:   { labelKey: 'statusClosed', color: '#16a34a', bg: 'rgba(22,163,74,0.10)',  icon: 'done' },
-};
 
 const getProjectTimelineColor = (project) => {
   const seed = String(project?.nombre || project?.id || '')
@@ -173,7 +167,6 @@ const getProjectTimelineColor = (project) => {
   return PROJECT_TIMELINE_COLORS[seed % PROJECT_TIMELINE_COLORS.length];
 };
 
-const getProjectStatusConf = (estado) => PROJECT_STATUS_CONF[String(estado || 'ACTIVO').toUpperCase()] || PROJECT_STATUS_CONF.ACTIVO;
 const getAreaLabel = (area, t) => t(AREA_CONF[String(area || '').toUpperCase()]?.labelKey || 'areaGeneral');
 
 const getTaskStableKey = (taskLike) => `tarea-${getTaskNumericId(taskLike) || taskLike?.origenId || taskLike?.id}-${taskLike?.fechaInicio || ''}`;
@@ -612,7 +605,7 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
           const selected = selectedProjectId === entry.project.id;
           const progress = entry.project.progresoGeneral ?? entry.project.progreso ?? 0;
           const palette = getProjectTimelineColor(entry.project);
-          const statusConf = getProjectStatusConf(entry.project.estado);
+          const statusConf = getEstadoProyecto(entry.project.estado);
           const miembros = entry.project.miembros || [];
           const previewMiembros = miembros.slice(0, 3);
 
@@ -1799,7 +1792,7 @@ const DashboardAdmin = () => {
                     {(p.enProgreso ?? 0)} {t('dashboardInProgress').toLowerCase()}
                   </span>
                   <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {t(getProjectStatusConf(p.estado ?? projects.find((project) => project.id === p.id)?.estado ?? 'ACTIVO').labelKey)}
+                    {t(getEstadoProyecto(p.estado ?? projects.find((project) => project.id === p.id)?.estado ?? 'ACTIVO').labelKey)}
                   </span>
                   <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#8b5cf6', background: 'rgba(139,92,246,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
                     {t('dashboardMembersCount', {

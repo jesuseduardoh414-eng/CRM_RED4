@@ -12,6 +12,13 @@ import Tooltip from '../components/Tooltip';
 import ActionMenu from '../components/ActionMenu';
 import TaskAttachments from '../components/TaskAttachments';
 import { sortProyectos } from '../utils/sorters';
+import { Switch } from '../components/ui/switch';
+import {
+  ESTADOS_PROYECTO,
+  getEstadoProyecto,
+  normalizarEstadoProyecto,
+  estaListoParaRevision,
+} from '../utils/estadosProyecto';
 import { 
   Code2, 
   BarChart3, 
@@ -26,7 +33,11 @@ import {
   Upload,
   FileText,
   Calendar,
-  Megaphone
+  Megaphone,
+  Archive,
+  ArchiveRestore,
+  BadgeCheck,
+  RotateCcw
 } from 'lucide-react';
 
 // ── Configuraciones Visuales ────────────────────────────────────────────────
@@ -37,22 +48,6 @@ const AREA_CONF = {
   MARKETING:      { labelKey: 'areaMarketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)', icon: <Megaphone size={14} /> },
 };
 
-const ESTADOS = [
-  { value: 'ACTIVO',   labelKey: 'statusActive', color: '#00d166', bg: 'rgba(0,209,102,0.12)' },
-  { value: 'EN_PAUSA', labelKey: 'statusPaused', color: '#ff9100', bg: 'rgba(255,145,0,0.12)' },
-  { value: 'CERRADO',  labelKey: 'statusClosed', color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
-];
-
-const ESTADO_ALIASES = {
-  PENDIENTE: 'EN_PAUSA',
-  PAUSA: 'EN_PAUSA',
-  PAUSADO: 'EN_PAUSA',
-  TERMINADO: 'CERRADO',
-  FINALIZADO: 'CERRADO',
-  HECHO: 'CERRADO',
-};
-
-const normalizarEstadoProyecto = (estado) => ESTADO_ALIASES[String(estado || '').toUpperCase()] || String(estado || 'ACTIVO').toUpperCase();
 
 const getAreasProyecto = (area) => {
   if (!area) return ['DESARROLLO'];
@@ -223,10 +218,11 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
 };
 
 // ── Tarjeta de Proyecto ─────────────────────────────────────────────────────
-const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin }) => {
+const ProyectoCard = ({ proyecto, onEditar, onEliminar, onCambiarEstado, onVerDetalle, esAdmin }) => {
   const { t, locale } = usePreferences();
   const areaLabel = getLabelAreas(proyecto.area, t);
-  const estado = ESTADOS.find(e => e.value === normalizarEstadoProyecto(proyecto.estado)) || ESTADOS[0];
+  const estado = getEstadoProyecto(proyecto.estado);
+  const listoParaRevision = esAdmin && estaListoParaRevision(proyecto);
   const total = proyecto._count?.tareas || 0;
   const progresoGeneral = proyecto.progresoGeneral ?? proyecto.progreso ?? 0;
   const progresoMiembro = proyecto.progresoMiembro;
@@ -243,6 +239,13 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
             <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md" style={{ color: estado.color, background: estado.bg }}>
               {t(estado.labelKey)}
             </span>
+            {/* Aviso al admin: todas las tareas estan hechas pero nadie ha dado
+                el visto bueno todavia. No se marca solo a proposito. */}
+            {listoParaRevision && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md text-amber-700 bg-amber-100">
+                <BadgeCheck size={12} /> {t('projectReadyForReview')}
+              </span>
+            )}
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
               {areaLabel}
             </span>
@@ -300,13 +303,25 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
         
         {esAdmin && (
           <div className="flex gap-2">
-            {/* Aqui se sumaran archivar / documentos / activar-desactivar (tarea P8) */}
             <ActionMenu
               size={16}
               className="p-2 bg-slate-50 border border-slate-100 rounded-xl"
               items={[
                 { label: t('edit'), icon: <Pencil size={15} />, onSelect: () => onEditar(proyecto) },
+                estado.value !== 'TERMINADO' && estado.value !== 'ARCHIVADO' && {
+                  label: t('projectMarkFinished'),
+                  icon: <BadgeCheck size={15} />,
+                  onSelect: () => onCambiarEstado(proyecto, 'TERMINADO'),
+                },
+                estado.value !== 'ACTIVO' && {
+                  label: t('projectReactivate'),
+                  icon: <RotateCcw size={15} />,
+                  onSelect: () => onCambiarEstado(proyecto, 'ACTIVO'),
+                },
                 { separator: true },
+                estado.value === 'ARCHIVADO'
+                  ? { label: t('projectUnarchive'), icon: <ArchiveRestore size={15} />, onSelect: () => onCambiarEstado(proyecto, 'ACTIVO') }
+                  : { label: t('projectArchive'), icon: <Archive size={15} />, onSelect: () => onCambiarEstado(proyecto, 'ARCHIVADO') },
                 { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onEliminar(proyecto), danger: true },
               ]}
             />
@@ -605,9 +620,18 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectFieldStatus').toUpperCase()}</label>
-                <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
-                  {ESTADOS.map(e => <option key={e.value} value={e.value}>{t(e.labelKey)}</option>)}
-                </select>
+                {/* Switch solo para activo/inactivo, que es el uso diario.
+                    Terminar y archivar viven en el menu de la tarjeta. */}
+                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-sm font-bold text-[var(--color-text)]">
+                    {t(getEstadoProyecto(form.estado).labelKey)}
+                  </span>
+                  <Switch
+                    checked={normalizarEstadoProyecto(form.estado) === 'ACTIVO'}
+                    onCheckedChange={(activo) => setForm({ ...form, estado: activo ? 'ACTIVO' : 'INACTIVO' })}
+                    aria-label={t('projectActiveSwitch')}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('projectFieldArea').toUpperCase()}</label>
@@ -945,7 +969,27 @@ const ProyectosPage = () => {
     } catch (err) { showToast(err.message, 'error'); }
   };
 
-  const filtrados = filtro === 'TODOS' ? proyectos : proyectos.filter(p => normalizarEstadoProyecto(p.estado) === filtro);
+  // Terminar, reactivar y archivar. Se manda solo el estado: el backend deja el
+  // resto de campos intactos porque el update es parcial.
+  const handleCambiarEstado = async (p, nuevoEstado) => {
+    const anterior = p.estado;
+    setProyectos(prev => prev.map(x => (x.id === p.id ? { ...x, estado: nuevoEstado } : x)));
+    try {
+      const formData = new FormData();
+      formData.append('estado', nuevoEstado);
+      await proyectosService.editar(p.id, formData);
+      showToast(t(ESTADOS_PROYECTO.find(e => e.value === nuevoEstado)?.labelKey || 'statusActive'));
+    } catch (err) {
+      setProyectos(prev => prev.map(x => (x.id === p.id ? { ...x, estado: anterior } : x)));
+      showToast(err.message, 'error');
+    }
+  };
+
+  // "Todos" deja fuera los archivados: archivar sirve justamente para sacarlos
+  // de la vista diaria. Se ven eligiendo el filtro Archivados.
+  const filtrados = filtro === 'TODOS'
+    ? proyectos.filter(p => normalizarEstadoProyecto(p.estado) !== 'ARCHIVADO')
+    : proyectos.filter(p => normalizarEstadoProyecto(p.estado) === filtro);
 
   if (cargando) return <PageSkeleton cards={3} />;
 
@@ -968,7 +1012,7 @@ const ProyectosPage = () => {
 
       {/* Filtros */}
       <div className="flex gap-2 mb-10 overflow-x-auto pb-2 snap-x snap-mandatory no-scrollbar">
-        {['TODOS', 'ACTIVO', 'EN_PAUSA', 'CERRADO'].map(f => (
+        {['TODOS', ...ESTADOS_PROYECTO.map(e => e.value)].map(f => (
           <button
             key={f} 
             onClick={() => setFiltro(f)}
@@ -977,7 +1021,7 @@ const ProyectosPage = () => {
               ${filtro === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
             `}
           >
-            {f === 'TODOS' ? t('projectFilterAll') : t(ESTADOS.find(e => e.value === f)?.labelKey || 'statusActive')}
+            {f === 'TODOS' ? t('projectFilterAll') : t(ESTADOS_PROYECTO.find(e => e.value === f)?.labelKey || 'statusActive')}
           </button>
         ))}
       </div>
@@ -997,8 +1041,9 @@ const ProyectosPage = () => {
           {filtrados.map(p => (
             <ProyectoCard 
               key={p.id} proyecto={p} esAdmin={esAdmin} 
-              onEditar={(p) => { setEditando(p); setModal(true); }} 
+              onEditar={(p) => { setEditando(p); setModal(true); }}
               onEliminar={handleEliminar}
+              onCambiarEstado={handleCambiarEstado}
               onVerDetalle={() => navigate(`/proyectos/${p.id}`)}
             />
           ))}
