@@ -63,6 +63,9 @@ export const ToastProvider = ({ children }) => {
               <span style={{ flex: 1 }}>{toast.message}</span>
               <button
                 onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                // Sin tooltip a proposito: los avisos se cierran solos y una etiqueta
+                // flotante encima estorbaria. Basta el nombre accesible.
+                aria-label="Cerrar aviso"
                 style={{
                   background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
                   cursor: 'pointer', width: '20px', height: '20px', borderRadius: '50%',

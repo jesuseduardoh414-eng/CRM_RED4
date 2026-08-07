@@ -16,6 +16,7 @@ import {
 import { agendaService, adjuntosService, usuariosService } from '../services/api';
 import UserAvatar from './UserAvatar';
 import Modal from './Modal';
+import Tooltip from './Tooltip';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferences } from '../context/PreferencesContext';
@@ -96,7 +97,7 @@ const TimeRangePicker = ({ start, end, onChange }) => {
           >
             <div style={{ padding: '1.4rem 1.5rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900' }}>{t('eventSelectTime')}</h3>
-              <button type="button" onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-dim)' }}>
+              <button type="button" onClick={() => setIsOpen(false)} aria-label={t('close')} title={t('close')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-dim)' }}>
                 <X size={22} />
               </button>
             </div>
@@ -778,15 +779,17 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', paddingBottom: '1rem' }}>
             {evento && esDuenio && (
-              <button
-                type="button"
-                onClick={() => onDelete(evento.id)}
-                style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#f87171', width: '56px', height: '56px', borderRadius: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
-              >
-                <Trash2 size={24} />
-              </button>
+              <Tooltip label={t('delete')}>
+                <button
+                  type="button"
+                  onClick={() => onDelete(evento.id)}
+                  style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#f87171', width: '56px', height: '56px', borderRadius: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
+                >
+                  <Trash2 size={24} />
+                </button>
+              </Tooltip>
             )}
             <button
               type="button"

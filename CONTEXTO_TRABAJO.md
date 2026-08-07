@@ -114,7 +114,7 @@ Origen: `tareas_generadas.json` (19 tareas, sin trackear en git) **+ el bloc de 
 | ID | Tarea |
 |---|---|
 | D5 | Quitar "Calendario de tareas" |
-| D6 | Quitar "Top productividad" |
+| D6 | ✅ Quitar "Top productividad" — *hecho el 2026-08-07 junto con M2* |
 | D7 | Quitar "Flujo reciente" |
 | D8 | Quitar la parte de equipo del inicio |
 
@@ -213,7 +213,7 @@ Origen: `tareas_generadas.json` (19 tareas, sin trackear en git) **+ el bloc de 
 | ID | Tarea | JSON |
 |---|---|---|
 | M1 | Agregar filtros | 19 |
-| M2 | Quitar la actividad del usuario | — |
+| M2 | ✅ Quitar la actividad del usuario — *hecho el 2026-08-07*. Ojo: quedaron **claves de traducción huérfanas** (`usersActivity*`, `usersViewActivity`, `dashboardTopProductivity`, `dashboardPerWeek`). Se dejaron a propósito: borrarlas no aporta y arriesga tumbar alguna que siga en uso. | — |
 
 ---
 
@@ -281,6 +281,16 @@ Archivo: [AgendaPage.jsx](frontend/src/pages/AgendaPage.jsx) (2154 líneas). Ir 
 
 ---
 
+## 5-bis. Bugs preexistentes encontrados de paso
+
+| Archivo | Problema | Estado |
+|---|---|---|
+| [DashboardPage.jsx:995](frontend/src/pages/DashboardPage.jsx#L995) y [:1030](frontend/src/pages/DashboardPage.jsx#L1030) | Usa `tareasService` pero **nunca lo importa** (la línea 5 solo trae `proyectosService` y `statsService`). Al pulsar "mover +1 día / +2 días / elegir cantidad" en el día expandido del Inicio, revienta con `tareasService is not defined`. Lo detecta ESLint como `no-undef`; **estaba así desde antes de este trabajo**. | ⚠️ Reportado al usuario, sin corregir |
+
+> Arreglo: añadir `tareasService` al import de la línea 5. Ojo: `pedirMovimientoPersonalizado` (línea ~1375) aparece como no usada, así que parte de ese flujo puede ser código muerto — conviene revisar cuál de las dos rutas está viva antes de tocar.
+
+---
+
 ## 6. Dudas abiertas
 
 Anotadas, no bloqueantes. El usuario pidió: *"si no entiendes aún qué hacer en una actividad, no importa, solo anótala y conforme vayamos haciéndolas te explico más a detalle."*
@@ -308,8 +318,17 @@ Anotadas, no bloqueantes. El usuario pidió: *"si no entiendes aún qué hacer e
 | 2026-08-07 | **0 · G1** | ✅ **Scrollbar rediseñado.** Antes el thumb era `--color-surface-3` (casi invisible en claro) y en hover saltaba a `--color-text-dim` (demasiado oscuro). Ahora usa `--color-scrollbar` / `-hover` por tema, con `background-clip: content-box` y soporte Firefox. Quitados 3 scrollbars inline duplicados. **Definida la clase `.no-scrollbar`, que se usaba en `ProyectosPage` sin existir** (bug latente). | `src/index.css`, `KanbanView.jsx`, `TaskComments.jsx`, `ProyectoDetallePage.jsx` |
 | 2026-08-07 | **0 · G3** | ✅ **Scroll heredado arreglado.** `useEffect` sobre `location.pathname` que resetea el contenedor del `<main>`. Clave: **el scroll no lo lleva `window`** sino el `div.flex-1.overflow-y-auto` del Layout, por eso `window.scrollTo` solo no bastaba. | `Layout.jsx` |
 | 2026-08-07 | **0 · G4** | ✅ **Avatares.** Causa raíz: `UserAvatar` solo se usaba en `EquipoPage`; los otros 13 lugares dibujaban iniciales a mano con fondos de color fijos (incl. el **gradiente naranja** del sidebar). `UserAvatar` ahora usa fondo neutro cuando hay foto y cae a iniciales si la URL está rota (`onError`). Migrados 9 sitios. | `UserAvatar.jsx`, `Layout.jsx` (×2), `KanbanView.jsx`, `TaskComments.jsx`, `ProjectActivityLog.jsx`, `UsuariosPage.jsx` (×2), `ModalEvento.jsx`, `ProyectosPage.jsx` |
-| 2026-08-07 | **0 · G2** | 🟡 `TooltipProvider` montado en `App.jsx` y primitivo listo. **Falta aplicar tooltips a los botones-icono**, que se hará módulo por módulo. | `App.jsx`, `eslint.config.js` |
+| 2026-08-07 | **M2 + D6** | ✅ **Quitada la actividad del usuario de Gestión de Usuarios** (panel desplegable, columnas hechas/en progreso/vencen, resumen por proyecto) **y el bloque "Top productividad" de Inicio**. Iban juntos: *Top productividad* era lo único que enlazaba a ese panel vía `/usuarios?actividad=<id>`. Se borraron `UserActivityPanel`, `ActivityColumn`, `ProjectSummary`, `TaskMini`, `actividadVacia`, `actividadDesdeTareas`, `ordenarPorFecha`, el estado `actividadAbierta` y el manejo del parámetro `?actividad=`. **El endpoint `usuariosService.actividad` y su ruta en el backend se dejaron intactos** por si se reusan en otro módulo. | `UsuariosPage.jsx` (−149 líneas), `DashboardPage.jsx` |
+| 2026-08-07 | **0 · G2 (parte 3)** | ✅ **Menú extendido y Kanban recolocado.** El usuario ajustó la regla: aplicarlo también con **exactamente 2** acciones, no solo con 3+. Convertidos: fila de tarea del detalle, tarjeta de proyecto, evento de la agenda, tarjeta de Usuarios en móvil. En el Kanban, los 3 puntitos se movieron junto a la fecha y la fila de "Avanzar" ya solo se renderiza si la tarea puede avanzar — antes una tarea completada dejaba el botón suelto en una fila vacía. | `KanbanView.jsx`, `ProyectoDetallePage.jsx`, `ProyectosPage.jsx`, `AgendaPage.jsx`, `UsuariosPage.jsx` |
+| 2026-08-07 | **0 · G2 (parte 2)** | ✅ **Menú de 3 puntitos.** El usuario aclaró que G2 no era solo poner etiquetas: con más de 2 botones en un componente hay que agruparlos. Creado `ActionMenu.jsx` (Radix DropdownMenu) y aplicado en 4 sitios. Decisión suya: la acción principal queda **fuera** del menú. Ver "Regla de acciones por componente". | `ActionMenu.jsx` (nuevo), `KanbanView.jsx`, `UsuariosPage.jsx` (×2), `ProyectoDetallePage.jsx`, `PreferencesContext.jsx` (`moreOptions`) |
+| 2026-08-07 | **0 · G2** | ✅ **Tooltips aplicados en todo el sistema.** Componente `Tooltip.jsx` (envoltorio de Radix) que además inyecta `aria-label` en el hijo — Radix solo aporta `aria-describedby`, que es *descripción*, no *nombre* accesible. **44 de 57 botones de solo icono** quedaron etiquetados; los 13 restantes no son de solo icono (muestran texto vía `{variable}`). De paso se conectó `t()` en 6 componentes que tenían texto en español fijo. **Cierra G2.** | `Tooltip.jsx` (nuevo), `App.jsx`, `KanbanView`, `TaskComments`, `TaskAttachments`, `RangeDatePicker`, `ModalEvento`, `ModalConfiguracionAgenda`, `ToastContext`, `LoginPage`, `InvitationPage`, `UsuariosPage`, `ProyectosPage`, `ProyectoDetallePage`, `AgendaPage`, `DashboardPage`, `PreferencesContext` (8 claves nuevas) |
 | 2026-08-07 | **0 · G6/G7/A4 + obs. usuario** | ✅ **Componente `Modal` común creado** sobre Radix Dialog y aplicado a **las 11 ventanas**. Resuelve de raíz: scroll dentro de la tarjeta (el usuario reportó que la barra se salía por la esquina redondeada), encabezado/pie fijos, cierre con **Esc** y **clic fuera**, bloqueo de scroll del fondo y foco atrapado. El usuario validó el look con 2 ventanas antes de extenderlo. **Cierra G6, G7 y A4.** | `src/components/Modal.jsx` (nuevo), `ModalEvento.jsx`, `ModalImportar.jsx`, `ModalConfiguracionAgenda.jsx`, `ProyectosPage.jsx`, `ProyectoDetallePage.jsx` (×3), `UsuariosPage.jsx` (×2), `AgendaPage.jsx`, `DashboardPage.jsx`, `PreferencesContext.jsx` (clave `agendaSettingsTitle`) |
+
+### 🚀 Publicado
+
+**2026-08-07 — commit `e40a01b` en `master`.** Todo lo anterior (shadcn, scrollbar, scroll entre páginas, avatares y las 11 ventanas) se subió con la aprobación explícita del usuario y quedó desplegado en el CRM en vivo vía Vercel.
+
+`tareas_generadas.json` **no se subió**: contiene un correo personal y no se pudo confirmar si el repo es público. Sigue como archivo local sin trackear.
 
 ### Decisiones técnicas tomadas en el Bloque 0
 
@@ -317,6 +336,16 @@ Anotadas, no bloqueantes. El usuario pidió: *"si no entiendes aún qué hacer e
 - **Se mantuvo Tailwind v3** (CLI `shadcn@2.10.0`). Subir a v4 ahora sería una segunda migración simultánea.
 - **Override de ESLint** para `src/components/ui/**`: shadcn exporta `buttonVariants`/`badgeVariants` junto al componente, lo que dispara `react-refresh/only-export-components`. Es código de terceros.
 - `PerfilPage` **no** se migró a `UserAvatar` a propósito: usa `previewFoto` para mostrar la imagen recién elegida antes de subirla, y su fondo ya es neutro.
+
+### 📐 Regla de acciones por componente (definida por el usuario, 2026-08-07)
+
+**Con 2 o más acciones en una tarjeta, fila o barra, van a un menú de 3 puntitos** ([ActionMenu.jsx](frontend/src/components/ActionMenu.jsx)). Si hay una acción claramente principal y frecuente (*Avanzar* en el Kanban, *Nueva tarea* en la barra del detalle), esa queda visible y el resto entra al menú. Con una sola acción, botón suelto con su `Tooltip`.
+
+> El usuario ajustó esta regla sobre la marcha: al principio dijo "más de 2", pero luego pidió aplicarlo también donde quedaban exactamente 2. El criterio real es **cuántos botones se ven a la vez**, no el número exacto.
+
+El objetivo del usuario es visual: menos botones a la vista y menos espacio ocupado en cada tarjeta. **No** aplica a navegación (flechas anterior/hoy/siguiente), pies de formulario (Cancelar/Guardar), pestañas, ni a menús que ya son desplegables.
+
+Aplicado en: tarjeta del Kanban · fila de Usuarios (escritorio) · tarjeta de Usuarios (móvil) · barra del detalle de proyecto. Queda listo para la tarea **P8**, donde la tarjeta de proyecto tendrá 5 opciones.
 
 ### ⚠️ Dos reglas del componente `Modal` que NO hay que romper
 

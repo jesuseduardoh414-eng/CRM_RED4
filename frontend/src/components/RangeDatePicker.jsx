@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { Calendar as CalendarIcon, X, Check } from 'lucide-react';
+import { usePreferences } from '../context/PreferencesContext';
 
 const RangeDatePicker = ({
   from,
@@ -13,6 +14,7 @@ const RangeDatePicker = ({
   placeholder = 'Seleccionar fecha',
   title = 'Seleccionar fecha',
 }) => {
+  const { t } = usePreferences();
   const [isOpen, setIsOpen] = useState(false);
   const range = { from, to };
 
@@ -92,7 +94,7 @@ const RangeDatePicker = ({
           >
             <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--color-text)', margin: 0 }}>{title}</h3>
-              <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-dim)', cursor: 'pointer', padding: '0.5rem' }}>
+              <button onClick={() => setIsOpen(false)} aria-label={t('close')} title={t('close')} style={{ background: 'none', border: 'none', color: 'var(--color-text-dim)', cursor: 'pointer', padding: '0.5rem' }}>
                 <X size={24} />
               </button>
             </div>

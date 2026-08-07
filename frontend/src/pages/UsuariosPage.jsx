@@ -1,7 +1,6 @@
 // Página de Gestión de Usuarios (Solo Admin)
 import { Fragment, useState, useEffect, useCallback } from 'react';
 import useSWR from 'swr';
-import { useSearchParams } from 'react-router-dom';
 import { proyectosService, tareasService, usuariosService, statsService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +8,7 @@ import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
 import UserAvatar from '../components/UserAvatar';
 import Modal from '../components/Modal';
+import ActionMenu from '../components/ActionMenu';
 import { 
   Pencil, 
   Trash2, 
@@ -21,171 +21,17 @@ import {
   RefreshCcw,
   UserX,
   UserCheck,
-  Activity,
-  CalendarDays,
-  PlayCircle,
-  ChevronDown,
   Ban
 } from 'lucide-react';
 
 const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION', 'MARKETING'];
 const ROLES = ['MIEMBRO', 'ADMIN'];
 
-const actividadVacia = () => ({
-  hechasHoy: [],
-  enProgreso: [],
-  faltanHoy: [],
-  faltanSemana: [],
-  totales: {
-    hechasHoy: 0,
-    enProgreso: 0,
-    faltanHoy: 0,
-    faltanSemana: 0
-  }
-});
-
-const ordenarPorFecha = (a, b) => {
-  if (!a.venceEn && !b.venceEn) return a.titulo.localeCompare(b.titulo);
-  if (!a.venceEn) return 1;
-  if (!b.venceEn) return -1;
-  return new Date(a.venceEn) - new Date(b.venceEn);
-};
-
-const actividadDesdeTareas = (usuarioId, tareas) => {
-  const usuarioTareas = tareas.filter(t => t.asignadoId === usuarioId || t.creadorId === usuarioId);
-  const actividad = actividadVacia();
-
-  actividad.hechasHoy = usuarioTareas.filter(t => t.estado === 'HECHO').sort(ordenarPorFecha);
-  actividad.enProgreso = usuarioTareas.filter(t => t.estado === 'EN_PROGRESO').sort(ordenarPorFecha);
-  actividad.faltanHoy = usuarioTareas.filter(t => t.estado === 'PENDIENTE').sort(ordenarPorFecha);
-  actividad.faltanSemana = usuarioTareas.filter(t => t.estado !== 'HECHO' && t.venceEn).sort(ordenarPorFecha);
-  actividad.porProyecto = [...usuarioTareas.reduce((acc, tarea) => {
-    const id = tarea.proyecto?.id || 'sin-proyecto';
-    const actual = acc.get(id) || {
-      id,
-      nombre: tarea.proyecto?.nombre || 'Sin proyecto',
-      total: 0,
-      hechas: 0,
-      enProgreso: 0,
-      pendientes: 0
-    };
-
-    actual.total += 1;
-    if (tarea.estado === 'HECHO') actual.hechas += 1;
-    if (tarea.estado === 'EN_PROGRESO') actual.enProgreso += 1;
-    if (tarea.estado === 'PENDIENTE') actual.pendientes += 1;
-    acc.set(id, actual);
-    return acc;
-  }, new Map()).values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-  actividad.totales = {
-    hechasHoy: actividad.hechasHoy.length,
-    enProgreso: actividad.enProgreso.length,
-    faltanHoy: actividad.faltanHoy.length,
-    faltanSemana: actividad.faltanSemana.length
-  };
-
-  return actividad;
-};
-
 const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
-const TaskMini = ({ tarea }) => (
-  <div className="py-2 border-b border-slate-100 last:border-0">
-    <div className="text-xs font-black text-slate-800 leading-snug">{tarea.titulo}</div>
-    <div className="mt-1 flex items-center justify-between gap-2 text-[10px] font-bold text-slate-400">
-      <span className="truncate">{tarea.proyecto?.nombre || ''}</span>
-      {tarea.venceEn && <span className="shrink-0">{new Date(tarea.venceEn).toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' })}</span>}
-    </div>
-  </div>
-);
-
-const ActivityColumn = ({ title, count, icon, color, items, empty }) => (
-  <div className="min-w-0">
-    <div className="flex items-center justify-between gap-2 mb-2">
-      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest" style={{ color }}>
-        {icon}
-        {title}
-      </div>
-      <span className="text-xs font-black" style={{ color }}>{count}</span>
-    </div>
-    <div className="bg-white rounded-xl border border-slate-100 px-3 py-1 min-h-[58px]">
-      {items?.length ? items.map(t => <TaskMini key={t.id} tarea={t} />) : (
-        <div className="h-11 flex items-center text-[11px] font-bold text-slate-400">{empty}</div>
-      )}
-    </div>
-  </div>
-);
-
-const ProjectSummary = ({ proyectos }) => {
-  const { t } = usePreferences();
-  if (!proyectos?.length) return null;
-
-  return (
-    <div className="lg:col-span-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-3">
-      <div className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)] mb-2">{t('usersActivityByProject')}</div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-        {proyectos.map(p => (
-          <div key={p.id} className="rounded-lg bg-[var(--color-surface-3)] border border-[var(--color-border)] px-3 py-2">
-            <div className="text-xs font-black text-[var(--color-text)] truncate">{p.nombre}</div>
-            <div className="mt-1 text-[10px] font-bold text-[var(--color-text-muted)]">
-              {p.total} · {p.hechas} {t('usersActivityDone').toLowerCase()} · {p.enProgreso} {t('projectInProgress').toLowerCase()} · {p.pendientes}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const UserActivityPanel = ({ actividad }) => {
-  const { t } = usePreferences();
-  if (!actividad) {
-    return <div className="text-xs font-bold text-[var(--color-text-muted)]">{t('usersNoActivityData')}</div>;
-  }
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-      <ProjectSummary proyectos={actividad.porProyecto} />
-      <ActivityColumn
-        title={t('usersActivityDone')}
-        count={actividad.totales?.hechasHoy || 0}
-        color="#16a34a"
-        icon={<CheckCircle2 size={13} />}
-        items={actividad.hechasHoy}
-        empty={t('usersActivityNoDone')}
-      />
-      <ActivityColumn
-        title={t('usersActivityDoing')}
-        count={actividad.totales?.enProgreso || 0}
-        color="#2563eb"
-        icon={<PlayCircle size={13} />}
-        items={actividad.enProgreso}
-        empty={t('usersActivityNoCurrent')}
-      />
-      <ActivityColumn
-        title={t('usersActivityDueToday')}
-        count={actividad.totales?.faltanHoy || 0}
-        color="#dc2626"
-        icon={<Clock size={13} />}
-        items={actividad.faltanHoy}
-        empty={t('usersActivityNoDue')}
-      />
-      <ActivityColumn
-        title={t('usersActivityDueWeek')}
-        count={actividad.totales?.faltanSemana || 0}
-        color="#f59e0b"
-        icon={<CalendarDays size={13} />}
-        items={actividad.faltanSemana}
-        empty={t('usersActivityNoDueWeek')}
-      />
-    </div>
-  );
-};
 
 const UsuariosPage = () => {
   const { t } = usePreferences();
   const { usuario: usuarioActual } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState('activos');
   const [usuarios, setUsuarios] = useState([]);
   const [invitaciones, setInvitaciones] = useState([]);
@@ -193,7 +39,6 @@ const UsuariosPage = () => {
   const [modalEditar, setModalEditar] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const { showToast } = useToast();
-  const actividadParam = searchParams.get('actividad');
 
   const { 
     data: listado, 
@@ -270,14 +115,6 @@ const UsuariosPage = () => {
     } catch (error) { showToast(error.message, 'error'); }
   };
 
-  const handleCargarActividad = async (id) => {
-    try {
-      const data = await usuariosService.actividad(id);
-      setUsuarios(prev => prev.map(u => u.id === id ? { ...u, actividad: data.actividad } : u));
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
-  };
 
   if (isLoading && (usuarios.length === 0 && invitaciones.length === 0)) return <PageSkeleton cards={4} />;
 
@@ -317,14 +154,11 @@ const UsuariosPage = () => {
       {/* Content */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         {tab === 'activos' ? (
-          <TablaActivos 
-            usuarios={usuarios} 
+          <TablaActivos
+            usuarios={usuarios}
             onEdit={(u) => { setUsuarioEditando(u); setModalEditar(true); }}
             onDelete={handleEliminar}
             onToggleStatus={handleToggleEstado}
-            onLoadActivity={handleCargarActividad}
-            actividadInicialId={actividadParam ? Number(actividadParam) : null}
-            onActividadInicialConsumida={() => setSearchParams({}, { replace: true })}
           />
         ) : (
           <TablaInvitaciones 
@@ -356,23 +190,8 @@ const UsuariosPage = () => {
   );
 };
 
-const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivity, actividadInicialId, onActividadInicialConsumida }) => {
+const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus }) => {
   const { t } = usePreferences();
-  const [actividadAbierta, setActividadAbierta] = useState(null);
-
-  useEffect(() => {
-    if (!actividadInicialId || actividadAbierta === actividadInicialId) return;
-    const usuarioExiste = usuarios.some((usuario) => usuario.id === actividadInicialId);
-    if (!usuarioExiste) return;
-
-    const abrir = async () => {
-      await onLoadActivity(actividadInicialId);
-      setActividadAbierta(actividadInicialId);
-      onActividadInicialConsumida?.();
-    };
-
-    abrir();
-  }, [actividadInicialId, actividadAbierta, usuarios, onLoadActivity, onActividadInicialConsumida]);
 
   if (usuarios.length === 0) return <div className="p-12 text-center text-[var(--color-text-muted)]">{t('usersNoActiveMembers')}</div>;
 
@@ -433,55 +252,23 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
                 </span>
               </td>
               <td className="px-6 py-4 text-right">
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={async () => {
-                      if (actividadAbierta !== u.id) await onLoadActivity(u.id);
-                      setActividadAbierta(prev => prev === u.id ? null : u.id);
-                    }}
-                    title="Ver actividad"
-                    className={`p-2 rounded-xl transition-all ${actividadAbierta === u.id ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
-                  >
-                    <Activity size={18} />
-                  </button>
-                  <button 
-                    onClick={() => onToggleStatus(u)}
-                    title={u.estado === 'activo' ? 'Desactivar' : 'Activar'}
-                    className={`p-2 rounded-xl transition-all ${u.estado === 'activo' ? 'text-slate-400 hover:text-red-500 hover:bg-red-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
-                  >
-                    {u.estado === 'activo' ? <UserX size={18} /> : <UserCheck size={18} />}
-                  </button>
-                  <button 
-                    onClick={() => onEdit(u)}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                  >
-                    <Pencil size={18} />
-                  </button>
-                  <button 
-                    onClick={() => onDelete(u.id)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                <div className="flex justify-end items-center gap-2">
+                  <ActionMenu
+                    size={18}
+                    items={[
+                      {
+                        label: u.estado === 'activo' ? t('usersDeactivate') : t('usersActivate'),
+                        icon: u.estado === 'activo' ? <UserX size={15} /> : <UserCheck size={15} />,
+                        onSelect: () => onToggleStatus(u),
+                      },
+                      { label: t('edit'), icon: <Pencil size={15} />, onSelect: () => onEdit(u) },
+                      { separator: true },
+                      { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onDelete(u.id), danger: true },
+                    ]}
+                  />
                 </div>
               </td>
             </tr>
-            {actividadAbierta === u.id && (
-              <tr key={`${u.id}-actividad`} className="bg-slate-50/70">
-                <td colSpan={6} className="px-6 py-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-xs font-black text-slate-500 uppercase tracking-widest">{t('usersActivityOf', { name: u.nombre })}</div>
-                    <button
-                      onClick={() => setActividadAbierta(null)}
-                      className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-slate-700"
-                    >
-                      {t('close')} <ChevronDown size={13} className="rotate-180" />
-                    </button>
-                  </div>
-                  <UserActivityPanel actividad={u.actividad} />
-                </td>
-              </tr>
-            )}
             </Fragment>
           ))}
         </tbody>
@@ -531,32 +318,20 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, onLoadActivi
               <div className="text-[10px] text-slate-400 font-medium italic">
                 {t('usersRegShort')} {new Date(u.creadoEn).toLocaleDateString(getLocale())}
               </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => onToggleStatus(u)}
-                  className={`p-2.5 rounded-xl border transition-all ${u.estado === 'activo' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-emerald-50 text-emerald-500 border-emerald-100'}`}
-                >
-                  {u.estado === 'activo' ? <UserX size={16} /> : <UserCheck size={16} />}
-                </button>
-                <button 
-                  onClick={() => onEdit(u)}
-                  className="p-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl"
-                >
-                  <Pencil size={16} />
-                </button>
-                <button 
-                  onClick={() => onDelete(u.id)}
-                  className="p-2.5 bg-red-50 text-red-500 border border-red-100 rounded-xl"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-            <div className="pt-3 border-t border-slate-200/50">
-              <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                <Activity size={13} /> {t('usersActivity')}
-              </div>
-              <UserActivityPanel actividad={u.actividad} />
+              <ActionMenu
+                size={16}
+                className="p-2.5 border border-[var(--color-border)]"
+                items={[
+                  { label: t('edit'), icon: <Pencil size={15} />, onSelect: () => onEdit(u) },
+                  {
+                    label: u.estado === 'activo' ? t('usersDeactivate') : t('usersActivate'),
+                    icon: u.estado === 'activo' ? <UserX size={15} /> : <UserCheck size={15} />,
+                    onSelect: () => onToggleStatus(u),
+                  },
+                  { separator: true },
+                  { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onDelete(u.id), danger: true },
+                ]}
+              />
             </div>
           </div>
         ))}

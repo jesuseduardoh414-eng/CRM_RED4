@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
+import ActionMenu from '../components/ActionMenu';
 import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
 import { PageSkeleton } from '../components/Skeleton';
@@ -190,19 +191,20 @@ const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado 
           ) : '-'}
         </div>
 
-        <div className="flex gap-2 ml-4">
-          <button 
-            onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
-            className="p-2 lg:p-2.5 bg-[var(--color-surface-3)] text-[var(--color-text-dim)] rounded-xl hover:brightness-105 transition-colors border border-[var(--color-border)]"
-          >
-            {tarea.estado === 'HECHO' ? <RotateCcw size={14} /> : <ArrowRight size={14} />}
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onEliminar(tarea); }}
-            className="p-2 lg:p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-          >
-            <Trash2 size={14} />
-          </button>
+        <div className="flex items-center gap-2 ml-4">
+          <ActionMenu
+            size={16}
+            className="p-2 lg:p-2.5 bg-[var(--color-surface-3)] border border-[var(--color-border)] rounded-xl"
+            items={[
+              {
+                label: tarea.estado === 'HECHO' ? t('taskReopen') : t('taskAdvanceStatus'),
+                icon: tarea.estado === 'HECHO' ? <RotateCcw size={15} /> : <ArrowRight size={15} />,
+                onSelect: () => onCambiarEstado(tarea.id, sigEstado),
+              },
+              { separator: true },
+              { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onEliminar(tarea), danger: true },
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -509,33 +511,24 @@ const ProyectoDetallePage = () => {
           <p className="text-sm lg:text-base text-[var(--color-text-dim)] font-medium max-w-2xl">{proyecto?.descripcion}</p>
         </div>
 
-        <div className="flex gap-2 w-full lg:w-auto">
-          <button 
-            onClick={() => setModalExportar(true)} 
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs lg:text-sm font-black text-[var(--color-text-dim)] hover:bg-[var(--color-surface-3)] transition-all shadow-sm"
-          >
-            <Download size={18} /> {t('projectExport')}
-          </button>
-          {usuario?.rol === 'ADMIN' && (
-            <button 
-              onClick={() => setModalPlantilla(true)} 
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs lg:text-sm font-black text-[var(--color-text-dim)] hover:bg-[var(--color-surface-3)] transition-all shadow-sm"
-            >
-              <Save size={18} /> {t('projectSaveTemplate')}
-            </button>
-          )}
-          <button 
-            onClick={() => setModalImportar(true)} 
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs lg:text-sm font-black text-[var(--color-text-dim)] hover:bg-[var(--color-surface-3)] transition-all shadow-sm"
-          >
-            <Download size={18} /> {t('projectImport')}
-          </button>
-          <button 
-            onClick={() => { setTareaEditando(null); setModal(true); }} 
+        {/* Accion principal visible; importar/exportar/plantilla van al menu */}
+        <div className="flex items-center gap-2 w-full lg:w-auto">
+          <button
+            onClick={() => { setTareaEditando(null); setModal(true); }}
             className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-blue-600 text-white rounded-xl text-xs lg:text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
           >
             <Plus size={18} /> {t('projectNewTask')}
           </button>
+          <ActionMenu
+            size={18}
+            className="shrink-0 p-3 lg:p-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm"
+            items={[
+              { label: t('projectImport'), icon: <Download size={15} />, onSelect: () => setModalImportar(true) },
+              { label: t('projectExport'), icon: <Download size={15} />, onSelect: () => setModalExportar(true) },
+              usuario?.rol === 'ADMIN' && { separator: true },
+              usuario?.rol === 'ADMIN' && { label: t('projectSaveTemplate'), icon: <Save size={15} />, onSelect: () => setModalPlantilla(true) },
+            ]}
+          />
         </div>
       </div>
 

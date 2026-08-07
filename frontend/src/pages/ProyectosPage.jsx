@@ -8,6 +8,8 @@ import { agendaService, proyectosService, usuariosService } from '../services/ap
 import { PageSkeleton } from '../components/Skeleton';
 import UserAvatar from '../components/UserAvatar';
 import Modal from '../components/Modal';
+import Tooltip from '../components/Tooltip';
+import ActionMenu from '../components/ActionMenu';
 import TaskAttachments from '../components/TaskAttachments';
 import { sortProyectos } from '../utils/sorters';
 import { 
@@ -171,15 +173,19 @@ const ProjectDatePicker = ({ label, value, onChange, blockedDates, required = fa
       {open && (
         <div className="absolute z-[1200] mt-2 w-[300px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
           <div className="flex items-center justify-between mb-4">
-            <button type="button" onClick={() => moveMonth(-1)} className="p-2 rounded-lg hover:bg-slate-50 text-slate-500">
-              <ChevronLeft size={18} />
-            </button>
+            <Tooltip label={t('previous')}>
+              <button type="button" onClick={() => moveMonth(-1)} className="p-2 rounded-lg hover:bg-slate-50 text-slate-500">
+                <ChevronLeft size={18} />
+              </button>
+            </Tooltip>
             <p className="text-xs font-black uppercase tracking-widest text-slate-900">
               {visibleMonth.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}
             </p>
-            <button type="button" onClick={() => moveMonth(1)} className="p-2 rounded-lg hover:bg-slate-50 text-slate-500">
-              <ChevronRight size={18} />
-            </button>
+            <Tooltip label={t('next')}>
+              <button type="button" onClick={() => moveMonth(1)} className="p-2 rounded-lg hover:bg-slate-50 text-slate-500">
+                <ChevronRight size={18} />
+              </button>
+            </Tooltip>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
             {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'].map(day => <span key={day}>{day}</span>)}
@@ -294,18 +300,16 @@ const ProyectoCard = ({ proyecto, onEditar, onEliminar, onVerDetalle, esAdmin })
         
         {esAdmin && (
           <div className="flex gap-2">
-            <button 
-              onClick={(e) => { e.stopPropagation(); onEditar(proyecto); }}
-              className="p-2 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
-            >
-              <Pencil size={14} />
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); onEliminar(proyecto); }}
-              className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-            >
-              <Trash2 size={14} />
-            </button>
+            {/* Aqui se sumaran archivar / documentos / activar-desactivar (tarea P8) */}
+            <ActionMenu
+              size={16}
+              className="p-2 bg-slate-50 border border-slate-100 rounded-xl"
+              items={[
+                { label: t('edit'), icon: <Pencil size={15} />, onSelect: () => onEditar(proyecto) },
+                { separator: true },
+                { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onEliminar(proyecto), danger: true },
+              ]}
+            />
           </div>
         )}
       </div>
@@ -883,13 +887,15 @@ const ModalProyecto = ({ proyecto, onClose, onGuardar }) => {
                         <FileText size={16} className="text-blue-500" />
                         <span className="text-[10px] font-black text-slate-600 truncate max-w-[200px]">{file.name}</span>
                       </div>
-                      <button 
-                        type="button"
-                        onClick={() => setArchivos(archivos.filter((_, i) => i !== idx))}
-                        className="text-red-500 hover:bg-red-50 p-1 rounded-md transition-colors"
-                      >
-                        <Plus size={16} className="rotate-45" />
-                      </button>
+                      <Tooltip label={t('removeFile')}>
+                        <button
+                          type="button"
+                          onClick={() => setArchivos(archivos.filter((_, i) => i !== idx))}
+                          className="text-red-500 hover:bg-red-50 p-1 rounded-md transition-colors"
+                        >
+                          <Plus size={16} className="rotate-45" />
+                        </button>
+                      </Tooltip>
                     </div>
                   ))}
                 </div>

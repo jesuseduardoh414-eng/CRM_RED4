@@ -5,9 +5,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { authService } from '../services/api';
 
 const LoginPage = () => {
+  const { t } = usePreferences();
   const navigate       = useNavigate();
   const { login }      = useAuth();
 
@@ -105,6 +107,8 @@ const LoginPage = () => {
                 <button
                   type="button"
                   onClick={() => setVerPassword(!verPassword)}
+                  aria-label={verPassword ? t('hidePassword') : t('showPassword')}
+                  title={verPassword ? t('hidePassword') : t('showPassword')}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors p-1"
                 >
                   {verPassword ? <EyeOff size={20} /> : <Eye size={20} />}

@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { comentariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { MessageSquare, Trash2, Send } from 'lucide-react';
 import { PanelSkeleton } from './Skeleton';
 import UserAvatar from './UserAvatar';
+import Tooltip from './Tooltip';
 
 const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
   const { usuario } = useAuth();
+  const { t } = usePreferences();
   const [comentarios, setComentarios] = useState([]);
   const [nuevo, setNuevo] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -147,11 +150,12 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
                     
                     {/* Botón eliminar flotante */}
                     {(esMio || usuario.rol === 'ADMIN') && (
+                      <Tooltip label={t('delete')}>
                       <button
                         onClick={() => handleEliminar(c.id)}
-                        style={{ 
+                        style={{
                           position: 'absolute', top: '-8px', [esMio ? 'left' : 'right']: '-8px',
-                          background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', 
+                          background: 'var(--color-surface-2)', border: '1px solid var(--color-border)',
                           borderRadius: '50%', width: '22px', height: '22px',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           cursor: 'pointer', fontSize: '0.7rem', transition: 'all 0.2s',
@@ -162,6 +166,7 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
                       >
                         <Trash2 size={12} color="var(--color-accent-error)" />
                       </button>
+                      </Tooltip>
                     )}
                   </div>
                 </div>

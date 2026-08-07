@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { adjuntosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
+import Tooltip from './Tooltip';
 import {
   Archive,
   Eye,
@@ -66,6 +68,7 @@ const getFileIcon = (tipo = '', nombre = '') => {
 };
 
 const PreviewCard = ({ item, isPending = false, canDelete = false, onDelete }) => {
+  const { t } = usePreferences();
   const kind = getPreviewKind(item.tipo, item.nombre);
   const previewUrl = item.previewUrl || (item.url ? adjuntosService.getPreviewUrl(item.url) : null);
 
@@ -129,9 +132,11 @@ const PreviewCard = ({ item, isPending = false, canDelete = false, onDelete }) =
             </div>
           </div>
           {canDelete && (
-            <button type="button" onClick={onDelete} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444' }}>
-              {isPending ? <X size={16} /> : <Trash2 size={16} />}
-            </button>
+            <Tooltip label={isPending ? t('removeFile') : t('delete')}>
+              <button type="button" onClick={onDelete} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444' }}>
+                {isPending ? <X size={16} /> : <Trash2 size={16} />}
+              </button>
+            </Tooltip>
           )}
         </div>
 

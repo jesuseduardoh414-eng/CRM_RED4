@@ -15,6 +15,7 @@ import { agendaService } from '../services/api';
 import { usePreferences } from '../context/PreferencesContext';
 import RangeDatePicker from './RangeDatePicker';
 import Modal from './Modal';
+import Tooltip from './Tooltip';
 
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const TIPOS_DIA = [
@@ -412,7 +413,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                             </div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{tipo?.label}</div>
                           </div>
-                          <button onClick={() => handleDelDia(dia.id)} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', padding: '0.5rem' }}><Trash2 size={16} /></button>
+                          <Tooltip label={t('delete')}><button onClick={() => handleDelDia(dia.id)} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', padding: '0.5rem' }}><Trash2 size={16} /></button></Tooltip>
                         </div>
                       );
                     })

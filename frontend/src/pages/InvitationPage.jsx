@@ -3,9 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { AuthSkeleton } from '../components/Skeleton';
 
 const InvitationPage = () => {
+  const { t } = usePreferences();
   const { token } = useParams();
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -148,6 +150,8 @@ const InvitationPage = () => {
                 <button
                   type="button"
                   onClick={() => setVerPassword(!verPassword)}
+                  aria-label={verPassword ? t('hidePassword') : t('showPassword')}
+                  title={verPassword ? t('hidePassword') : t('showPassword')}
                   className="absolute right-3 top-[34px] text-slate-400 hover:text-slate-600"
                 >
                   {verPassword ? <EyeOff size={20} /> : <Eye size={20} />}

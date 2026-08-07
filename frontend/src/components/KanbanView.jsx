@@ -1,5 +1,6 @@
 import { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
 import UserAvatar from './UserAvatar';
+import ActionMenu from './ActionMenu';
 import {
   Plus,
   ListTodo,
@@ -193,40 +194,37 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
             {getTaskAssignees(tarea).map((asignado) => asignado.nombre?.split(' ')[0]).filter(Boolean).join(', ') || 'S/A'}
           </span>
         </div>
-        {tarea.venceEn && (
-          <span style={{ fontSize: '0.72rem', color: esVencida(tarea.venceEn) ? 'var(--color-error)' : 'var(--color-text-dim)' }}>
-            {formatFecha(tarea.venceEn)}
-          </span>
-        )}
+        {/* Fecha y menu juntos: asi una tarea completada no deja una fila de
+            acciones vacia con el boton de 3 puntitos suelto en medio. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          {tarea.venceEn && (
+            <span style={{ fontSize: '0.72rem', color: esVencida(tarea.venceEn) ? 'var(--color-error)' : 'var(--color-text-dim)' }}>
+              {formatFecha(tarea.venceEn)}
+            </span>
+          )}
+          <ActionMenu
+            size={14}
+            items={[
+              { label: t('edit'), icon: <Pencil size={14} />, onSelect: () => onEditar(tarea) },
+              { label: t('delete'), icon: <Trash2 size={14} />, onSelect: () => onEliminar(tarea), danger: true },
+            ]}
+          />
+        </div>
       </div>
 
-      {/* Acciones Rápidas */}
-      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem' }}>
-        {tarea.estado !== 'HECHO' && (
-          <button 
-            onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
-            style={{ 
-              flex: 1, padding: '0.4rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)',
-              border: 'none', color: 'var(--color-text)', fontSize: '0.7rem', fontWeight: '600', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem'
-            }}
-          >
-            {t('taskAdvance')} <ArrowRight size={12} />
-          </button>
-        )}
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEditar(tarea); }}
-          style={{ padding: '0.4rem 0.6rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      {/* Accion principal: solo existe mientras la tarea pueda avanzar */}
+      {tarea.estado !== 'HECHO' && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
+          style={{
+            width: '100%', padding: '0.4rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)',
+            border: 'none', color: 'var(--color-text)', fontSize: '0.7rem', fontWeight: '600', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem'
+          }}
         >
-          <Pencil size={12} />
+          {t('taskAdvance')} <ArrowRight size={12} />
         </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEliminar(tarea); }}
-          style={{ padding: '0.4rem 0.6rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-error)' }}
-        >
-          <Trash2 size={12} />
-        </button>
-      </div>
+      )}
     </div>
   );
 };

@@ -25,6 +25,8 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import Modal from '../components/Modal';
+import Tooltip from '../components/Tooltip';
+import ActionMenu from '../components/ActionMenu';
 import ModalEvento from '../components/ModalEvento';
 import ModalConfiguracionAgenda from '../components/ModalConfiguracionAgenda';
 
@@ -951,14 +953,14 @@ const AgendaPage = () => {
           </h1>
           <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
             <div style={{ display: 'flex', gap: '2px' }}>
-              <button onClick={nav.prev} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronLeft size={16} /></button>
+              <Tooltip label={t('previous')}><button onClick={nav.prev} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronLeft size={16} /></button></Tooltip>
               <button
                 onClick={nav.hoy}
                 style={{ padding: '0 0.8rem', fontSize: '0.7rem', fontWeight: '800', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)' }}
               >
                 {t('agendaToday')}
               </button>
-              <button onClick={nav.next} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronRight size={16} /></button>
+              <Tooltip label={t('next')}><button onClick={nav.next} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronRight size={16} /></button></Tooltip>
             </div>
           </div>
         </div>
@@ -1011,12 +1013,14 @@ const AgendaPage = () => {
           </button>
 
           {!isMobile && (
-            <button
-              onClick={() => setModalConfigOpen(true)}
-              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: '0.6rem', borderRadius: '10px', cursor: 'pointer' }}
-            >
-              <Settings size={18} color="var(--color-text-dim)" />
-            </button>
+            <Tooltip label={t('agendaSettingsTitle')}>
+              <button
+                onClick={() => setModalConfigOpen(true)}
+                style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: '0.6rem', borderRadius: '10px', cursor: 'pointer' }}
+              >
+                <Settings size={18} color="var(--color-text-dim)" />
+              </button>
+            </Tooltip>
           )}
 
           <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
@@ -1061,7 +1065,7 @@ const AgendaPage = () => {
         <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: isMobile ? '100%' : '400px', background: 'var(--color-surface)', boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', zIndex: 1100, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontWeight: '900', fontSize: '1.5rem' }}>{t('agendaInvitations')}</h2>
-            <button onClick={() => setShowInvitaciones(false)} className="btn-icon-sm"><X size={20} /></button>
+            <Tooltip label={t('close')}><button onClick={() => setShowInvitaciones(false)} className="btn-icon-sm"><X size={20} /></button></Tooltip>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {invitaciones.length === 0 ? (
@@ -2066,8 +2070,14 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                     <div style={{ display: 'flex', gap: '4px' }}>
                       {!evento.esLectura && (
                         <>
-                          <button onClick={() => onSelectEvent(evento)} className="btn-icon-sm"><Edit2 size={12} /></button>
-                          <button onClick={() => onEliminar(evento.id)} className="btn-icon-sm" style={{ color: 'var(--color-error)' }}><Trash2 size={12} /></button>
+                          <ActionMenu
+                            size={14}
+                            items={[
+                              { label: t('edit'), icon: <Edit2 size={15} />, onSelect: () => onSelectEvent(evento) },
+                              { separator: true },
+                              { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onEliminar(evento.id), danger: true },
+                            ]}
+                          />
                         </>
                       )}
                     </div>

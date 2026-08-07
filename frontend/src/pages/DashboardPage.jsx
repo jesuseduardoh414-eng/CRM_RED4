@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { proyectosService, statsService } from '../services/api';
+import { proyectosService, statsService, tareasService } from '../services/api';
 import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
 import Modal from '../components/Modal';
+import Tooltip from '../components/Tooltip';
 import {
   Layers,
   CheckCircle2,
@@ -353,8 +354,8 @@ const ProjectCalendarPanel = ({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {headerAction}
-              <button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button>
-              <button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button>
+              <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
+              <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
             </div>
           </div>
 
@@ -371,8 +372,8 @@ const ProjectCalendarPanel = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {headerAction}
-            <button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button>
-            <button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button>
+            <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
+            <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
           </div>
         </div>
       )}
@@ -481,9 +482,9 @@ const ProjectCalendarPanel = ({
                   {expandedDay.projects.length} proyectos activos en esta fecha
                 </p>
               </div>
-              <button type="button" onClick={closeExpandedDay} className="btn-icon-sm">
+              <Tooltip label={t('close')}><button type="button" onClick={closeExpandedDay} className="btn-icon-sm">
                 <ArrowRight size={16} style={{ transform: 'rotate(45deg)' }} />
-              </button>
+              </button></Tooltip>
             </div>
 
             <div style={{ padding: '1rem 1.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: 'calc(80vh - 88px)', overflowY: 'auto' }}>
@@ -1068,11 +1069,11 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
             <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardTeamOccupation')}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button>
+            <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
             <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#2563eb', textTransform: 'uppercase', minWidth: '140px', textAlign: 'center' }}>
               {formatMonthLabel(monthDate, locale)}
             </div>
-            <button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button>
+            <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
           </div>
         </div>
       )}
@@ -1083,8 +1084,8 @@ const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }
             {formatMonthLabel(monthDate, locale)}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button>
-            <button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button>
+            <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
+            <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
           </div>
         </div>
       )}
@@ -1817,26 +1818,6 @@ const DashboardAdmin = () => {
           </div>
         </div>
 
-        <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>{t('dashboardTopProductivity')}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {topUsuarios.map((u, idx) => (
-              <button key={u.id} type="button" onClick={() => navigate(`/usuarios?actividad=${u.id}`)} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--color-surface-3)', borderRadius: '1rem', border: 'none', textAlign: 'left', cursor: 'pointer' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: idx === 0 ? '#fbbf24' : 'var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: idx === 0 ? 'var(--color-text)' : '#fff' }}>{idx + 1}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>{u.nombre}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{getAreaLabel(u.area, t)}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: '900', color: 'var(--color-primary-light)', fontSize: '1.25rem' }}>{u.promedioSemanal}</div>
-                  <div style={{ fontSize: '0.66rem', fontWeight: '800', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
-                    {t('dashboardPerWeek')}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       <AdminMemberActivity miembros={actividadMiembros} onOpenTask={openTaskProject} />
