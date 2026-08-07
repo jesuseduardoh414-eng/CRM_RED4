@@ -1,0 +1,192 @@
+[
+  {
+    "numeroActividad": 1,
+    "titulo": "Mejorar diseño del scrollbar",
+    "descripcion": "Mejorar diseño del scrollbar",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-10",
+    "venceEn": "2026-08-10",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 2,
+    "titulo": "Agregar tooltips en botones de solo icono",
+    "descripcion": "Agregar tooltips en botones de solo icono",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-10",
+    "venceEn": "2026-08-10",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 3,
+    "titulo": "Abrir nueva pestaña al inicio",
+    "descripcion": "Abrir nueva pestaña al inicio",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-11",
+    "venceEn": "2026-08-11",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 4,
+    "titulo": "Reemplazar avatares por imagen",
+    "descripcion": "Reemplazar avatares por imagen",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-11",
+    "venceEn": "2026-08-11",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 5,
+    "titulo": "Migrar componentes a shadcn",
+    "descripcion": "Migrar componentes a shadcn",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-11",
+    "venceEn": "2026-08-11",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 6,
+    "titulo": "Máximo un modal y usar popovers",
+    "descripcion": "Máximo un modal y usar popovers",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-12",
+    "venceEn": "2026-08-12",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 7,
+    "titulo": "Dropdown gant",
+    "descripcion": "Dropdown gant",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-12",
+    "venceEn": "2026-08-12",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 8,
+    "titulo": "Arreglar fechas gant",
+    "descripcion": "Arreglar fechas gant",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-12",
+    "venceEn": "2026-08-12",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 9,
+    "titulo": "Filtro proyecto gant",
+    "descripcion": "Filtro proyecto gant",
+    "estado": "PENDIENTE",
+    "prioridad": "ALTA",
+    "fechaInicio": "2026-08-13",
+    "venceEn": "2026-08-13",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 10,
+    "titulo": "Vista tabla progreso",
+    "descripcion": "Vista tabla progreso",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-13",
+    "venceEn": "2026-08-13",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 11,
+    "titulo": "Paginación proyectos",
+    "descripcion": "Paginación proyectos",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-13",
+    "venceEn": "2026-08-13",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 12,
+    "titulo": "Archivar proyectos",
+    "descripcion": "Archivar proyectos",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-14",
+    "venceEn": "2026-08-14",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 13,
+    "titulo": "Wizard crear proyecto",
+    "descripcion": "Wizard crear proyecto",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-14",
+    "venceEn": "2026-08-14",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 14,
+    "titulo": "Documentos proyecto",
+    "descripcion": "Documentos proyecto",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-14",
+    "venceEn": "2026-08-14",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 15,
+    "titulo": "Paginación gant tareas",
+    "descripcion": "Paginación gant tareas",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-15",
+    "venceEn": "2026-08-15",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 16,
+    "titulo": "Agenda sin scroll horizontal",
+    "descripcion": "Agenda sin scroll horizontal",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-15",
+    "venceEn": "2026-08-15",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 17,
+    "titulo": "Cerrar modales click fuera",
+    "descripcion": "Cerrar modales click fuera",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-15",
+    "venceEn": "2026-08-15",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 18,
+    "titulo": "Comunidad a filtro miembros",
+    "descripcion": "Comunidad a filtro miembros",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-16",
+    "venceEn": "2026-08-16",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  },
+  {
+    "numeroActividad": 19,
+    "titulo": "Filtros miembros",
+    "descripcion": "Filtros miembros",
+    "estado": "PENDIENTE",
+    "prioridad": "MEDIA",
+    "fechaInicio": "2026-08-16",
+    "venceEn": "2026-08-16",
+    "asignadoEmail": "jesuseduardoh414@gmail.com"
+  }
+]
