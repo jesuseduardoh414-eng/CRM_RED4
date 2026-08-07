@@ -285,9 +285,7 @@ Archivo: [AgendaPage.jsx](frontend/src/pages/AgendaPage.jsx) (2154 líneas). Ir 
 
 | Archivo | Problema | Estado |
 |---|---|---|
-| [DashboardPage.jsx:995](frontend/src/pages/DashboardPage.jsx#L995) y [:1030](frontend/src/pages/DashboardPage.jsx#L1030) | Usa `tareasService` pero **nunca lo importa** (la línea 5 solo trae `proyectosService` y `statsService`). Al pulsar "mover +1 día / +2 días / elegir cantidad" en el día expandido del Inicio, revienta con `tareasService is not defined`. Lo detecta ESLint como `no-undef`; **estaba así desde antes de este trabajo**. | ⚠️ Reportado al usuario, sin corregir |
-
-> Arreglo: añadir `tareasService` al import de la línea 5. Ojo: `pedirMovimientoPersonalizado` (línea ~1375) aparece como no usada, así que parte de ese flujo puede ser código muerto — conviene revisar cuál de las dos rutas está viva antes de tocar.
+| `DashboardPage.jsx` | Usaba `tareasService` en los manejadores de "mover +1 / +2 días / elegir cantidad" pero **nunca lo importaba**, así que esos botones reventaban con `tareasService is not defined` en vez de mover nada. ESLint lo marcaba como `no-undef` desde antes de este trabajo. | ✅ **Corregido el 2026-08-07** (commit `a8dea05`) |
 
 ---
 
@@ -326,9 +324,13 @@ Anotadas, no bloqueantes. El usuario pidió: *"si no entiendes aún qué hacer e
 
 ### 🚀 Publicado
 
-**2026-08-07 — commit `e40a01b` en `master`.** Todo lo anterior (shadcn, scrollbar, scroll entre páginas, avatares y las 11 ventanas) se subió con la aprobación explícita del usuario y quedó desplegado en el CRM en vivo vía Vercel.
+| Commit | Fecha | Contenido |
+|---|---|---|
+| `e40a01b` | 2026-08-07 | shadcn, scrollbar, scroll entre páginas, avatares, las 11 ventanas |
+| `1dccc9e` | 2026-08-07 | `tareas_generadas.json` (el usuario confirmó que el repo es privado) |
+| `a8dea05` | 2026-08-07 | tooltips, menú de 3 puntitos, quitada la actividad de usuario y Top productividad, arreglado el bug de `tareasService` |
 
-`tareas_generadas.json` **no se subió**: contiene un correo personal y no se pudo confirmar si el repo es público. Sigue como archivo local sin trackear.
+Todo desplegado en el CRM en vivo vía Vercel, con aprobación explícita del usuario en cada subida.
 
 ### Decisiones técnicas tomadas en el Bloque 0
 
