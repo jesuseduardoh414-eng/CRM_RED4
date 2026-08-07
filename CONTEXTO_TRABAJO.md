@@ -294,9 +294,17 @@ Archivo: [AgendaPage.jsx](frontend/src/pages/AgendaPage.jsx) (2154 líneas). Ir 
 
 **Validación:** el backend rechaza estados fuera del catálogo con 400. Antes aceptaba cualquier texto.
 
+### ✅ Migración de datos aplicada
+
+`20260807180000_normalizar_estados_proyecto` — se corrió con `prisma migrate deploy` **después** de publicar el código, que era el orden seguro (el frontend desplegado no conocía `INACTIVO` y los habría mostrado como "Activo").
+
+Antes: 29 proyectos → 27 `ACTIVO`, 2 `EN_PAUSA`, 0 `CERRADO`.
+Después: 29 proyectos → 27 `ACTIVO`, 2 `INACTIVO`. Sin pérdida de registros.
+
+> Ojo para el futuro: **Vercel no aplica migraciones solo.** El `vercel-build` del backend es solo `prisma generate`. Cualquier migración hay que correrla a mano con `npx prisma migrate deploy` desde `backend/`.
+
 ### ⏳ Pendiente de este bloque
 
-- **Migrar los 2 proyectos con `EN_PAUSA` a `INACTIVO`.** Hay que hacerlo **después** de publicar, no antes: el frontend desplegado todavía no conoce `INACTIVO` y los mostraría como "Activo". Con el código nuevo ya publicado, la migración es segura. Al 2026-08-07 la base tenía 29 proyectos: 27 `ACTIVO`, 2 `EN_PAUSA`, 0 `CERRADO`.
 - **P8** aún no incluye "agregar documentos" en el menú de la tarjeta — eso llega con el Bloque 4.
 - **D10** (que el Inicio muestre solo activos y sin terminar) es del Bloque 7; el modelo de datos que necesita ya está listo.
 
