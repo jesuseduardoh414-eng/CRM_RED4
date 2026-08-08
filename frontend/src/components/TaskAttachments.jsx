@@ -99,7 +99,7 @@ const PreviewCard = ({ item, isPending = false, canDelete = false, onDelete }) =
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', color: '#475569' }}>
             {getFileIcon(item.tipo, item.nombre)}
-            <span style={{ fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 500, textTransform: '' }}>
               {kind === 'text' ? 'Documento' : 'Archivo'}
             </span>
           </div>
@@ -110,7 +110,7 @@ const PreviewCard = ({ item, isPending = false, canDelete = false, onDelete }) =
             top: '0.6rem',
             left: '0.6rem',
             fontSize: '0.65rem',
-            fontWeight: '900',
+            fontWeight: 500,
             background: '#dbeafe',
             color: '#1d4ed8',
             padding: '0.25rem 0.5rem',
@@ -124,7 +124,7 @@ const PreviewCard = ({ item, isPending = false, canDelete = false, onDelete }) =
       <div style={{ padding: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '0.75rem' }}>
           <div style={{ minWidth: 0 }}>
-            <div title={item.nombre} style={{ fontSize: '0.82rem', fontWeight: '800', color: 'var(--color-text)', wordBreak: 'break-word' }}>
+            <div title={item.nombre} style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--color-text)', wordBreak: 'break-word' }}>
               {item.nombre}
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '0.2rem' }}>
@@ -154,7 +154,7 @@ const PreviewCard = ({ item, isPending = false, canDelete = false, onDelete }) =
                 background: '#eff6ff',
                 color: '#2563eb',
                 fontSize: '0.75rem',
-                fontWeight: '900',
+                fontWeight: 500,
                 textDecoration: 'none',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -177,7 +177,7 @@ const PreviewCard = ({ item, isPending = false, canDelete = false, onDelete }) =
                 background: 'var(--color-surface)',
                 color: 'var(--color-text)',
                 fontSize: '0.75rem',
-                fontWeight: '900',
+                fontWeight: 500,
                 cursor: 'pointer'
               }}
             >
@@ -200,6 +200,9 @@ const TaskAttachments = ({
   showUploader = true,
   showExisting = true,
   uploadLabel = 'Subir archivos',
+  // Version para columna estrecha: encabezado y boton apilados, sin el texto
+  // de ayuda largo. Se usa en el panel lateral del detalle de proyecto.
+  compacto = false,
 }) => {
   const { usuario } = useAuth();
   const [adjuntos, setAdjuntos] = useState([]);
@@ -303,27 +306,37 @@ const TaskAttachments = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: compacto ? 'stretch' : 'center',
+        justifyContent: 'space-between',
+        flexDirection: compacto ? 'column' : 'row',
+        gap: compacto ? '0.75rem' : '1rem',
+        flexWrap: 'wrap',
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Paperclip size={18} />
-          <h4 style={{ fontSize: '1rem', fontWeight: '900', color: 'var(--color-text)' }}>
+          <h4 style={{ fontSize: compacto ? '0.95rem' : '1rem', fontWeight: 600, color: 'var(--color-text)' }}>
             {title || (type === 'proyectos' ? 'Documentos del Proyecto' : type === 'agenda' ? 'Documentos del Evento' : 'Archivos Adjuntos')}
           </h4>
         </div>
 
         {showUploader && (
           <label style={{
-            background: '#0f172a',
+            // Antes era un #0f172a fijo: en modo oscuro quedaba un boton negro
+            // sobre fondo negro.
+            background: 'var(--color-primary)',
             color: '#fff',
             borderRadius: '0.8rem',
-            padding: '0.7rem 1rem',
+            padding: compacto ? '0.6rem 0.9rem' : '0.7rem 1rem',
             cursor: subiendo ? 'wait' : 'pointer',
             fontSize: '0.8rem',
-            fontWeight: '900',
+            fontWeight: 500,
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '0.45rem',
-            opacity: subiendo ? 0.7 : 1
+            opacity: subiendo ? 0.7 : 1,
           }}>
             <Upload size={14} />
             {subiendo ? 'Subiendo...' : uploadLabel}
@@ -332,15 +345,15 @@ const TaskAttachments = ({
         )}
       </div>
 
-      {showUploader && (
+      {showUploader && !compacto && (
         <div style={{
           padding: '1rem',
-          border: '1px dashed #cbd5e1',
+          border: '1px dashed var(--color-border)',
           borderRadius: '1rem',
-          background: '#f8fafc',
+          background: 'var(--color-surface-3)',
           fontSize: '0.78rem',
           color: 'var(--color-text-muted)',
-          fontWeight: '700'
+          fontWeight: 400,
         }}>
           Puedes subir varios archivos a la vez: imágenes, PDF, Word, Excel, TXT y más.
         </div>

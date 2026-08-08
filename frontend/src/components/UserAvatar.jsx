@@ -48,7 +48,7 @@ const UserAvatar = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontWeight: '900',
+        fontWeight: 500,
         fontSize,
         color,
         boxShadow: shadow,

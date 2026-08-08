@@ -46,7 +46,7 @@ const FORMAT_INFO = {
       { campo: 'venceEn', desc: 'Opcional. "YYYY-MM-DD"' },
       { campo: 'asignadoEmail', desc: 'Opcional. Solo se usa si eliges "Según el archivo"' },
     ],
-  },
+  }
 };
 
 const MODOS = [
@@ -301,7 +301,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 
         {!resultado && (
           <div style={{ marginBottom: '1.25rem' }}>
-            <p style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--color-text-muted)', marginBottom: '0.6rem' }}>
+            <p style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--color-text-muted)', marginBottom: '0.6rem' }}>
               ¿A quién asignar las tareas?
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -331,7 +331,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                   />
                   <div style={{ color: modo === m.key ? 'var(--color-primary)' : 'var(--color-text-muted)', display: 'flex' }}>{m.icon}</div>
                   <div>
-                    <div style={{ fontWeight: '700', fontSize: '0.88rem' }}>{m.label}</div>
+                    <div style={{ fontWeight: 500, fontSize: '0.88rem' }}>{m.label}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{m.desc}</div>
                   </div>
                 </label>
@@ -340,7 +340,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 
             {modo === 'miembro' && (
               <div style={{ marginTop: '0.75rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '600', marginBottom: '0.35rem', color: 'var(--color-text-muted)' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--color-text-muted)' }}>
                   Miembro responsable:
                 </label>
                 <select
@@ -397,14 +397,14 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                 width: '100%', padding: '0.65rem 1rem', marginBottom: '1rem',
                 background: 'transparent', border: '1px dashed var(--color-border)',
                 borderRadius: '0.6rem', color: 'var(--color-text-muted)', cursor: 'pointer',
-                fontSize: '0.85rem', fontWeight: '500',
+                fontSize: '0.85rem', fontWeight: 500
               }}
             >
               <Download size={14} /> Descargar plantilla de ejemplo ({fmt.label})
             </button>
 
             <div style={{ marginBottom: '1rem', padding: '0.9rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', background: 'rgba(148,163,184,0.08)' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text-muted)', marginBottom: '0.45rem' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: '0.45rem' }}>
                 Campos esperados
               </div>
               <div style={{ display: 'grid', gap: '0.35rem' }}>
@@ -417,7 +417,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
             </div>
 
             <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--color-text-muted)' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-muted)' }}>
                 Seleccionar archivo {fmt.label}:
               </label>
               <div
@@ -448,7 +448,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                     <div style={{ color: 'var(--color-primary)', display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
                       <File size={32} />
                     </div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{archivo.name}</div>
+                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{archivo.name}</div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: '0.2rem' }}>
                       {(archivo.size / 1024).toFixed(1)} KB
                     </div>
@@ -458,7 +458,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                     <div style={{ color: 'var(--color-text-dim)', display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
                       <UploadCloud size={40} />
                     </div>
-                    <div style={{ fontWeight: '600', fontSize: '0.88rem' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>
                       Arrastra tu archivo aquí o <span style={{ color: 'var(--color-primary)' }}>haz clic</span>
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
@@ -485,17 +485,17 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
           <div style={{ marginBottom: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
               <div>
-                <div style={{ fontSize: '1rem', fontWeight: '800' }}>Vista previa de importación</div>
+                <div style={{ fontSize: '1rem', fontWeight: 500 }}>Vista previa de importación</div>
                 <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>{previewArchivo}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(59,130,246,0.12)', color: '#2563eb', fontSize: '0.78rem', fontWeight: '800' }}>
+                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(59,130,246,0.12)', color: '#2563eb', fontSize: '0.78rem', fontWeight: 500 }}>
                   {filasActivas.length} activas
                 </div>
-                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', fontSize: '0.78rem', fontWeight: '800' }}>
+                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', fontSize: '0.78rem', fontWeight: 500 }}>
                   {filasInvalidas.length} con error
                 </div>
-                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(245,158,11,0.12)', color: '#d97706', fontSize: '0.78rem', fontWeight: '800' }}>
+                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(245,158,11,0.12)', color: '#d97706', fontSize: '0.78rem', fontWeight: 500 }}>
                   {filasConAvisos.length} con aviso
                 </div>
               </div>
@@ -518,7 +518,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.9rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <div>
-                        <div style={{ fontSize: '0.82rem', fontWeight: '900', color: 'var(--color-text)' }}>Fila {fila.fila}</div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--color-text)' }}>Fila {fila.fila}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Asignación final: {asignacion}</div>
                       </div>
                       <button
@@ -531,7 +531,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                           borderRadius: '999px',
                           padding: '0.45rem 0.8rem',
                           fontSize: '0.75rem',
-                          fontWeight: '800',
+                          fontWeight: 500,
                           cursor: 'pointer',
                         }}
                       >
@@ -541,39 +541,39 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                       <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Número</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Número</span>
                         <input disabled={fila.omitida} value={fila.numeroActividad} onChange={(e) => updateFila(index, 'numeroActividad', e.target.value)} className="form-input" type="number" min="1" />
                       </label>
                       <label style={{ display: 'grid', gap: '0.35rem', gridColumn: 'span 2' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Título</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Título</span>
                         <input disabled={fila.omitida} value={fila.titulo} onChange={(e) => updateFila(index, 'titulo', e.target.value)} className="form-input" />
                       </label>
                       <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Estado</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Estado</span>
                         <select disabled={fila.omitida} value={fila.estado || 'PENDIENTE'} onChange={(e) => updateFila(index, 'estado', e.target.value)} className="form-input form-select">
                           {ESTADOS.map((estado) => <option key={estado} value={estado}>{estado}</option>)}
                         </select>
                       </label>
                       <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Prioridad</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Prioridad</span>
                         <select disabled={fila.omitida} value={fila.prioridad || 'MEDIA'} onChange={(e) => updateFila(index, 'prioridad', e.target.value)} className="form-input form-select">
                           {PRIORIDADES.map((prioridad) => <option key={prioridad} value={prioridad}>{prioridad}</option>)}
                         </select>
                       </label>
                       <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Inicio</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Inicio</span>
                         <input disabled={fila.omitida} value={fila.fechaInicio} onChange={(e) => updateFila(index, 'fechaInicio', e.target.value)} className="form-input" type="date" />
                       </label>
                       <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Límite</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Límite</span>
                         <input disabled={fila.omitida} value={fila.venceEn} onChange={(e) => updateFila(index, 'venceEn', e.target.value)} className="form-input" type="date" />
                       </label>
                       <label style={{ display: 'grid', gap: '0.35rem', gridColumn: 'span 2' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Descripción</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Descripción</span>
                         <textarea disabled={fila.omitida} value={fila.descripcion} onChange={(e) => updateFila(index, 'descripcion', e.target.value)} className="form-input" rows="2" style={{ resize: 'vertical' }} />
                       </label>
                       <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Correo asignado</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Correo asignado</span>
                         <input
                           disabled={fila.omitida || modo !== 'archivo'}
                           value={fila.asignadoEmail}
@@ -587,13 +587,13 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                     {!fila.omitida && errores.length > 0 && (
                       <div style={{ padding: '0.75rem 0.85rem', borderRadius: '0.75rem', background: 'rgba(239,68,68,0.08)', color: '#dc2626', display: 'grid', gap: '0.3rem' }}>
                         {errores.map((error) => (
-                          <div key={error} style={{ fontSize: '0.78rem', fontWeight: '700' }}>{error}</div>
+                          <div key={error} style={{ fontSize: '0.78rem', fontWeight: 500 }}>{error}</div>
                         ))}
                       </div>
                     )}
 
                     {!fila.omitida && modo === 'archivo' && fila.asignadoEmail && !usuarios.some((u) => String(u.email || '').toLowerCase() === String(fila.asignadoEmail || '').toLowerCase()) && (
-                      <div style={{ marginTop: '0.65rem', padding: '0.75rem 0.85rem', borderRadius: '0.75rem', background: 'rgba(245,158,11,0.08)', color: '#b45309', fontSize: '0.78rem', fontWeight: '700' }}>
+                      <div style={{ marginTop: '0.65rem', padding: '0.75rem 0.85rem', borderRadius: '0.75rem', background: 'rgba(245,158,11,0.08)', color: '#b45309', fontSize: '0.78rem', fontWeight: 500 }}>
                         El correo no coincide con un miembro del proyecto. Se usará la asignación por defecto si existe; si no, quedará sin asignar.
                       </div>
                     )}
@@ -610,7 +610,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
               <div style={{
                 background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
                 borderRadius: '0.6rem', padding: '0.75rem 1rem', marginBottom: '0.75rem',
-                color: '#34d399', fontSize: '0.95rem', fontWeight: '700',
+                color: '#34d399', fontSize: '0.95rem', fontWeight: 500,
                 display: 'flex', alignItems: 'center', gap: '0.5rem',
               }}>
                 <CheckCircle2 size={18} /> {resultado.creadas} tarea{resultado.creadas !== 1 ? 's' : ''} creada{resultado.creadas !== 1 ? 's' : ''} correctamente
@@ -622,7 +622,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                 background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)',
                 borderRadius: '0.6rem', padding: '0.75rem 1rem',
               }}>
-                <p style={{ fontSize: '0.82rem', fontWeight: '700', color: '#f59e0b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <p style={{ fontSize: '0.82rem', fontWeight: 400, color: '#f59e0b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <AlertTriangle size={14} /> {resultado.errores.length} fila{resultado.errores.length !== 1 ? 's' : ''} no se pudo guardar:
                 </p>
                 <div style={{ display: 'grid', gap: '0.35rem' }}>
@@ -644,7 +644,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
               flex: 1, padding: '0.75rem',
               background: 'transparent', border: '1px solid var(--color-border)',
               borderRadius: '0.75rem', color: 'var(--color-text-muted)',
-              cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem',
+              cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem'
             }}
           >
             Cerrar
@@ -661,7 +661,7 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                 flex: 1, padding: '0.75rem',
                 background: 'transparent', border: '1px solid var(--color-border)',
                 borderRadius: '0.75rem', color: 'var(--color-text-muted)',
-                cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem',
+                cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem'
               }}
             >
               Cambiar archivo

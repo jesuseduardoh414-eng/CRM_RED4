@@ -31,6 +31,10 @@ const Modal = ({
   headerExtra,
   footer,
   maxWidth = '760px',
+  // Alto fijo opcional. Sin el, la tarjeta crece con su contenido; con el, se
+  // queda quieta aunque el contenido cambie (p. ej. un formulario por pasos,
+  // donde cada paso tiene distinto largo y la ventana daba saltos).
+  height,
   bodyClassName = '',
   children,
 }) => {
@@ -45,14 +49,14 @@ const Modal = ({
 
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          style={{ maxWidth }}
-          className="fixed inset-0 z-[1401] m-auto flex h-fit max-h-[90vh] w-[calc(100%-2rem)] flex-col overflow-hidden rounded-[1.75rem] bg-[var(--color-surface)] shadow-2xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0"
+          style={{ maxWidth, height }}
+          className={`fixed inset-0 z-[1401] m-auto flex ${height ? '' : 'h-fit'} max-h-[90vh] w-[calc(100%-2rem)] flex-col overflow-hidden rounded-[1.75rem] bg-[var(--color-surface)] shadow-2xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0`}
         >
           {/* Encabezado fijo */}
           <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
             <div className="flex items-start justify-between gap-4 px-6 py-5 lg:px-8">
               <div className="min-w-0">
-                <DialogPrimitive.Title className="text-xl font-black tracking-tight text-[var(--color-text)] lg:text-2xl">
+                <DialogPrimitive.Title className="text-xl font-medium tracking-tight text-[var(--color-text)] lg:text-2xl">
                   {title}
                 </DialogPrimitive.Title>
                 {subtitle && (

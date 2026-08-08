@@ -1,34 +1,37 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import useSWR from 'swr';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { proyectosService, statsService, tareasService } from '../services/api';
+import { proyectosService, statsService } from '../services/api';
 import { usePreferences } from '../context/PreferencesContext';
 import { PageSkeleton } from '../components/Skeleton';
-import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
-import { getEstadoProyecto } from '../utils/estadosProyecto';
+import CampoFiltro from '../components/CampoFiltro';
+import UserAvatar from '../components/UserAvatar';
+import { Button } from '../components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { ESTADOS_PROYECTO, getEstadoProyecto, normalizarEstadoProyecto } from '../utils/estadosProyecto';
 import {
   Layers,
+  FolderKanban,
   CheckCircle2,
-  Users,
   BarChart3,
   Code2,
   Mail,
   ArrowRight,
   ClipboardList,
   AlertCircle,
+  X,
   Clock,
   PlayCircle,
-  CalendarDays,
   User,
   Megaphone,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
-} from 'lucide-react';
+  Search} from 'lucide-react';
 
 const AREA_CONF = {
   DESARROLLO:     { labelKey: 'areaDesarrollo',    color: '#2563eb', bg: 'rgba(37,99,235,0.08)', icon: <Code2 size={18} /> },
@@ -37,19 +40,10 @@ const AREA_CONF = {
   MARKETING:      { labelKey: 'areaMarketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)', icon: <Megaphone size={18} /> },
 };
 
-const CALENDAR_FILTERS = [
-  { id: 'todo',    labelKey: 'agendaAllTypes',  color: '#0f172a', bg: 'var(--color-surface-3)' },
-  { id: 'proyecto', labelKey: 'agendaProjects', color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
-  { id: 'tarea',   labelKey: 'agendaTasks',     color: '#16a34a', bg: 'rgba(22,163,74,0.10)' },
-  { id: 'evento',  labelKey: 'agendaEvents',    color: '#7c3aed', bg: 'rgba(124,58,237,0.10)' },
-  { id: 'reunion', labelKey: 'agendaMeetings',  color: '#db2777', bg: 'rgba(219,39,119,0.10)' },
-];
 
-const IconProjects = () => <Layers size={20} strokeWidth={2.5} />;
-const IconTasks = () => <ClipboardList size={20} strokeWidth={2.5} />;
-const IconChart = () => <BarChart3 size={20} strokeWidth={2.5} />;
-const IconTeam = () => <Users size={20} strokeWidth={2.5} />;
-const IconCheck = () => <CheckCircle2 size={20} strokeWidth={2.5} />;
+const IconProjects = () => <Layers size={16} strokeWidth={2} />;
+const IconTasks = () => <ClipboardList size={16} strokeWidth={2} />;
+const IconCheck = () => <CheckCircle2 size={16} strokeWidth={2} />;
 
 const saludo = (t) => {
   const h = new Date().getHours();
@@ -58,8 +52,6 @@ const saludo = (t) => {
   return t('dashboardGoodEvening');
 };
 
-const formatMonthLabel = (date, locale = 'es-MX') =>
-  date.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
 
 const startOfDay = (value) => {
   const date = new Date(value);
@@ -73,80 +65,77 @@ const endOfDay = (value) => {
   return date;
 };
 
+/**
+ * Fecha de fin de un proyecto para la linea de tiempo, en tres niveles segun
+ * que tan real sea el dato:
+ *
+ * 'real' → tiene fechaFin capturada
+ * 'deducida' → no la tiene, pero se usa el cierre de su ultima tarea hecha
+ * 'estimada' → no hay nada; se dibujan 7 dias solo para que la barra exista
+ *
+ * Solo la ultima se marca visualmente, porque es la unica inventada.
+ */
 const getProjectRange = (project) => {
   const startCandidates = [project?.fechaInicio, project?.creadoEn].filter(Boolean);
-  const endCandidates = [project?.fechaFin].filter(Boolean);
-
   const start = startCandidates.length
     ? new Date(Math.min(...startCandidates.map((value) => new Date(value).getTime())))
     : new Date();
-  const end = endCandidates.length
-    ? new Date(Math.max(...endCandidates.map((value) => new Date(value).getTime())))
-    : new Date(start.getTime() + (7 * 24 * 60 * 60 * 1000));
 
-  return { start, end };
+  if (project?.fechaFin) {
+    return { start, end: new Date(project.fechaFin), origenFin: 'real' };
+  }
+
+  const ultimoCierre = project?.ultimaTareaCompletadaEn
+    ? new Date(project.ultimaTareaCompletadaEn)
+    : null;
+
+  // Solo sirve si el cierre es posterior al inicio; si no, la barra saldria al reves
+  if (ultimoCierre && !Number.isNaN(ultimoCierre.getTime()) && ultimoCierre > start) {
+    return { start, end: ultimoCierre, origenFin: 'deducida' };
+  }
+
+  return {
+    start,
+    end: new Date(start.getTime() + (7 * 24 * 60 * 60 * 1000)),
+    origenFin: 'estimada'
+  };
 };
 
-const getProjectStats = (project) => ({
-  porcentaje: project?.progresoGeneral ?? project?.progreso ?? 0,
-  totalTareas: project?._count?.tareas ?? 0,
-  estado: project?.estado || 'ACTIVO',
-  miembros: project?.miembros?.length ?? 0,
-});
+// Solo la primera letra. El `capitalize` de CSS pone mayuscula a cada palabra
+// y dejaba "Mayo De 2026" en vez de "Mayo de 2026".
+const capitalizar = (texto = '') => (texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : texto);
 
-const buildCalendarDays = (monthDate) => {
-  const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const day = start.getDay();
-  const mondayOffset = day === 0 ? 6 : day - 1;
-  start.setDate(start.getDate() - mondayOffset);
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return date;
-  });
+/**
+ * Elige texto claro u oscuro segun que tan luminoso sea el fondo.
+ * Las barras usan el color del proyecto, y sobre los tonos claros (verde lima,
+ * amarillo) el blanco no se alcanzaba a leer.
+ */
+const textoLegibleSobre = (hex) => {
+  const limpio = String(hex || '').replace('#', '');
+  if (limpio.length < 6) return '#ffffff';
+  const r = parseInt(limpio.slice(0, 2), 16);
+  const g = parseInt(limpio.slice(2, 4), 16);
+  const b = parseInt(limpio.slice(4, 6), 16);
+  // Luminancia percibida (los ojos pesan mas el verde que el azul)
+  const luminancia = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminancia > 0.6 ? '#0f172a' : '#ffffff';
 };
 
-const isDateBetween = (date, start, end) => {
-  const target = startOfDay(date).getTime();
-  return target >= startOfDay(start).getTime() && target <= endOfDay(end).getTime();
+// Densidad de la linea de tiempo. Con "mes" un proyecto de 4 dias mide ~32px;
+// con "semana" mide ~96px y se puede leer.
+const ESCALAS_TIMELINE = {
+  semana: { labelKey: 'timelineWeek', pxPorDia: 24 },
+  mes: { labelKey: 'timelineMonth', pxPorDia: 8 },
+  trimestre: { labelKey: 'timelineQuarter', pxPorDia: 2.8 }
 };
 
-const uniqueCalendarItems = (items = []) => {
-  const seen = new Set();
-  return items.filter((item) => {
-    const key = `${item.tipo}-${item.origenId ?? item.id}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
 
-const getDateKey = (value) => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
 
-const sumarDias = (value, days) => {
-  const date = value instanceof Date ? new Date(value) : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setDate(date.getDate() + days);
-  return date;
-};
 
-const moverFechaComoDia = (value, days) => {
-  const date = sumarDias(value, days);
-  return date ? getDateKey(date) : null;
-};
 
-const getTaskNumericId = (taskLike) => {
-  const rawId = String(taskLike?.origenId || taskLike?.id || '');
-  const match = rawId.match(/tarea-(\d+)/i);
-  if (match) return Number(match[1]);
-  const numeric = Number(rawId);
-  return Number.isFinite(numeric) ? numeric : null;
-};
+
+
+
 
 const PROJECT_TIMELINE_COLORS = [
   { solid: '#2563eb', soft: 'rgba(37,99,235,0.16)', accent: '#93c5fd' },
@@ -169,365 +158,134 @@ const getProjectTimelineColor = (project) => {
 
 const getAreaLabel = (area, t) => t(AREA_CONF[String(area || '').toUpperCase()]?.labelKey || 'areaGeneral');
 
-const getTaskStableKey = (taskLike) => `tarea-${getTaskNumericId(taskLike) || taskLike?.origenId || taskLike?.id}-${taskLike?.fechaInicio || ''}`;
 
-const moverTareaLocal = (tarea, dias) => ({
-  ...tarea,
-  fechaInicio: moverFechaComoDia(tarea.fechaInicio || tarea.creadoEn, dias),
-  fechaFin: moverFechaComoDia(tarea.fechaFin || tarea.venceEn || tarea.fechaInicio || tarea.creadoEn, dias),
-  venceEn: moverFechaComoDia(tarea.venceEn || tarea.fechaFin || tarea.fechaInicio || tarea.creadoEn, dias),
-});
 
-const getItemProjectId = (item) => item?.proyecto?.id || item?.proyectoId || (item?.tipo === 'proyecto' ? item?.origenId : null);
-const getItemProjectName = (item) => item?.proyecto?.nombre || (item?.tipo === 'proyecto' ? String(item?.titulo || '').replace(/^Proyecto:\s*/i, '').trim() : null);
-const normalizeProjectName = (name) => String(name || '').trim().toLowerCase();
-
-const itemMatchesProjectFilter = (item, projectFilter) => {
-  if (!projectFilter) return true;
-  const itemProjectId = String(getItemProjectId(item) || '');
-  const itemProjectName = normalizeProjectName(getItemProjectName(item));
-
-  return (
-    (itemProjectId && projectFilter.ids?.includes(itemProjectId)) ||
-    (itemProjectName && itemProjectName === projectFilter.key)
-  );
-};
-
-const StatCard = ({ value, sub, icon, color, bg, onClick, helper }) => (
+/**
+ * Indicador del inicio, en una sola linea: icono, numero y etiqueta juntos.
+ * Sin caja, sin sombra y sin fondo en el icono.
+ */
+const StatCard = ({ value, sub, icon, color, onClick, primero }) => (
   <button
     type="button"
     onClick={onClick}
-    className="bg-white p-5 lg:p-6 rounded-[24px] shadow-sm border border-slate-50 flex items-center justify-between min-w-[140px] h-[110px] lg:h-[120px] text-left transition-all hover:-translate-y-0.5 hover:shadow-lg"
+    className={`flex items-baseline gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[var(--color-surface-3)] ${
+      primero ? '' : 'border-l border-[var(--color-border)] pl-4 ml-1'
+    }`}
   >
-    <div className="flex flex-col gap-0.5">
-      <div className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-none">
+    <span className="self-center" style={{ color }}>{icon}</span>
+    <span className="text-xl font-semibold text-[var(--color-text)] tracking-tight leading-none">
         {value}
-      </div>
-      {sub && <div className="text-[10px] lg:text-xs text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">{sub}</div>}
-      {helper && <div className="text-[10px] text-blue-600 font-bold mt-1">{helper}</div>}
-    </div>
-    <div
-      className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110"
-      style={{ background: bg || `${color}10`, color }}
-    >
-      {icon}
-    </div>
+    </span>
+    {sub && <span className="text-sm font-normal text-[var(--color-text-muted)]">{sub}</span>}
   </button>
 );
 
-const MiniTask = ({ tarea, onOpen }) => {
+/**
+ * `mostrarHora` se usa en las completadas: ahi interesa a que hora se cerro la
+ * tarea, no su fecha de vencimiento.
+ */
+const MiniTask = ({ tarea, onOpen, mostrarHora = false }) => {
   const { locale } = usePreferences();
+  const hora = mostrarHora && tarea.completadoEn
+    ? new Date(tarea.completadoEn).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+    : null;
+
   return (
-  <button
-    type="button"
+    <button
+      type="button"
     onClick={() => onOpen?.(tarea)}
     style={{ padding: '0.65rem 0', borderBottom: '1px solid rgba(148,163,184,0.16)', width: '100%', textAlign: 'left' }}
-  >
-    <div style={{ fontSize: '0.82rem', fontWeight: '800', color: 'var(--color-text)', lineHeight: 1.25 }}>
+    >
+      <div className="text-sm font-medium text-[var(--color-text)] leading-snug">
       {tarea.titulo}
-    </div>
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginTop: '0.25rem', fontSize: '0.68rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tarea.proyecto?.nombre || ''}</span>
-      {tarea.venceEn && <span>{new Date(tarea.venceEn).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}</span>}
-    </div>
-  </button>
+      </div>
+      <div className="flex justify-between gap-3 mt-1 text-xs font-normal text-[var(--color-text-muted)]">
+        <span className="truncate">{tarea.proyecto?.nombre || ''}</span>
+        {hora ? (
+          <span className="shrink-0 inline-flex items-center gap-1 font-medium text-[var(--color-text-dim)]">
+            <Clock size={11} /> {hora}
+          </span>
+              ) : (
+          tarea.venceEn && (
+            <span className="shrink-0">
+              {new Date(tarea.venceEn).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
+            </span>
+          )
+        )}
+      </div>
+    </button>
   );
 };
 
+// Columna con encabezado fijo y lista con scroll propio. Llena el alto que le
+// den: dentro del panel de vistas todas las columnas miden lo mismo.
 const ActivityBucket = ({ label, count, icon, color, children }) => (
-  <div style={{ minWidth: 0 }}>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.72rem', fontWeight: '900', color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+  <div style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.65rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', fontWeight: 500, color }}>
         {icon}
         {label}
       </div>
-      <span style={{ fontSize: '0.78rem', fontWeight: '900', color }}>{count}</span>
+      <span style={{ fontSize: '0.8rem', fontWeight: 500, color }}>{count}</span>
     </div>
-    <div style={{ minHeight: '48px', maxHeight: '260px', overflowY: 'auto', paddingRight: '0.3rem' }}>{children}</div>
+    <div style={{ flex: 1, minHeight: '48px', overflowY: 'auto', paddingRight: '0.3rem' }}>{children}</div>
   </div>
 );
 
-const AdminMemberActivity = ({ miembros, onOpenTask }) => {
-  const { t } = usePreferences();
-  if (!miembros?.length) return null;
-
-  return (
-    <div className="card" style={{ padding: '2rem', marginBottom: '3rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>{t('dashboardTeamActivity')}</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>{t('dashboardTeamActivityDesc')}</p>
-        </div>
-        <span style={{ fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t('dashboardTodayWeek')}</span>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '72vh', overflowY: 'auto', paddingRight: '0.35rem' }}>
-        {miembros.map((miembro) => (
-          <div key={miembro.id} style={{ border: '1px solid var(--color-border)', borderRadius: '16px', padding: '1rem', background: 'var(--color-surface)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(37,99,235,0.10)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>
-                {miembro.nombre?.charAt(0).toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: '900', color: 'var(--color-text)' }}>{miembro.nombre}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>{getAreaLabel(miembro.area, t)}</div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#0f172a', background: 'var(--color-surface-3)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.totalTareas} {t('dashboardTasksLabel').toLowerCase()}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.hechasHoy} {t('dashboardCompletedShort')}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.enProgreso} {t('dashboardInProgressShort')}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#dc2626', background: 'rgba(239,68,68,0.10)', padding: '0.25rem 0.45rem', borderRadius: '8px' }}>{miembro.totales.faltanHoy} {t('dashboardDueShort')}</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.55rem', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                {miembro.totales.totalHechas} {t('dashboardDone').toLowerCase()}
-              </span>
-              <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#dc2626', background: 'rgba(239,68,68,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                {miembro.totales.pendientes} {t('dashboardPending').toLowerCase()}
-              </span>
-              <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                {miembro.totales.porcentajeCumplimiento}% {t('dashboardDone').toLowerCase()}
-              </span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
-              <ActivityBucket label={t('dashboardDoneToday')} count={miembro.totales.hechasHoy} color="#16a34a" icon={<CheckCircle2 size={15} />}>
-                {miembro.hechasHoy.length ? miembro.hechasHoy.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardCompletedToday')}</span>}
-              </ActivityBucket>
-              <ActivityBucket label={t('dashboardDoing')} count={miembro.totales.enProgreso} color="#2563eb" icon={<PlayCircle size={15} />}>
-                {miembro.enProgreso.length ? miembro.enProgreso.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardNoCurrent')}</span>}
-              </ActivityBucket>
-              <ActivityBucket label={t('dashboardDueToday')} count={miembro.totales.faltanHoy} color="#dc2626" icon={<Clock size={15} />}>
-                {miembro.faltanHoy.length ? miembro.faltanHoy.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardNoDueToday')}</span>}
-              </ActivityBucket>
-              <ActivityBucket label={t('dashboardDueWeek')} count={miembro.totales.faltanSemana} color="#f59e0b" icon={<CalendarDays size={15} />}>
-                {miembro.faltanSemana.length ? miembro.faltanSemana.map((task) => <MiniTask key={task.id} tarea={task} onOpen={onOpenTask} />) : <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardNoDueWeek')}</span>}
-              </ActivityBucket>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+/** 'YYYY-MM-DD' del día de hoy en hora local, para el selector de fecha. */
+const claveDiaLocal = (fecha = new Date()) => {
+  const d = new Date(fecha);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const ProjectCalendarPanel = ({
-  monthDate,
-  onMonthChange,
-  projectEntries,
-  onSelectProject,
-  selectedProjectId,
-  headerAction = null,
-  embedded = false,
-}) => {
-  const { t, locale } = usePreferences();
-  const days = useMemo(() => buildCalendarDays(monthDate), [monthDate]);
-  const weekLabels = useMemo(() => {
-    const base = new Date(2024, 0, 1);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(base);
-      d.setDate(1 + i);
-      return d.toLocaleDateString(locale, { weekday: 'short' }).slice(0, 3);
-    });
-  }, [locale]);
-  const todayKey = startOfDay(new Date()).getTime();
-  const [expandedDay, setExpandedDay] = useState(null);
-
-  const closeExpandedDay = () => setExpandedDay(null);
-  const content = (
-    <>
-      {!embedded && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>{t('dashboardProjectCalendar')}</h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardProjectCalendarDesc')}</p>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {headerAction}
-              <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
-              <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
-            </div>
-          </div>
-
-          <div style={{ fontSize: '0.78rem', fontWeight: '900', textTransform: 'uppercase', color: '#2563eb', marginBottom: '0.85rem', letterSpacing: '0.06em' }}>
-            {formatMonthLabel(monthDate, locale)}
-          </div>
-        </>
-      )}
-
-      {embedded && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.78rem', fontWeight: '900', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.06em' }}>
-            {formatMonthLabel(monthDate, locale)}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {headerAction}
-            <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
-            <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.6rem' }}>
-        {weekLabels.map((label) => (
-          <div key={label} style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-text-muted)', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-            {label}
-          </div>
-        ))}
-
-        {days.map((day) => {
-          const isCurrentMonth = day.getMonth() === monthDate.getMonth();
-          const dayProjects = projectEntries.filter((entry) => isDateBetween(day, entry.start, entry.end));
-          const isToday = startOfDay(day).getTime() === todayKey;
-
-          return (
-            <div
-              key={day.toISOString()}
-              style={{
-                minHeight: '116px',
-                borderRadius: '18px',
-                border: '1px solid var(--color-border)',
-                background: isCurrentMonth ? 'var(--color-surface)' : 'var(--color-surface-3)',
-                padding: '0.65rem',
-                opacity: isCurrentMonth ? 1 : 0.55,
-                boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)' : 'none',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: isToday ? '#2563eb' : 'var(--color-text)' }}>{day.getDate()}</span>
-                {dayProjects.length > 0 && <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#2563eb' }}>{dayProjects.length}</span>}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                {dayProjects.slice(0, 2).map((entry) => (
-                  <button
-                    key={`${entry.project.id}-${day.toISOString()}`}
-                    type="button"
-                    onClick={() => onSelectProject(entry.project.id)}
-                    style={{
-                      width: '100%',
-                      border: 'none',
-                      borderRadius: '7px',
-                      padding: '0.25rem 0.4rem',
-                      background: selectedProjectId === entry.project.id ? '#2563eb' : '#eaf1ff',
-                      color: selectedProjectId === entry.project.id ? '#fff' : '#2563eb',
-                      borderLeft: selectedProjectId === entry.project.id ? 'none' : '2px solid #2563eb',
-                      fontSize: '0.55rem',
-                      fontWeight: '900',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {entry.project.nombre}
-                  </button>
-                ))}
-                {dayProjects.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedDay({ date: day, projects: dayProjects })}
-                    style={{ fontSize: '0.6rem', fontWeight: '900', color: 'var(--color-text-dim)', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 0 0 0.2rem' }}
-                  >
-                    +{dayProjects.length - 2} mas
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-
-  return (
-    <>
-      {embedded ? content : <div className="card" style={{ padding: '1.5rem' }}>{content}</div>}
-
-      {expandedDay && (
-        <div
-          onClick={(event) => {
-            if (event.target === event.currentTarget) closeExpandedDay();
-          }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.55)',
-            backdropFilter: 'blur(6px)',
-            zIndex: 1200,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1.5rem',
-          }}
-        >
-          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '80vh', overflow: 'hidden', background: 'var(--color-surface)', borderRadius: '24px', boxShadow: '0 24px 70px rgba(15,23,42,0.2)' }}>
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-              <div>
-                <h4 style={{ fontSize: '1.05rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '0.2rem' }}>
-                  Proyectos del {expandedDay.date.toLocaleDateString(locale, { day: 'numeric', month: 'long' })}
-                </h4>
-                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-                  {expandedDay.projects.length} proyectos activos en esta fecha
-                </p>
-              </div>
-              <Tooltip label={t('close')}><button type="button" onClick={closeExpandedDay} className="btn-icon-sm">
-                <ArrowRight size={16} style={{ transform: 'rotate(45deg)' }} />
-              </button></Tooltip>
-            </div>
-
-            <div style={{ padding: '1rem 1.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: 'calc(80vh - 88px)', overflowY: 'auto' }}>
-              {expandedDay.projects.map((entry) => (
-                <button
-                  key={`${entry.project.id}-expanded`}
-                  type="button"
-                  onClick={() => {
-                    onSelectProject(entry.project.id);
-                    closeExpandedDay();
-                  }}
-                  style={{ width: '100%', textAlign: 'left', border: '1px solid var(--color-border)', borderRadius: '16px', padding: '0.95rem 1rem', background: selectedProjectId === entry.project.id ? 'rgba(37,99,235,0.10)' : 'var(--color-surface)', cursor: 'pointer' }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.45rem' }}>
-                    <span style={{ fontWeight: '900', color: 'var(--color-text)' }}>{entry.project.nombre}</span>
-                    <span style={{ fontSize: '0.78rem', fontWeight: '900', color: '#2563eb' }}>{entry.project.progresoGeneral ?? entry.project.progreso ?? 0}%</span>
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-                    {new Date(entry.start).toLocaleDateString(locale, { day: '2-digit', month: 'short' })} - {new Date(entry.end).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+// Seis por página: es lo que cabe en el panel de vistas sin obligar a desplazar
+// dentro del gantt (6 × 84px de fila + cabecera y pie).
+const PROYECTOS_POR_PAGINA = 6;
 
 const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject }) => {
   const { t, locale } = usePreferences();
-  const validEntries = projectEntries.filter((entry) => entry.start && entry.end);
+  const [escala, setEscala] = useState('mes');
+  const [pagina, setPagina] = useState(1);
 
-  const range = useMemo(() => {
-    if (!validEntries.length) {
+  const todos = projectEntries.filter((entry) => entry.start && entry.end);
+  // Al elegir un proyecto se muestra solo ese; el boton "ver todos" lo devuelve.
+  const filtrados = selectedProjectId
+    ? todos.filter((entry) => entry.project.id === selectedProjectId)
+    : todos;
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PROYECTOS_POR_PAGINA));
+  // Se recorta en vez de reiniciar con un efecto: al filtrar a un solo proyecto
+  // totalPaginas baja a 1 y esto ya deja la pagina en rango por si solo.
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const validEntries = filtrados.slice(
+    (paginaActual - 1) * PROYECTOS_POR_PAGINA,
+    paginaActual * PROYECTOS_POR_PAGINA,
+  );
+
+  // El eje se calcula sobre TODOS los filtrados, no sobre la pagina visible:
+  // si dependiera de la pagina, cada una tendria un rango de fechas distinto y
+  // las barras "saltarian" al pasar de pagina.
+  const range = (() => {
+    if (!filtrados.length) {
       const start = new Date();
-      const end = new Date(start.getTime() + (14 * 24 * 60 * 60 * 1000));
-      return { start, end };
+      return { start, end: new Date(start.getTime() + (14 * 24 * 60 * 60 * 1000)) };
     }
-
     return {
-      start: new Date(Math.min(...validEntries.map((entry) => entry.start.getTime()))),
-      end: new Date(Math.max(...validEntries.map((entry) => entry.end.getTime()))),
+      start: new Date(Math.min(...filtrados.map((entry) => entry.start.getTime()))),
+      end: new Date(Math.max(...filtrados.map((entry) => entry.end.getTime())))
     };
-  }, [validEntries]);
+  })();
 
   const totalDays = Math.max(1, Math.ceil((endOfDay(range.end) - startOfDay(range.start)) / (1000 * 60 * 60 * 24)));
 
-  const months = useMemo(() => {
+  // Ancho en pixeles (antes eran porcentajes). Con pixeles la escala puede
+  // cambiar la densidad y el area se desplaza en horizontal si no cabe.
+  const pxPorDia = ESCALAS_TIMELINE[escala].pxPorDia;
+  const anchoTotal = Math.max(560, Math.round(totalDays * pxPorDia));
+
+  // Sin useMemo: son un puñado de meses y depende de valores derivados que el
+  // compilador de React no puede memorizar de forma fiable.
+  const months = (() => {
     const items = [];
     const cursor = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
     const endMonth = new Date(range.end.getFullYear(), range.end.getMonth(), 1);
@@ -538,167 +296,902 @@ const ProjectTimeline = ({ projectEntries, selectedProjectId, onSelectProject })
       const visibleStart = monthStart < range.start ? range.start : monthStart;
       const visibleEnd = monthEnd > range.end ? range.end : monthEnd;
       const days = Math.max(1, Math.ceil((endOfDay(visibleEnd) - startOfDay(visibleStart)) / (1000 * 60 * 60 * 24)));
+      const ancho = Math.round((days / totalDays) * anchoTotal);
 
       items.push({
         key: `${cursor.getFullYear()}-${cursor.getMonth()}`,
-        label: cursor.toLocaleDateString(locale, { month: 'long', year: 'numeric' }),
-        width: `${(days / totalDays) * 100}%`,
+        // Con poco espacio se abrevia el mes, para que no se corte a la mitad
+        label: capitalizar(cursor.toLocaleDateString(locale, ancho < 110
+          ? { month: 'short' }
+          : { month: 'long', year: 'numeric' })),
+        ancho
       });
 
       cursor.setMonth(cursor.getMonth() + 1);
     }
-
     return items;
-  }, [range.end, range.start, totalDays]);
+  })();
 
-  const getOffset = (date) => ((startOfDay(date) - startOfDay(range.start)) / (1000 * 60 * 60 * 24) / totalDays) * 100;
+  const getPx = (date) => ((startOfDay(date) - startOfDay(range.start)) / (1000 * 60 * 60 * 24) / totalDays) * anchoTotal;
+  const todayPx = getPx(new Date());
+  const hoyVisible = todayPx >= 0 && todayPx <= anchoTotal;
 
-  const todayOffset = getOffset(new Date());
+  const proyectoSeleccionado = selectedProjectId
+    ? todos.find((entry) => entry.project.id === selectedProjectId)
+    : null;
 
-  if (!validEntries.length) {
+  if (!todos.length) {
     return (
-      <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: '20px', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-        No hay proyectos con fechas para mostrar en la linea de tiempo.
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem', textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: '20px', color: 'var(--color-text-muted)', fontWeight: 400 }}>
+        {t('timelineEmpty')}
       </div>
     );
   }
 
   return (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: '20px', overflow: 'hidden', background: 'var(--color-surface)' }}>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-3)' }}>
-        <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid var(--color-border)', fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Proyectos
-        </div>
-        <div style={{ flex: 1, display: 'flex' }}>
-          {months.map((month) => (
-            <div key={month.key} style={{ width: month.width, padding: '1rem 0.75rem', borderRight: '1px solid var(--color-border)', fontSize: '0.7rem', fontWeight: '900', color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {month.label}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', padding: '0.85rem 1.1rem', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.74rem', fontWeight: '900', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          <Layers size={14} color="#2563eb" />
-          Identidad por proyecto
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
-            {validEntries.length} proyectos visibles
-          </span>
-          <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#f59e0b', background: 'rgba(245,158,11,0.10)', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
-            Línea roja = hoy
-          </span>
-        </div>
-      </div>
-
-      <div style={{ maxHeight: '520px', overflowY: 'auto', position: 'relative' }}>
-        {todayOffset >= 0 && todayOffset <= 100 && (
-          <div style={{ position: 'absolute', top: 0, bottom: 0, left: `calc(240px + ${todayOffset}%)`, width: '2px', background: 'rgba(239,68,68,0.9)', zIndex: 8, pointerEvents: 'none' }}>
-            <div style={{ position: 'absolute', top: '8px', left: '-5px', width: '12px', height: '12px', borderRadius: '999px', background: '#ef4444', boxShadow: '0 0 0 4px rgba(239,68,68,0.14)' }} />
+    // Se ajusta al alto que le den: barra de control arriba y paginacion abajo
+    // siempre visibles, y las filas desplazan en medio. Antes crecia libre y la
+    // paginacion quedaba fuera del panel, sin nada que avisara que seguia ahi.
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, border: '1px solid var(--color-border)', borderRadius: '20px', overflow: 'hidden', background: 'var(--color-surface)' }}>
+      {/* Barra de control: proyecto y escala juntos, con la etiqueta arriba */}
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', padding: '0.85rem 1.1rem', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1.25rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text-dim)' }}>
+              <FolderKanban size={14} color="#2563eb" />
+                  {t('projects')}
+            </span>
+            <Select
+              value={selectedProjectId === null ? 'TODOS' : String(selectedProjectId)}
+              onValueChange={(valor) => onSelectProject(valor === 'TODOS' ? null : Number(valor))}
+            >
+              <SelectTrigger className="h-9 w-[240px] text-sm font-normal">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[1500] max-h-[320px]">
+                <SelectItem value="TODOS" className="text-sm font-normal">{t('dashboardAllProjects')}</SelectItem>
+                {todos.map((entry) => (
+                  <SelectItem key={entry.project.id} value={String(entry.project.id)} className="text-sm font-normal">
+                    {entry.project.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text-dim)' }}>
+          <Layers size={14} color="#2563eb" />
+              {t('timelineScale')}
+            </span>
+            <Select value={escala} onValueChange={setEscala}>
+              <SelectTrigger className="h-9 w-[150px] text-sm font-normal">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[1500]">
+                {Object.entries(ESCALAS_TIMELINE).map(([clave, conf]) => (
+                  <SelectItem key={clave} value={clave} className="text-sm font-normal">{t(conf.labelKey)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+          {proyectoSeleccionado ? (
+            <Button variant="ghost" size="sm" onClick={() => onSelectProject(null)} className="text-blue-600">
+              <X size={14} /> {t('timelineShowAll')}
+            </Button>
+              ) : (
+            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
+              {t('timelineVisibleCount', { count: validEntries.length })}
+            </span>
+          )}
+          <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#ef4444', background: 'rgba(239,68,68,0.10)', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
+            {t('timelineTodayLine')}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-muted)', background: 'var(--color-surface-3)', padding: '0.32rem 0.55rem', borderRadius: '999px' }}>
+            <span style={{ width: '18px', height: '9px', borderRadius: '999px', background: 'repeating-linear-gradient(45deg, var(--color-text-muted) 0 3px, transparent 3px 6px)' }} />
+            {t('timelineEstimated')}
+          </span>
+        </div>
+      </div>
+
+      {/* El desplazamiento vertical vive aqui, no en cada columna, para que los
+          nombres y las barras se muevan juntos. La columna de la derecha solo
+          desplaza en horizontal (overflowY hidden), si no crearia su propio
+          scroll vertical y las dos columnas se desincronizarian. */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{ width: '240px', minWidth: '240px', borderRight: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+          <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-3)', fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                  {t('projects')}
+          </div>
         {validEntries.map((entry, index) => {
-          const offset = getOffset(entry.start);
-          const width = Math.max(4, getOffset(entry.end) - offset);
+          const palette = getProjectTimelineColor(entry.project);
+          const statusConf = getEstadoProyecto(entry.project.estado);
+          const progress = entry.project.progresoGeneral ?? entry.project.progreso ?? 0;
+          const selected = selectedProjectId === entry.project.id;
+          const miembros = entry.project.miembros || [];
+
+            return (
+              <button
+              key={entry.project.id}
+                type="button"
+                onClick={() => onSelectProject(selected ? null : entry.project.id)}
+                style={{
+                  width: '100%', height: '84px', padding: '0.9rem 1.25rem',
+                  border: 'none',
+                borderBottom: index < validEntries.length - 1 ? '1px solid var(--color-border-light)' : 'none',
+                background: selected ? 'rgba(37,99,235,0.10)' : 'var(--color-surface)',
+                  cursor: 'pointer', textAlign: 'left', position: 'relative',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.35rem'
+                }}
+              >
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: palette.solid }} />
+                <div style={{ fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {entry.project.nombre}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.3rem', minWidth: 0 }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 500, color: statusConf.color, background: statusConf.bg, padding: '0.2rem 0.42rem', borderRadius: '999px', whiteSpace: 'nowrap' }}>
+                    {t(statusConf.labelKey)}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 500, color: palette.solid, background: palette.soft, padding: '0.2rem 0.42rem', borderRadius: '999px' }}>
+                    {progress}%
+                    </span>
+                  </div>
+
+                  {/* Miembros. Se usa UserAvatar para que salga la foto de perfil:
+                      antes esta lista dibujaba la inicial a mano. */}
+                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                    {miembros.slice(0, 3).map((miembro) => (
+                      <div key={miembro.id} style={{ marginRight: '-7px' }}>
+                        <UserAvatar
+                          usuario={miembro}
+                          size={22}
+                          radius={999}
+                          fontSize="0.55rem"
+                          color={palette.solid}
+                          background="var(--color-surface)"
+                          borderColor={palette.soft}
+                />
+                      </div>
+                    ))}
+                    {miembros.length > 3 && (
+                      <span style={{ marginLeft: '0.55rem', fontSize: '0.7rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                        +{miembros.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
+          <div style={{ width: `${anchoTotal}px`, position: 'relative' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-3)' }}>
+          {months.map((month) => (
+                <div key={month.key} style={{ width: `${month.ancho}px`, minWidth: `${month.ancho}px`, padding: '1rem 0.6rem', borderRight: '1px solid var(--color-border)', fontSize: '0.75rem', fontWeight: 500, color: '#2563eb', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+              {month.label}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              {hoyVisible && (
+                <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${todayPx}px`, width: '2px', background: 'rgba(239,68,68,0.9)', zIndex: 8, pointerEvents: 'none' }}>
+                  <div style={{ position: 'absolute', top: '6px', left: '-5px', width: '12px', height: '12px', borderRadius: '999px', background: '#ef4444', boxShadow: '0 0 0 4px rgba(239,68,68,0.14)' }} />
+                </div>
+              )}
+
+        {validEntries.map((entry, index) => {
+                const left = getPx(entry.start);
+                // Ancho minimo para que la barra siga siendo visible y clickeable
+                const ancho = Math.max(26, getPx(entry.end) - left);
           const selected = selectedProjectId === entry.project.id;
           const progress = entry.project.progresoGeneral ?? entry.project.progreso ?? 0;
           const palette = getProjectTimelineColor(entry.project);
-          const statusConf = getEstadoProyecto(entry.project.estado);
-          const miembros = entry.project.miembros || [];
-          const previewMiembros = miembros.slice(0, 3);
+                const fechas = `${entry.start.toLocaleDateString(locale, { day: '2-digit', month: 'short' })} – ${entry.end.toLocaleDateString(locale, { day: '2-digit', month: 'short' })}`;
+                const esEstimada = entry.origenFin === 'estimada';
+                const notaFin = esEstimada
+                  ? t('timelineEstimatedShort')
+                  : entry.origenFin === 'deducida'
+                    ? t('timelineDerivedShort')
+                    : '';
+                // La etiqueta va donde quepa. Con barras anchas no hay hueco a
+                // ningun lado, asi que se dibuja dentro de la propia barra.
+                const anchoEtiqueta = 190;
+                const posicionEtiqueta = left + ancho + anchoEtiqueta < anchoTotal
+                  ? 'despues'
+                  : left > anchoEtiqueta
+                    ? 'antes'
+                    : 'dentro';
 
-          return (
-            <button
+                return (
+                  <div
               key={entry.project.id}
-              type="button"
-              onClick={() => onSelectProject(entry.project.id)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'stretch',
-                border: 'none',
+                    onClick={() => onSelectProject(selected ? null : entry.project.id)}
+                    style={{
+                      height: '84px', position: 'relative', cursor: 'pointer',
                 borderBottom: index < validEntries.length - 1 ? '1px solid var(--color-border-light)' : 'none',
-                background: selected ? 'rgba(37,99,235,0.10)' : 'var(--color-surface)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                position: 'relative',
-              }}
-            >
-              <div style={{ width: '240px', minWidth: '240px', padding: '1rem 1.25rem', borderRight: '1px solid var(--color-border)', position: 'relative' }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: palette.solid }} />
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.35rem' }}>
-                  <div style={{ fontWeight: '900', color: 'var(--color-text)', lineHeight: 1.2 }}>{entry.project.nombre}</div>
-                  <span style={{ flexShrink: 0, width: '11px', height: '11px', borderRadius: '999px', background: palette.solid, boxShadow: `0 0 0 5px ${palette.soft}` }} />
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.55rem' }}>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: statusConf.color, background: statusConf.bg, padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
-                    {t(statusConf.labelKey)}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: palette.solid, background: palette.soft, padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
-                    {progress}%
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: 'var(--color-text-dim)', background: 'var(--color-surface-3)', padding: '0.24rem 0.48rem', borderRadius: '999px' }}>
-                    {entry.project._count?.tareas || 0} {t('projectTaskPlural')}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.28rem' }}>
-                    {previewMiembros.length > 0 ? previewMiembros.map((miembro) => (
-                      <div
-                        key={miembro.id}
-                        title={miembro.nombre}
-                        style={{
-                          width: '26px',
-                          height: '26px',
-                          borderRadius: '999px',
-                          background: 'var(--color-surface)',
-                          border: `2px solid ${palette.soft}`,
-                          color: palette.solid,
-                          fontSize: '0.68rem',
-                          fontWeight: '900',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: '-6px',
-                          boxShadow: '0 2px 8px rgba(15,23,42,0.06)',
-                        }}
-                      >
-                        {String(miembro.nombre || '?').charAt(0).toUpperCase()}
-                      </div>
-                    )) : (
-                      <div style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>Sin integrantes</div>
-                    )}
-                    {miembros.length > 3 && (
-                      <span style={{ marginLeft: '0.45rem', fontSize: '0.68rem', fontWeight: '900', color: 'var(--color-text-muted)' }}>+{miembros.length - 3}</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>
-                    {t('dashboardMembersCount', { count: miembros.length, memberLabel: miembros.length === 1 ? t('teamMemberSingular') : t('teamMemberPlural') })}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ flex: 1, position: 'relative', minHeight: '72px', padding: '1rem 0.75rem' }}>
-                <div style={{ position: 'absolute', left: `${offset}%`, width: `${width}%`, top: '50%', transform: 'translateY(-50%)', height: '22px', borderRadius: '999px', background: selected ? palette.solid : `${palette.solid}dd`, boxShadow: selected ? `0 12px 24px ${palette.soft}` : `0 8px 18px ${palette.soft}`, overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 50%)' }} />
+                      background: selected ? 'rgba(37,99,235,0.10)' : 'transparent'
+                    }}
+                  >
+                    <div
+                      title={`${entry.project.nombre} · ${fechas}${notaFin ? ` · ${notaFin}` : ''}`}
+                      style={{
+                        position: 'absolute', left: `${left}px`, width: `${ancho}px`,
+                        top: '50%', transform: 'translateY(-50%)', height: '22px', borderRadius: '999px',
+                        // Solo la fecha inventada se raya. La deducida del ultimo
+                        // cierre es un dato real y se dibuja como cualquier otra.
+                        background: esEstimada
+                          ? `repeating-linear-gradient(45deg, ${palette.solid} 0 6px, ${palette.solid}66 6px 12px)`
+                          : `${palette.solid}dd`,
+                        boxShadow: selected ? `0 12px 24px ${palette.soft}` : `0 8px 18px ${palette.soft}`,
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {!esEstimada && (
                   <div style={{ width: `${progress}%`, maxWidth: '100%', height: '100%', borderRadius: '999px', background: palette.accent, opacity: 0.92 }} />
+                      )}
+                    </div>
+                    {/* Una sola etiqueta: antes habia una al inicio y otra al
+                        final, y con barras cortas se encimaban. */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '0.72rem',
+                        fontWeight: 400,
+                        whiteSpace: 'nowrap',
+                        ...(posicionEtiqueta === 'despues' && {
+                          left: `${left + ancho + 10}px`,
+                    color: 'var(--color-text-muted)',
+                        }),
+                        ...(posicionEtiqueta === 'antes' && {
+                          left: `${left - anchoEtiqueta - 14}px`,
+                          width: `${anchoEtiqueta}px`,
+                          textAlign: 'right',
+                    color: 'var(--color-text-muted)',
+                        }),
+                        // Dentro de la barra: el color del texto depende de que
+                        // tan claro sea el color del proyecto. Sobre verde lima
+                        // o amarillo, el blanco no se leia.
+                        ...(posicionEtiqueta === 'dentro' && {
+                          left: `${left + ancho - 12}px`,
+                          transform: 'translate(-100%, -50%)',
+                          color: textoLegibleSobre(palette.solid)
+                        })
+                      }}
+                    >
+                      {fechas}{notaFin ? ` · ${notaFin}` : ''}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Paginacion entre proyectos. Se oculta al ver uno solo o si todos caben. */}
+      {totalPaginas > 1 && (
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', padding: '0.85rem 1.1rem', borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-3)' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--color-text-muted)' }}>
+            {t('timelineRange', {
+              desde: (paginaActual - 1) * PROYECTOS_POR_PAGINA + 1,
+              hasta: Math.min(paginaActual * PROYECTOS_POR_PAGINA, filtrados.length),
+              total: filtrados.length
+            })}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Tooltip label={t('previous')}>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaActual === 1}>
+                <ChevronLeft size={16} />
+              </Button>
+            </Tooltip>
+            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--color-text)', minWidth: '78px', textAlign: 'center' }}>
+              {paginaActual} / {totalPaginas}
+            </span>
+            <Tooltip label={t('next')}>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaActual === totalPaginas}>
+                <ChevronRight size={16} />
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Cuantas actividades se cerraron en cada mes. Los datos vienen ya agrupados
+// del servidor (stats.actividadPorMes), no se calculan aqui.
+const ActividadPorMes = ({ datos }) => {
+  const { t, locale } = usePreferences();
+  const meses = datos?.meses || [];
+  const sinFecha = datos?.sinFecha || 0;
+
+  const maximo = Math.max(1, ...meses.map((m) => m.total));
+  const total = meses.reduce((suma, m) => suma + m.total, 0);
+
+  const nombreMes = (clave) => {
+    const [anio, mes] = clave.split('-').map(Number);
+    return capitalizar(new Date(anio, mes - 1, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' }));
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.75rem' }}>
+        <div>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--color-text)' }}>{t('monthlyActivityTitle')}</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: 400, marginTop: '0.2rem' }}>
+            {t('monthlyActivitySubtitle')}
+          </p>
+        </div>
+        {total > 0 && (
+          <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.32rem 0.6rem', borderRadius: '999px' }}>
+            {t('monthlyActivityTotal', { count: total })}
+          </span>
+        )}
+      </div>
+
+      {meses.length === 0 ? (
+        <div style={{ padding: '2.5rem', textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: '16px', color: 'var(--color-text-muted)', fontWeight: 400 }}>
+          {t('monthlyActivityEmpty')}
+        </div>
+              ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          {meses.map((m) => {
+            const pct = Math.round((m.total / maximo) * 100);
+            return (
+              <div key={m.mes} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '150px', minWidth: '150px', fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-dim)' }}>
+                  {nombreMes(m.mes)}
                 </div>
-                <div style={{ position: 'absolute', left: `${offset}%`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>
-                  {new Date(entry.start).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
+                <div style={{ flex: 1, height: '26px', background: 'var(--color-surface-3)', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${pct}%`,
+                      minWidth: m.total > 0 ? '30px' : 0,
+                      height: '100%',
+                      borderRadius: '999px',
+                      background: 'linear-gradient(90deg, #2563eb 0%, #60a5fa 100%)',
+                      transition: 'width 0.5s ease'
+                    }}
+                />
                 </div>
-                <div style={{ position: 'absolute', left: `calc(${offset + width}% - 44px)`, top: 'calc(50% + 18px)', fontSize: '0.66rem', fontWeight: '800', color: 'var(--color-text-muted)' }}>
-                  {new Date(entry.end).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
-                </div>
-                <div style={{ position: 'absolute', left: `calc(${offset}% + 10px)`, top: 'calc(50% - 22px)', fontSize: '0.65rem', fontWeight: '900', color: palette.solid, background: 'var(--color-surface)', border: `1px solid ${palette.soft}`, padding: '0.2rem 0.45rem', borderRadius: '999px' }}>
-                  {progress}% avance
+                <div style={{ width: '52px', textAlign: 'right', fontSize: '1rem', fontWeight: 500, color: 'var(--color-text)' }}>
+                  {m.total}
                 </div>
               </div>
-            </button>
-          );
-        })}
+            );
+          })}
+        </div>
+      )}
+
+      {/* Las terminadas sin fecha de cierre no se pueden ubicar en un mes; se
+          avisa en vez de repartirlas o inventarles una fecha. */}
+      {sinFecha > 0 && (
+        <p style={{ marginTop: '1.25rem', fontSize: '0.78rem', fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <AlertCircle size={13} />
+          {t('monthlyActivityNoDate', { count: sinFecha })}
+        </p>
+      )}
+    </div>
+  );
+};
+
+
+/**
+ * Pestañas del panel de actividad. Las tres primeras miran un día concreto;
+ * "General" ignora la fecha y muestra todo lo acumulado de cada persona.
+ */
+const VISTAS_ACTIVIDAD = [
+  { id: 'hechas', campo: 'hechasHoy', labelKey: 'dashboardViewDone', vacioKey: 'dashboardCompletedToday' },
+  { id: 'manana', campo: 'faltanManana', labelKey: 'dashboardViewTomorrow', vacioKey: 'dashboardNoDueTomorrow' },
+  { id: 'semana', campo: 'faltanSemana', labelKey: 'dashboardViewWeek', vacioKey: 'dashboardNoDueWeek' },
+  { id: 'general', campo: null, labelKey: 'dashboardViewGeneral', vacioKey: null },
+];
+
+/**
+ * Columnas de la vista general, por estado de la tarea.
+ *
+ * Ya no hay columna de "faltan esta semana": para eso está la pestaña
+ * "Esta semana", y repetirla aquí era la misma información dos veces.
+ */
+const COLUMNAS_GENERAL = [
+  { estado: 'PENDIENTE', labelKey: 'dashboardStatusPending', vacioKey: 'dashboardNoPending', color: '#dc2626', icono: <Clock size={15} /> },
+  { estado: 'EN_PROGRESO', labelKey: 'dashboardDoing', vacioKey: 'dashboardNoCurrent', color: '#2563eb', icono: <PlayCircle size={15} /> },
+  { estado: 'HECHO', labelKey: 'dashboardStatusDone', vacioKey: 'dashboardNoDone', color: '#16a34a', icono: <CheckCircle2 size={15} /> },
+];
+
+/** Fila de tarea del detalle: qué se hizo, de qué proyecto y a qué hora. */
+const FilaTareaDetalle = ({ tarea, onOpen, mostrarHora }) => {
+  const { locale } = usePreferences();
+  const hora = mostrarHora && tarea.completadoEn
+    ? new Date(tarea.completadoEn).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const vence = !mostrarHora && tarea.venceEn
+    ? new Date(tarea.venceEn).toLocaleDateString(locale, { day: '2-digit', month: 'short' })
+    : null;
+
+  return (
+    <button
+      type="button"
+    onClick={() => onOpen?.(tarea)}
+      className="w-full text-left flex items-start justify-between gap-4 px-4 py-3 rounded-lg transition-colors hover:bg-[var(--color-surface-3)]"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-[var(--color-text)] leading-snug">
+      {tarea.titulo}
+        </span>
+        <span className="block text-xs font-normal text-[var(--color-text-muted)] mt-0.5 truncate">
+          {tarea.proyecto?.nombre || '—'}
+        </span>
+      </span>
+      {(hora || vence) && (
+        <span className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-[var(--color-text-dim)] pt-0.5">
+          <Clock size={11} /> {hora || vence}
+        </span>
+      )}
+    </button>
+  );
+};
+
+const AdminMemberActivity = ({ miembros, onOpenTask, fecha, onFechaChange, cargando }) => {
+  const { t, locale } = usePreferences();
+  const [vista, setVista] = useState('hechas');
+  const [busqueda, setBusqueda] = useState('');
+  const [proyectoId, setProyectoId] = useState(null);
+  const [seleccionadoId, setSeleccionadoId] = useState(null);
+
+  const hoy = claveDiaLocal();
+  const esHoy = fecha === hoy;
+
+  const vistaActual = VISTAS_ACTIVIDAD.find((v) => v.id === vista) || VISTAS_ACTIVIDAD[0];
+  const campoVista = vistaActual.campo;
+  const esGeneral = vista === 'general';
+
+  const lista = miembros || [];
+
+  // El catálogo del filtro sale de las tareas y no de la lista de proyectos del
+  // tablero: así solo aparecen proyectos donde alguien tiene algo asignado.
+  const proyectos = (() => {
+    const mapa = new Map();
+    lista.forEach((miembro) => (miembro.todasConFecha || []).forEach((tarea) => {
+      if (tarea.proyecto?.id && !mapa.has(tarea.proyecto.id)) {
+        mapa.set(tarea.proyecto.id, tarea.proyecto.nombre);
+      }
+      }));
+    return [...mapa]
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
+  })();
+
+  const porProyecto = (tareas) => (
+    proyectoId ? (tareas || []).filter((tarea) => tarea.proyecto?.id === proyectoId) : (tareas || [])
+  );
+
+  const termino = busqueda.trim().toLowerCase();
+
+  // En "General" cuenta todo lo acumulado de la persona; en las de fecha, solo
+  // el bloque del día. El filtro de proyecto se aplica en los dos casos.
+  const tareasDe = (miembro) => porProyecto(esGeneral ? miembro.todasConFecha : miembro[campoVista]);
+  const contar = (miembro) => tareasDe(miembro).length;
+
+  // Primero quien tiene actividad, de más a menos, y quien no tiene nada al
+  // final. Al empatar manda el nombre, así que a primera hora del día —cuando
+  // todos van en cero— la lista sale en orden alfabético por sí sola.
+  const visibles = lista
+    .filter((miembro) => !termino || String(miembro.nombre || '').toLowerCase().includes(termino))
+    .map((miembro) => ({ miembro, total: contar(miembro) }))
+    .sort((a, b) => (
+      b.total - a.total
+      || String(a.miembro.nombre || '').localeCompare(String(b.miembro.nombre || ''), locale, { sensitivity: 'base' })
+    ))
+    .map((fila) => fila.miembro);
+
+  // Se deriva en vez de guardarlo en un efecto: si la persona elegida sale del
+  // filtro, cambia el día o cambia el proyecto, cae sola en la primera con tareas.
+  const seleccionado = visibles.find((miembro) => miembro.id === seleccionadoId)
+    || visibles.find((miembro) => contar(miembro) > 0)
+    || visibles[0]
+    || null;
+
+  const tareasDetalle = seleccionado ? tareasDe(seleccionado) : [];
+
+  const moverDia = (dias) => {
+    const d = new Date(`${fecha}T12:00:00`);
+    d.setDate(d.getDate() + dias);
+    onFechaChange(claveDiaLocal(d));
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+        <div>
+          <h3 className="text-lg font-semibold text-[var(--color-text)]">{t('dashboardTeamActivity')}</h3>
+          <p className="text-sm font-normal text-[var(--color-text-muted)] mt-0.5">{t('dashboardTeamActivityDesc')}</p>
+        </div>
+
+        {/* Selector de día. En "General" no se muestra: esa vista no es de un
+            día concreto, así que dejarlo ahí solo confundiría. */}
+        {!esGeneral && (
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-[var(--color-text-dim)]">{t('dashboardActivityDay')}</span>
+              <div className="flex items-center gap-1">
+                <Tooltip label={t('previous')}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => moverDia(-1)}>
+                    <ChevronLeft size={16} />
+                  </Button>
+                </Tooltip>
+                <input
+                  type="date"
+                  value={fecha}
+                  max={hoy}
+                  onChange={(e) => e.target.value && onFechaChange(e.target.value)}
+                  className="h-9 px-3 rounded-lg bg-[var(--color-surface-3)] border-0 text-sm font-normal text-[var(--color-text)] outline-none"
+                />
+                <Tooltip label={t('next')}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => moverDia(1)} disabled={esHoy}>
+                    <ChevronRight size={16} />
+                  </Button>
+                </Tooltip>
+              </div>
+            </div>
+            {!esHoy && (
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => onFechaChange(hoy)}>
+                {t('dashboardToday')}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Pestañas a la izquierda, buscador al centro y filtro de proyecto a la
+          derecha. El buscador ocupa el hueco sobrante para quedar centrado. */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Tabs value={vista} onValueChange={setVista}>
+          <TabsList>
+            {VISTAS_ACTIVIDAD.map((v) => (
+              <TabsTrigger key={v.id} value={v.id} className="text-sm font-normal data-[state=active]:font-medium">
+                {t(v.labelKey)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <div className="flex-1 flex justify-center min-w-[200px]">
+          <CampoFiltro label={t('search')}>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none">
+                <Search size={15} />
+              </span>
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder={t('dashboardSearchMember')}
+                aria-label={t('dashboardSearchMember')}
+                className="h-9 w-[220px] pl-9 pr-3 rounded-lg bg-[var(--color-surface-3)] border-0 text-sm font-normal text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
+              />
+            </div>
+          </CampoFiltro>
+        </div>
+
+        <CampoFiltro label={t('dashboardProjectFilter')}>
+          <Select
+            value={proyectoId === null ? 'TODOS' : String(proyectoId)}
+            onValueChange={(valor) => setProyectoId(valor === 'TODOS' ? null : Number(valor))}
+          >
+            <SelectTrigger className="h-9 w-[210px] text-sm font-normal">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-[1500] max-h-[320px]">
+              <SelectItem value="TODOS" className="text-sm font-normal">{t('dashboardAllProjects')}</SelectItem>
+              {proyectos.map((proyecto) => (
+                <SelectItem key={proyecto.id} value={String(proyecto.id)} className="text-sm font-normal">
+                  {proyecto.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CampoFiltro>
+      </div>
+
+      {cargando && (
+        <p className="text-sm font-normal text-[var(--color-text-muted)] py-6">{t('loading')}</p>
+      )}
+
+      {!cargando && visibles.length === 0 && (
+        <p className="py-10 text-center text-sm font-normal text-[var(--color-text-muted)]">
+          {termino || esGeneral
+            ? t('dashboardNoMembers')
+            : t('dashboardNoActivityDay', {
+              fecha: capitalizar(new Date(`${fecha}T12:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }))
+            })}
+        </p>
+      )}
+
+      {/* Maestro-detalle, igual en las cuatro pestañas: personas a la izquierda,
+          su actividad a la derecha. Lo único que cambia es el detalle. */}
+      {!cargando && visibles.length > 0 && (
+        <div className="grid flex-1 min-h-0 gap-5 lg:grid-cols-[280px_1fr]">
+          <div className="min-h-0 overflow-y-auto pr-1">
+            {visibles.map((miembro) => {
+              const total = contar(miembro);
+              const activo = seleccionado?.id === miembro.id;
+              return (
+                <button
+                        key={miembro.id}
+                  type="button"
+                  onClick={() => setSeleccionadoId(miembro.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activo ? 'bg-[var(--color-surface-3)]' : 'hover:bg-[var(--color-surface-3)]'
+                  }`}
+                >
+                  <UserAvatar
+                    usuario={miembro}
+                    size={30}
+                    radius={999}
+                    fontSize="0.7rem"
+                    color="#2563eb"
+                    background="rgba(37,99,235,0.10)"
+                    borderColor="rgba(37,99,235,0.18)"
+                />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-[var(--color-text)] truncate">{miembro.nombre}</span>
+                    <span className="block text-xs font-normal text-[var(--color-text-muted)] truncate">{getAreaLabel(miembro.area, t)}</span>
+                  </span>
+                  <span className={`shrink-0 text-sm tabular-nums ${
+                    total > 0 ? 'font-semibold text-[var(--color-text)]' : 'font-normal text-[var(--color-text-muted)]'
+                  }`}>
+                    {total}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex min-h-0 min-w-0 flex-col rounded-xl bg-[var(--color-surface-3)] p-2">
+            {seleccionado && (
+              <div className="px-3 py-2 mb-1 flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-[var(--color-text)] truncate">{seleccionado.nombre}</span>
+                <span className="text-sm font-normal text-[var(--color-text-muted)] shrink-0">
+                  {t('dashboardTaskCount', { count: tareasDetalle.length })}
+                </span>
+              </div>
+            )}
+
+            {esGeneral ? (
+              // Tres columnas por estado. Cada una scrollea por su cuenta para
+              // que una persona con 40 pendientes no estire las otras dos.
+              <div className="grid flex-1 min-h-0 gap-4 px-3 pb-2 sm:grid-cols-3">
+                {COLUMNAS_GENERAL.map((columna) => {
+                  const deLaColumna = tareasDetalle.filter((tarea) => tarea.estado === columna.estado);
+                  return (
+                    <ActivityBucket
+                      key={columna.estado}
+                      label={t(columna.labelKey)}
+                      count={deLaColumna.length}
+                      color={columna.color}
+                      icon={columna.icono}
+                    >
+                      {deLaColumna.length === 0 ? (
+                        <span className="text-sm font-normal text-[var(--color-text-muted)]">{t(columna.vacioKey)}</span>
+                      ) : deLaColumna.map((tarea) => (
+                        <MiniTask
+                  key={tarea.id}
+                          tarea={tarea}
+                          onOpen={onOpenTask}
+                          mostrarHora={columna.estado === 'HECHO'}
+                />
+                      ))}
+              </ActivityBucket>
+                  );
+                })}
+              </div>
+            ) : tareasDetalle.length === 0 ? (
+              <p className="px-3 py-10 text-center text-sm font-normal text-[var(--color-text-muted)]">
+                {t(vistaActual.vacioKey)}
+              </p>
+              ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {tareasDetalle.map((tarea) => (
+                  <FilaTareaDetalle
+                  key={tarea.id}
+                    tarea={tarea}
+                    onOpen={onOpenTask}
+                    mostrarHora={vista === 'hechas'}
+                />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PROYECTOS_POR_PAGINA_TABLA = 10;
+
+/**
+ * Progreso de proyectos en tabla.
+ *
+ * Por defecto oculta los terminados y archivados: la idea es ver lo que sigue
+ * en marcha. El admin decide cuando un proyecto esta terminado desde su menu,
+ * y a partir de ahi sale de esta lista salvo que se pida verlo con el filtro.
+ */
+const TablaProgresoProyectos = ({ proyectos, onAbrirProyecto }) => {
+  const { t, locale } = usePreferences();
+  const [filtro, setFiltro] = useState('EN_CURSO');
+  const [busqueda, setBusqueda] = useState('');
+  const [pagina, setPagina] = useState(1);
+
+  const FILTROS = [
+    { valor: 'EN_CURSO', labelKey: 'dashboardFilterInProgress' },
+    { valor: 'TODOS', labelKey: 'projectFilterAll' },
+    ...ESTADOS_PROYECTO.map((e) => ({ valor: e.value, labelKey: e.labelKey })),
+    ];
+
+  // Aqui la busqueda es local: los proyectos ya vienen todos en las estadisticas,
+  // no hace falta ir al servidor por cada letra.
+  const termino = busqueda.trim().toLowerCase();
+  const filtrados = proyectos.filter((p) => {
+    const estado = normalizarEstadoProyecto(p.estado);
+    const coincideEstado = filtro === 'EN_CURSO'
+      ? estado !== 'TERMINADO' && estado !== 'ARCHIVADO'
+      : filtro === 'TODOS' || estado === filtro;
+    const coincideTexto = !termino || String(p.nombre || '').toLowerCase().includes(termino);
+    return coincideEstado && coincideTexto;
+  });
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PROYECTOS_POR_PAGINA_TABLA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visibles = filtrados.slice(
+    (paginaActual - 1) * PROYECTOS_POR_PAGINA_TABLA,
+    paginaActual * PROYECTOS_POR_PAGINA_TABLA,
+  );
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">{t('dashboardProjectProgress')}</h3>
+
+        <div className="flex items-end gap-3 flex-wrap">
+          <CampoFiltro label={t('search')}>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none">
+                <Search size={15} />
+              </span>
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
+                placeholder={t('projectSearchPlaceholder')}
+                aria-label={t('projectSearchPlaceholder')}
+                className="h-9 w-[220px] pl-9 pr-3 rounded-lg bg-[var(--color-surface-3)] border-0 text-sm font-normal text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
+              />
+            </div>
+          </CampoFiltro>
+
+          <CampoFiltro label={t('projectFieldStatus')}>
+            <Select value={filtro} onValueChange={(v) => { setFiltro(v); setPagina(1); }}>
+              <SelectTrigger className="h-9 w-[160px] text-sm font-normal border-0 bg-[var(--color-surface-3)]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[1500]">
+                {FILTROS.map((f) => (
+                  <SelectItem key={f.valor} value={f.valor} className="text-sm font-normal">
+                    {t(f.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CampoFiltro>
+        </div>
+      </div>
+
+      {visibles.length === 0 ? (
+        <div className="py-12 text-center text-sm font-normal text-[var(--color-text-muted)]">
+          {t('projectNoResultsTitle')}
+        </div>
+              ) : (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-medium">{t('dashboardProjects')}</TableHead>
+                <TableHead className="font-medium">{t('projectFieldStatus')}</TableHead>
+                <TableHead className="font-medium w-[180px]">{t('dashboardProgress')}</TableHead>
+                <TableHead className="font-medium text-right">{t('dashboardTasksLabel')}</TableHead>
+                <TableHead className="font-medium text-right">{t('dashboardPending')}</TableHead>
+                <TableHead className="font-medium text-right">{t('teamTitle')}</TableHead>
+                <TableHead className="font-medium">{t('projectFieldStart')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibles.map((p) => {
+                const estado = getEstadoProyecto(p.estado);
+                const pct = p.porcentaje ?? 0;
+                return (
+                  <TableRow
+                    key={p.id}
+                    onClick={() => onAbrirProyecto(p.id)}
+                    className="cursor-pointer"
+                  >
+                    <TableCell className="font-medium text-[var(--color-text)]">{p.nombre}</TableCell>
+                    <TableCell>
+                      <span
+                        className="text-xs font-medium px-2 py-0.5 rounded-md whitespace-nowrap"
+                        style={{ color: estado.color, background: estado.bg }}
+                      >
+                        {t(estado.labelKey)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 rounded-full bg-[var(--color-surface-3)] overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[var(--color-primary)]"
+                            style={{ width: `${pct}%` }}
+                />
+                        </div>
+                        <span className="text-xs font-medium text-[var(--color-text-dim)] w-9 text-right">{pct}%</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-normal">{p.totalTareas ?? 0}</TableCell>
+                    <TableCell className="text-right font-normal">
+                      <span className={p.pendientes > 0 ? 'text-red-600 font-medium' : ''}>
+                        {p.pendientes ?? 0}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-normal">{p.miembros ?? 0}</TableCell>
+                    <TableCell className="font-normal text-[var(--color-text-muted)] whitespace-nowrap">
+                      {p.fechaInicio
+                        ? new Date(p.fechaInicio).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: '2-digit' })
+                        : '—'}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {totalPaginas > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-4 mt-2 border-t border-[var(--color-border)]">
+          <span className="text-sm font-normal text-[var(--color-text-muted)]">
+            {t('timelineRange', {
+              desde: (paginaActual - 1) * PROYECTOS_POR_PAGINA_TABLA + 1,
+              hasta: Math.min(paginaActual * PROYECTOS_POR_PAGINA_TABLA, filtrados.length),
+              total: filtrados.length
+            })}
+          </span>
+          <div className="flex items-center gap-2">
+            <Tooltip label={t('previous')}>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setPagina((n) => Math.max(1, n - 1))} disabled={paginaActual === 1}>
+                <ChevronLeft size={16} />
+              </Button>
+            </Tooltip>
+            <span className="text-sm font-medium text-[var(--color-text)] min-w-[70px] text-center">
+              {paginaActual} / {totalPaginas}
+            </span>
+            <Tooltip label={t('next')}>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setPagina((n) => Math.min(totalPaginas, n + 1))} disabled={paginaActual === totalPaginas}>
+                <ChevronRight size={16} />
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -743,43 +1236,43 @@ const DashboardMiembro = ({ usuario }) => {
     <div className="max-w-7xl mx-auto">
       <div className="mb-8 flex items-center gap-4">
         <div
-          className="w-12 h-12 lg:w-14 lg:h-14 rounded-2xl shrink-0 flex items-center justify-center font-black text-lg lg:text-xl shadow-xl shadow-slate-200/50"
+          className="w-12 h-12 lg:w-14 lg:h-14 rounded-2xl shrink-0 flex items-center justify-center font-medium text-lg lg:text-xl shadow-xl shadow-slate-200/50"
           style={{ background: area.bg, border: `2px solid ${area.color}`, color: area.color }}
         >
           {usuario?.nombre?.charAt(0).toUpperCase()}
         </div>
         <div>
-          <h1 className="text-xl lg:text-3xl font-black tracking-tight text-slate-900 leading-tight">
+          <h1 className="text-xl lg:text-3xl font-semibold tracking-tight text-slate-900 leading-tight">
             {saludo(t)}, {usuario?.nombre?.split(' ')[0]}
           </h1>
           <div className="flex flex-wrap gap-2 mt-1">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">
+            <span className="text-[10px] font-medium text-slate-500 px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">
               {t(area.labelKey)}
             </span>
-            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest px-2 py-0.5 bg-blue-50 rounded-md border border-blue-100">
+            <span className="text-[10px] font-medium text-blue-600 px-2 py-0.5 bg-blue-50 rounded-md border border-blue-100">
               {t('statusActive')}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-        <StatCard value={proyectos.length} icon={<IconProjects />} color="#2563eb" bg="rgba(37,99,235,0.10)" sub={t('dashboardProjects').toUpperCase()} helper={t('dashboardSeeProjects')} onClick={() => navigate('/proyectos')} />
-        <StatCard value={resumenTareas.total} icon={<IconTasks />} color="#0f172a" bg="var(--color-surface-3)" sub={t('dashboardTasksLabel').toUpperCase()} helper={`${tareasRestantes} ${t('dashboardPending').toLowerCase()}`} onClick={() => navigate('/proyectos')} />
-        <StatCard value={resumenTareas.hechas} icon={<IconCheck />} color="#10b981" bg="rgba(16,185,129,0.10)" sub={t('dashboardDone').toUpperCase()} helper={t('dashboardSeeAgenda')} onClick={() => navigate('/agenda')} />
-        <StatCard value={tareasRestantes} icon={<AlertCircle size={20} strokeWidth={2.5} />} color="#dc2626" bg="rgba(239,68,68,0.10)" sub={t('dashboardPending').toUpperCase()} helper={t('dashboardOpenBoard')} onClick={() => navigate('/proyectos')} />
-        <StatCard value={enProgreso.length} icon={<PlayCircle size={20} strokeWidth={2.5} />} color="#8b5cf6" bg="rgba(139,92,246,0.10)" sub={t('dashboardInProgress').toUpperCase()} helper={t('dashboardFollowTasks')} onClick={() => navigate('/proyectos')} />
+      <div className="flex items-center gap-1 flex-wrap mb-8">
+        <StatCard primero value={proyectos.length} icon={<IconProjects />} color="#2563eb" sub={t('dashboardProjects')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={resumenTareas.total} icon={<IconTasks />} color="var(--color-text-dim)" sub={t('dashboardTasksLabel')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={resumenTareas.hechas} icon={<IconCheck />} color="#10b981" sub={t('dashboardDone')} onClick={() => navigate('/agenda')} />
+        <StatCard value={tareasRestantes} icon={<AlertCircle size={16} strokeWidth={2} />} color="#dc2626" sub={t('dashboardPending')} onClick={() => navigate('/proyectos')} />
+        <StatCard value={enProgreso.length} icon={<PlayCircle size={16} strokeWidth={2} />} color="#8b5cf6" sub={t('dashboardInProgress')} onClick={() => navigate('/proyectos')} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', alignItems: 'start' }}>
         <div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{t('dashboardMyProjects')}</h3>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>{t('dashboardMyProjects')}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {proyectos.map((p) => (
               <button key={p.id} type="button" onClick={() => navigate(`/proyectos/${p.id}`)} className="card" style={{ padding: '1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', textAlign: 'left' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--color-primary)' }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>{p.nombre}</div>
+                  <div style={{ fontWeight: 500, fontSize: '1.1rem' }}>{p.nombre}</div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>{p._count?.tareas || 0} {t('taskAssignedPlural')}</div>
                 </div>
                 <span style={{ color: 'var(--color-primary)', display: 'flex' }}><ArrowRight size={20} /></span>
@@ -790,7 +1283,7 @@ const DashboardMiembro = ({ usuario }) => {
 
         {proximas.length > 0 && (
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem' }}>{t('dashboardUpcoming')}</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>{t('dashboardUpcoming')}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {proximas.map((tarea) => (
                 <button
@@ -799,9 +1292,9 @@ const DashboardMiembro = ({ usuario }) => {
                   onClick={() => navigate(`/proyectos/${tarea.proyectoId || tarea.proyecto?.id}`)}
                   style={{ background: 'var(--color-surface-2)', padding: '1rem', borderRadius: '0.85rem', border: '1px solid var(--color-border)', width: '100%', textAlign: 'left', cursor: 'pointer' }}
                 >
-                  <div style={{ fontWeight: '700', fontSize: '0.9rem', marginBottom: '0.25rem' }}>{tarea.titulo}</div>
+                  <div style={{ fontWeight: 500, fontSize: '0.9rem', marginBottom: '0.25rem' }}>{tarea.titulo}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 500, color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <AlertCircle size={10} /> {new Date(tarea.venceEn).toLocaleDateString()}
                     </span>
                     <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
@@ -818,711 +1311,65 @@ const DashboardMiembro = ({ usuario }) => {
   );
 };
 
-const TeamOccupationCalendar = ({ miembros, embedded = false, onRefresh = null }) => {
-  const { t, locale } = usePreferences();
-  const { showToast } = useToast();
-  const [localMiembros, setLocalMiembros] = useState(miembros || []);
-  const [selectedId, setSelectedId] = useState(miembros[0]?.id || null);
-  const [monthDate, setMonthDate] = useState(new Date());
-  const [expandedDay, setExpandedDay] = useState(null);
-  const [activeTaskMenu, setActiveTaskMenu] = useState(null);
-  const [movingTasks, setMovingTasks] = useState(false);
-  const [draggedGroup, setDraggedGroup] = useState(null);
-  const [calendarFilter, setCalendarFilter] = useState('todo');
-  const [selectedProjectFilter, setSelectedProjectFilter] = useState('todos');
 
-  const days = useMemo(() => buildCalendarDays(monthDate), [monthDate]);
-  const weekLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
-  const todayKey = startOfDay(new Date()).getTime();
+/**
+ * Vistas del panel del Inicio. Solo se muestra una a la vez; el orden es el que
+ * pidió el usuario y "actividad" es la de arranque porque es lo que revisa a diario.
+ */
+const VISTAS_PANEL = [
+  { id: 'actividad', labelKey: 'dashboardPanelActivity' },
+  { id: 'gantt', labelKey: 'dashboardPanelGantt' },
+  { id: 'progreso', labelKey: 'dashboardPanelProgress' },
+  { id: 'mes', labelKey: 'dashboardPanelMonthly' },
+];
 
-  useEffect(() => {
-    setLocalMiembros(miembros || []);
-    if (!miembros?.some((miembro) => miembro.id === selectedId)) {
-      setSelectedId(miembros?.[0]?.id || null);
-    }
-  }, [miembros, selectedId]);
-
-  const selectedMember = useMemo(() => localMiembros.find(m => m.id === selectedId), [localMiembros, selectedId]);
-
-  const projectFilterOptions = useMemo(() => {
-    const byName = new Map();
-    const sources = [
-      ...(selectedMember?.ocupacionCalendario || []),
-      ...(selectedMember?.todasConFecha || []),
-    ];
-
-    sources.forEach((item) => {
-      const projectId = getItemProjectId(item);
-      const projectName = getItemProjectName(item);
-      const key = normalizeProjectName(projectName);
-      if (!key || !projectName) return;
-
-      const existing = byName.get(key);
-      if (!existing) {
-        byName.set(key, { id: key, key, nombre: projectName, ids: projectId ? [String(projectId)] : [] });
-      } else if (projectId && !existing.ids.includes(String(projectId))) {
-        byName.set(key, { ...existing, ids: [...existing.ids, String(projectId)] });
-      }
-    });
-
-    return [...byName.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [selectedMember]);
-
-  const selectedProjectOption = useMemo(
-    () => projectFilterOptions.find((project) => project.id === selectedProjectFilter) || null,
-    [projectFilterOptions, selectedProjectFilter]
-  );
-
-  useEffect(() => {
-    if (selectedProjectFilter !== 'todos' && !projectFilterOptions.some((project) => project.id === selectedProjectFilter)) {
-      setSelectedProjectFilter('todos');
-    }
-  }, [projectFilterOptions, selectedProjectFilter]);
-
-  const itemPasaFiltros = useCallback((item) => {
-    if (calendarFilter !== 'todo') {
-      const tipo = item.tipo === 'reunion' ? 'reunion' : item.tipo;
-      if (calendarFilter === 'proyecto' && tipo !== 'proyecto') return false;
-      if (calendarFilter === 'tarea' && tipo !== 'tarea') return false;
-      if (calendarFilter === 'evento' && tipo !== 'evento') return false;
-      if (calendarFilter === 'reunion' && tipo !== 'reunion') return false;
-    }
-
-    if ((calendarFilter === 'proyecto' || calendarFilter === 'tarea') && selectedProjectFilter !== 'todos') {
-      return itemMatchesProjectFilter(item, selectedProjectOption);
-    }
-
-    return true;
-  }, [calendarFilter, selectedProjectFilter, selectedProjectOption]);
-
-  const getDayModalItems = useCallback((day) => {
-    const occupancyFromApi = (selectedMember?.ocupacionCalendario || [])
-      .filter((item) => ['proyecto', 'tarea', 'evento', 'reunion'].includes(item.tipo))
-      .filter(itemPasaFiltros);
-    const occupancyOnDayFromApi = occupancyFromApi.filter((item) =>
-      item.fechaInicio && item.fechaFin && isDateBetween(day, item.fechaInicio, item.fechaFin)
-    );
-    const hasTasksFromApi = occupancyOnDayFromApi.some((item) => item.tipo === 'tarea');
-    const taskFallbackOnDay = hasTasksFromApi || calendarFilter === 'proyecto' || calendarFilter === 'evento' || calendarFilter === 'reunion' ? [] : (selectedMember?.todasConFecha || [])
-      .filter((t) => isDateBetween(day, t.fechaInicio || t.creadoEn, t.venceEn || t.completadoEn || t.creadoEn))
-      .filter(itemPasaFiltros)
-      .map((t) => ({
-        ...t,
-        id: `tarea-fallback-${t.id}`,
-        origenId: t.id,
-        tipo: 'tarea',
-        fechaInicio: t.fechaInicio || t.creadoEn,
-        fechaFin: t.venceEn || t.completadoEn || t.creadoEn,
-      }));
-
-    const occupancyOnDay = uniqueCalendarItems([...occupancyOnDayFromApi, ...taskFallbackOnDay]);
-    const modalItems = [...occupancyOnDay].sort((a, b) => {
-      const tipoOrden = { proyecto: 0, tarea: 1, evento: 2, reunion: 3 };
-      const tipoA = tipoOrden[a.tipo] ?? 9;
-      const tipoB = tipoOrden[b.tipo] ?? 9;
-      return tipoA - tipoB || String(a.titulo || '').localeCompare(String(b.titulo || ''));
-    });
-
-    return { occupancyOnDay, modalItems };
-  }, [calendarFilter, itemPasaFiltros, selectedMember]);
-
-  const aplicarCambioOptimistaMiembro = useCallback(async ({ construirSiguienteEstado, ejecutarCambio, mensajeExito, mensajeError }) => {
-    const estadoAnterior = localMiembros;
-    const estadoSiguiente = construirSiguienteEstado(estadoAnterior);
-    setLocalMiembros(estadoSiguiente);
-
-    try {
-      await ejecutarCambio();
-      showToast(mensajeExito);
-      void onRefresh?.();
-      return true;
-    } catch (error) {
-      setLocalMiembros(estadoAnterior);
-      showToast(error.message || mensajeError, 'error');
-      return false;
-    }
-  }, [localMiembros, onRefresh, showToast]);
-
-  const handleMoverBloqueTareas = useCallback(async (fechaBase, diasAMover) => {
-    const dias = Number(diasAMover);
-    if (!fechaBase || !Number.isInteger(dias) || dias === 0) return false;
-
-    const tareasAMover = new Map();
-    let cursor = startOfDay(fechaBase);
-
-    for (let i = 0; i < 120 && cursor; i += 1) {
-      const { modalItems } = getDayModalItems(cursor);
-      const tareasDelDia = modalItems.filter((item) => item.tipo === 'tarea');
-      if (tareasDelDia.length === 0) break;
-
-      tareasDelDia.forEach((tarea) => {
-        const taskId = getTaskNumericId(tarea);
-        if (!taskId) return;
-        tareasAMover.set(taskId, tarea);
-      });
-
-      cursor = sumarDias(cursor, 1);
-    }
-
-    if (tareasAMover.size === 0) {
-      showToast(t('dashboardMoveTaskNone'), 'info');
-      return false;
-    }
-
-    const keys = new Set([...tareasAMover.values()].map((tarea) => getTaskStableKey(tarea)));
-    return aplicarCambioOptimistaMiembro({
-      construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((miembro) => {
-        if (miembro.id !== selectedId) return miembro;
-        return {
-          ...miembro,
-          ocupacionCalendario: (miembro.ocupacionCalendario || []).map((item) => (
-            item.tipo === 'tarea' && keys.has(getTaskStableKey(item)) ? moverTareaLocal(item, dias) : item
-          )),
-          todasConFecha: (miembro.todasConFecha || []).map((item) => (
-            keys.has(getTaskStableKey(item)) ? moverTareaLocal(item, dias) : item
-          )),
-        };
-      }),
-      ejecutarCambio: () => Promise.all(
-        [...tareasAMover.values()].map((tarea) =>
-          tareasService.editar(getTaskNumericId(tarea), {
-            fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
-            venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
-          })
-        )
-      ),
-      mensajeExito: t('dashboardMoveTaskSuccess', {
-        count: tareasAMover.size,
-        taskLabel: tareasAMover.size === 1 ? t('projectTaskSingular') : t('projectTaskPlural'),
-        days: Math.abs(dias),
-        dayLabel: Math.abs(dias) === 1 ? t('taskDaySingular') : t('taskDayPlural'),
-      }),
-      mensajeError: t('dashboardMoveTaskError'),
-    });
-  }, [aplicarCambioOptimistaMiembro, getDayModalItems, selectedId, showToast]);
-
-  const moverTareaIndividual = useCallback(async (tarea, diasAMover) => {
-    const dias = Number(diasAMover);
-    const taskId = getTaskNumericId(tarea);
-    if (!taskId || !Number.isInteger(dias) || dias === 0) return false;
-
-    const taskKey = getTaskStableKey(tarea);
-    return aplicarCambioOptimistaMiembro({
-      construirSiguienteEstado: (estadoAnterior) => estadoAnterior.map((miembro) => {
-        if (miembro.id !== selectedId) return miembro;
-        return {
-          ...miembro,
-          ocupacionCalendario: (miembro.ocupacionCalendario || []).map((item) => (
-            item.tipo === 'tarea' && getTaskStableKey(item) === taskKey ? moverTareaLocal(item, dias) : item
-          )),
-          todasConFecha: (miembro.todasConFecha || []).map((item) => (
-            getTaskStableKey(item) === taskKey ? moverTareaLocal(item, dias) : item
-          )),
-        };
-      }),
-      ejecutarCambio: () => tareasService.editar(taskId, {
-        fechaInicio: moverFechaComoDia(tarea.fechaInicio, dias),
-        venceEn: moverFechaComoDia(tarea.fechaFin || tarea.fechaInicio, dias),
-      }),
-      mensajeExito: `Se movió 1 tarea ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}.`,
-      mensajeError: 'No se pudo mover la tarea.',
-    });
-  }, [aplicarCambioOptimistaMiembro, selectedId]);
-
-  const ejecutarMovimiento = async (tarea, dias) => {
-    if (!tarea || movingTasks) return;
-    setMovingTasks(true);
-    setActiveTaskMenu(null);
-    const movido = await moverTareaIndividual(tarea, dias);
-    if (movido) setExpandedDay(null);
-    setMovingTasks(false);
-  };
-
-  const pedirMovimientoPersonalizado = async (tarea) => {
-    if (!tarea) return;
-    const value = window.prompt(t('dashboardMoveTaskPrompt'), '3');
-    if (value === null) return;
-    const dias = Number(value);
-    if (!Number.isInteger(dias) || dias === 0) return;
-    await ejecutarMovimiento(tarea, dias);
-  };
-
-  const onMonthChange = (delta) => {
-    setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + delta, 1));
-  };
-
-  if (!miembros?.length) return null;
-
-  const content = (
-    <>
-      {!embedded && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
-          <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '0.25rem' }}>{t('dashboardTeamAvailability')}</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardTeamOccupation')}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
-            <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#2563eb', textTransform: 'uppercase', minWidth: '140px', textAlign: 'center' }}>
-              {formatMonthLabel(monthDate, locale)}
-            </div>
-            <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
-          </div>
-        </div>
-      )}
-
-      {embedded && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.78rem', fontWeight: '900', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.06em' }}>
-            {formatMonthLabel(monthDate, locale)}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <Tooltip label={t('previous')}><button type="button" onClick={() => onMonthChange(-1)} className="btn-icon-sm"><ChevronLeft size={16} /></button></Tooltip>
-            <Tooltip label={t('next')}><button type="button" onClick={() => onMonthChange(1)} className="btn-icon-sm"><ChevronRight size={16} /></button></Tooltip>
-          </div>
-        </div>
-      )}
-
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: '22px', padding: '1rem', marginBottom: '1.25rem', background: 'var(--color-surface)', boxShadow: '0 16px 38px rgba(15,23,42,0.04)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
-              {t('dashboardCalendarFilters')}
-            </div>
-            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', marginTop: '0.18rem' }}>
-              {selectedProjectFilter === 'todos'
-                ? t('dashboardShowingMemberItems')
-                : t('dashboardSelectedProjectContext', { project: selectedProjectOption?.nombre || t('projects').toLowerCase() })}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
-            {CALENDAR_FILTERS.map((filter) => {
-              const active = calendarFilter === filter.id;
-              return (
-                <button
-                  key={filter.id}
-                  type="button"
-                  onClick={() => setCalendarFilter(filter.id)}
-                  style={{
-                    border: '1px solid',
-                    borderColor: active ? filter.color : '#dbe3ef',
-                    background: active ? filter.color : filter.bg,
-                    color: active ? '#fff' : filter.color,
-                    borderRadius: '999px',
-                    padding: '0.55rem 0.85rem',
-                    fontSize: '0.7rem',
-                    fontWeight: '900',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    cursor: 'pointer',
-                    boxShadow: active ? `0 10px 22px ${filter.color}22` : 'none',
-                  }}
-                >
-                  {t(filter.labelKey)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {(calendarFilter === 'proyecto' || calendarFilter === 'tarea' || selectedProjectFilter !== 'todos') && (
-          <div style={{ marginTop: '0.9rem', paddingTop: '0.9rem', borderTop: '1px solid #eef2f7' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-              <div>
-                <div style={{ fontSize: '0.66rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
-                  {t('projects')}
-                </div>
-                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--color-text-dim)', marginTop: '0.12rem' }}>
-                  {calendarFilter === 'proyecto'
-                    ? t('dashboardChooseProjectRange')
-                    : calendarFilter === 'tarea'
-                      ? t('dashboardChooseProjectTasks')
-                      : t('dashboardProjectContextFilters')}
-                </div>
-              </div>
-              {selectedProjectFilter !== 'todos' && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedProjectFilter('todos')}
-                  style={{
-                    border: '1px solid var(--color-border)',
-                    background: 'var(--color-surface)',
-                    color: 'var(--color-text-muted)',
-                    borderRadius: '999px',
-                    padding: '0.45rem 0.75rem',
-                    fontSize: '0.66rem',
-                    fontWeight: '900',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t('agendaClearProject')}
-                </button>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.55rem', overflowX: 'auto', paddingBottom: '0.2rem' }}>
-              <button
-                type="button"
-                onClick={() => setSelectedProjectFilter('todos')}
-                style={{
-                  flexShrink: 0,
-                  border: '1px solid',
-                  borderColor: selectedProjectFilter === 'todos' ? 'var(--color-text)' : '#dbe3ef',
-                  background: selectedProjectFilter === 'todos' ? 'var(--color-text)' : 'var(--color-surface)',
-                  color: selectedProjectFilter === 'todos' ? 'var(--color-surface)' : 'var(--color-text-dim)',
-                  borderRadius: '999px',
-                  padding: '0.55rem 0.85rem',
-                  fontSize: '0.7rem',
-                  fontWeight: '900',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {t('dashboardAllProjects')}
-              </button>
-              {projectFilterOptions.map((project) => {
-                const active = selectedProjectFilter === project.id;
-                return (
-                  <button
-                    key={project.id}
-                    type="button"
-                    onClick={() => setSelectedProjectFilter(project.id)}
-                    style={{
-                      flexShrink: 0,
-                      border: '1px solid',
-                      borderColor: active ? '#2563eb' : '#dbe3ef',
-                      background: active ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
-                      color: active ? 'var(--color-primary)' : 'var(--color-text-dim)',
-                      borderRadius: '999px',
-                      padding: '0.55rem 0.85rem',
-                      fontSize: '0.7rem',
-                      fontWeight: '900',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      boxShadow: active ? '0 10px 22px rgba(37,99,235,0.12)' : 'none',
-                    }}
-                  >
-                    {project.nombre}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', pb: '1rem', marginBottom: '2rem', paddingBottom: '0.5rem' }}>
-        {miembros.map(m => (
-          <button
-            key={m.id}
-            onClick={() => setSelectedId(m.id)}
-            style={{
-              padding: '0.75rem 1.25rem',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: selectedId === m.id ? '#2563eb' : 'var(--color-border)',
-              background: selectedId === m.id ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
-              color: selectedId === m.id ? 'var(--color-primary)' : 'var(--color-text-dim)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: selectedId === m.id ? '#2563eb' : 'var(--color-surface-3)', color: selectedId === m.id ? '#fff' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '900' }}>
-              {m.nombre.charAt(0)}
-            </div>
-            <span style={{ fontSize: '0.82rem', fontWeight: '800' }}>{m.nombre}</span>
-          </button>
-        ))}
-      </div>
-
-      <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '28px', padding: embedded ? '1rem' : '1.15rem', boxShadow: '0 20px 45px rgba(15,23,42,0.05)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.7rem' }}>
-        {weekLabels.map(l => (
-          <div key={l} style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-text-muted)', textAlign: 'center', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{l}</div>
-        ))}
-
-        {days.map(day => {
-          const isCurrentMonth = day.getMonth() === monthDate.getMonth();
-          const isToday = startOfDay(day).getTime() === todayKey;
-          const { occupancyOnDay, modalItems } = getDayModalItems(day);
-
-          const taskCount = occupancyOnDay.filter((item) => item.tipo === 'tarea').length;
-          const visibleProjects = occupancyOnDay.filter((item) => item.tipo === 'proyecto').slice(0, 2);
-          const visibleTasks = occupancyOnDay.filter((item) => item.tipo === 'tarea').slice(0, 1);
-          const visibleEvents = occupancyOnDay.filter((item) => item.tipo === 'evento').slice(0, 1);
-          const visibleMeetings = occupancyOnDay.filter((item) => item.tipo === 'reunion').slice(0, 1);
-          const hiddenCount = Math.max(occupancyOnDay.length - (visibleProjects.length + visibleTasks.length + visibleEvents.length + visibleMeetings.length), 0);
-
-          return (
-            <div
-              key={day.toISOString()}
-              onClick={() => modalItems.length > 0 && setExpandedDay({ date: day, tasks: modalItems })}
-              onDragOver={(ev) => {
-                if (!draggedGroup) return;
-                ev.preventDefault();
-              }}
-              onDrop={async (ev) => {
-                if (!draggedGroup) return;
-                ev.preventDefault();
-                ev.stopPropagation();
-                const delta = Math.round((startOfDay(day).getTime() - startOfDay(draggedGroup.sourceDate).getTime()) / 86400000);
-                if (!delta) {
-                  setDraggedGroup(null);
-                  return;
-                }
-                setActiveTaskMenu(null);
-                setMovingTasks(true);
-                const movido = await handleMoverBloqueTareas(draggedGroup.sourceDate, delta);
-                if (movido) setExpandedDay(null);
-                setDraggedGroup(null);
-                setMovingTasks(false);
-              }}
-              style={{
-                minHeight: '116px',
-                borderRadius: '18px',
-                border: '1px solid var(--color-border)',
-                background: isCurrentMonth
-                  ? 'var(--color-surface)'
-                  : 'var(--color-surface-3)',
-                padding: '0.65rem',
-                opacity: isCurrentMonth ? 1 : 0.4,
-                cursor: modalItems.length > 0 ? 'pointer' : 'default',
-                transition: 'all 0.2s',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.35rem',
-                boxShadow: isToday ? 'inset 0 0 0 2px rgba(37,99,235,0.14), 0 10px 24px rgba(37,99,235,0.08)' : 'none',
-                position: 'relative',
-                overflow: 'hidden',
-                outline: draggedGroup ? '1px dashed rgba(37,99,235,0.16)' : undefined,
-              }}
-              className={modalItems.length > 0 ? 'hover:border-blue-200 hover:shadow-md' : ''}
-            >
-              <div style={{ fontSize: '0.78rem', fontWeight: '900', color: isToday ? '#2563eb' : 'var(--color-text)', position: 'relative', zIndex: 2 }}>
-                {day.getDate()}
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.3rem', position: 'relative', zIndex: 2 }}>
-                {visibleProjects.map((item) => (
-                  <div
-                    key={`${item.id}-${day.toISOString()}`}
-                    style={{
-                      padding: '0.25rem 0.4rem',
-                      borderRadius: '7px',
-                      background: 'rgba(37,99,235,0.10)',
-                      color: '#2563eb',
-                      borderLeft: '2px solid #2563eb',
-                      fontSize: '0.55rem',
-                      fontWeight: '900',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {item.titulo}
-                  </div>
-                ))}
-                
-                {visibleTasks.map((item) => (
-                  <div
-                    key={`${item.id}-${day.toISOString()}`}
-                    draggable
-                    onDragStart={(ev) => {
-                      ev.stopPropagation();
-                      setDraggedGroup({ sourceDate: day });
-                      ev.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragEnd={() => setDraggedGroup(null)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '0.35rem',
-                      padding: '0.25rem 0.4rem',
-                      borderRadius: '7px',
-                      background: 'rgba(22,163,74,0.10)',
-                      color: '#15803d',
-                      borderLeft: '2px solid #16a34a',
-                      fontSize: '0.55rem',
-                      fontWeight: '900',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      cursor: 'grab'
-                    }}
-                  >
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('dashboardTasksLabel')}</span>
-                    {taskCount > 1 && <span style={{ flexShrink: 0 }}>{taskCount}</span>}
-                  </div>
-                ))}
-
-                {visibleEvents.map((item) => (
-                  <div
-                    key={`${item.id}-${day.toISOString()}`}
-                    style={{
-                      padding: '0.25rem 0.4rem',
-                      borderRadius: '7px',
-                      background: 'rgba(124,58,237,0.10)',
-                      color: '#7c3aed',
-                      borderLeft: '2px solid #7c3aed',
-                      fontSize: '0.55rem',
-                      fontWeight: '900',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {item.titulo}
-                  </div>
-                ))}
-
-                {visibleMeetings.map((item) => (
-                  <div
-                    key={`${item.id}-${day.toISOString()}`}
-                    style={{
-                      padding: '0.25rem 0.4rem',
-                      borderRadius: '7px',
-                      background: 'rgba(219,39,119,0.10)',
-                      color: '#db2777',
-                      borderLeft: '2px solid #db2777',
-                      fontSize: '0.55rem',
-                      fontWeight: '900',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {item.titulo}
-                  </div>
-                ))}
-
-                {hiddenCount > 0 && (
-                  <div style={{ fontSize: '0.6rem', fontWeight: '900', color: 'var(--color-text-dim)', paddingLeft: '0.2rem' }}>
-                    +{hiddenCount} mas
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      </div>
-    </>
-  );
-
-  return (
-    <div className={embedded ? '' : 'card'} style={embedded ? undefined : { padding: '2rem', marginBottom: '3.5rem' }}>
-      {content}
-
-      {expandedDay && (
-          <Modal
-            open
-            onClose={() => { setActiveTaskMenu(null); setExpandedDay(null); }}
-            maxWidth="500px"
-            title={expandedDay.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
-            subtitle={`Agenda de ${selectedMember?.nombre}`}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {expandedDay.tasks.filter((t) => ['proyecto', 'tarea', 'evento', 'reunion'].includes(t.tipo)).map(t => {
-                const isProject = t.tipo === 'proyecto';
-                const isTask = t.tipo === 'tarea';
-                const color = isProject ? '#2563eb' : isTask ? '#16a34a' : t.tipo === 'reunion' ? '#db2777' : '#7c3aed';
-                const bg = isProject ? '#eff6ff' : isTask ? '#f0fdf4' : t.tipo === 'reunion' ? '#fce7f3' : '#f3e8ff';
-                const label = isProject ? 'PROYECTO' : isTask ? 'TAREA' : t.tipo === 'reunion' ? 'REUNION' : 'EVENTO';
-                return (
-                <div key={t.id} style={{ padding: '1.1rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '20px', position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.5rem' }}>
-                    <div style={{ fontWeight: '900', fontSize: '0.95rem', color: 'var(--color-text)', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.titulo}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                      <span style={{
-                        fontSize: '0.6rem',
-                        fontWeight: '900',
-                        color,
-                        background: bg,
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '8px',
-                        textTransform: 'uppercase',
-                        height: 'fit-content'
-                      }}>
-                        {label}
-                      </span>
-                      {t.tipo === 'tarea' && (
-                        <button
-                          type="button"
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            setActiveTaskMenu((prev) => (prev === t.id ? null : t.id));
-                          }}
-                          disabled={movingTasks}
-                          title="Mover solo esta tarea"
-                          style={{ width: '30px', height: '30px', borderRadius: '999px', border: '1px solid #dbeafe', background: activeTaskMenu === t.id ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: movingTasks ? 'wait' : 'pointer' }}
-                        >
-                          <MoreHorizontal size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color }} />
-                    {t.proyecto?.nombre || (t.tipo === 'evento' || t.tipo === 'reunion' ? 'Agenda' : 'Sin proyecto')}
-                  </div>
-                  {t.tipo === 'tarea' && activeTaskMenu === t.id && (
-                    <div
-                      onClick={(ev) => ev.stopPropagation()}
-                      style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: 'var(--color-surface)', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
-                    >
-                      <button type="button" onClick={() => ejecutarMovimiento(t, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>{t('dashboardMovePlusOne')}</button>
-                      <button type="button" onClick={() => ejecutarMovimiento(t, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>{t('dashboardMovePlusTwo')}</button>
-                      <button type="button" onClick={() => pedirMovimientoPersonalizado(t)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>{t('dashboardMoveChooseAmount')}</button>
-                    </div>
-                  )}
-                </div>
-              );})}
-            </div>
-          </Modal>
-      )}
-    </div>
-  );
-};
+// Alto único del panel, para que cambiar de vista no mueva nada de lugar.
+// Calibrado para que en la vista de actividad quepan ~10 personas sin
+// desplazar. El tope de arriba deja ver la página completa en monitores altos;
+// en pantallas normales el panel ocupa casi todo y la página sí desplaza, que
+// es lo que pidió el usuario.
+const ALTO_PANEL_INICIO = 'clamp(600px, calc(100vh - 72px), 1000px)';
 
 const DashboardAdmin = () => {
   const { t, locale } = usePreferences();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [stats, setStats] = useState(null);
-  const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
-  const [ganttCollapsed, setGanttCollapsed] = useState(true);
-  const [calendarCollapsed, setCalendarCollapsed] = useState(true);
-  const [activeCalendarView, setActiveCalendarView] = useState('projects');
-  const [cargando, setCargando] = useState(true);
+  const [vistaPanel, setVistaPanel] = useState('actividad');
 
-  const cargarDashboard = useCallback(async () => {
-    try {
+  // Actividad del equipo por día. Va por su propia clave para que cambiar de
+  // fecha no obligue a recalcular todas las estadísticas, y para que volver a
+  // un día ya consultado sea inmediato.
+  const [fechaActividad, setFechaActividad] = useState(() => claveDiaLocal());
+
+  const { data: actividadRespuesta, isLoading: cargandoActividad } = useSWR(
+    ['actividad-equipo', fechaActividad],
+    async ([, fecha]) => statsService.actividadEquipo(fecha),
+    { onError: (error) => showToast?.(error.message, 'error') },
+  );
+  const actividadDia = actividadRespuesta?.miembros ?? null;
+
+  // El tablero completo (estadísticas + proyectos del gantt) también por SWR:
+  // es la pantalla de entrada y la más pesada, y antes volvía a pedirlo todo
+  // cada vez que se entraba, con el esqueleto de carga en blanco.
+  const { data: tablero, isLoading: cargando, mutate: recargarTablero } = useSWR(
+    'dashboard-admin',
+    async () => {
       const [statsData, projectsData] = await Promise.all([
         statsService.getAdminStats(),
         proyectosService.listar(),
       ]);
+      return { stats: statsData, projects: projectsData.proyectos || [] };
+    },
+    { onError: (error) => showToast?.(error.message || 'No se pudo actualizar el dashboard', 'error') },
+  );
 
-      setStats(statsData);
-      setProjects(projectsData.proyectos || []);
-    } catch (error) {
-      console.error(error);
-      showToast?.(error.message || 'No se pudo actualizar el dashboard', 'error');
-    } finally {
-      setCargando(false);
-    }
-  }, [showToast]);
+  const stats = tablero?.stats || null;
+  // Memorizado: `|| []` crearia un array nuevo en cada render y eso invalidaria
+  // los useMemo del gantt aunque los datos no hubieran cambiado.
+  const projects = useMemo(() => tablero?.projects || [], [tablero]);
 
-  useEffect(() => {
-    cargarDashboard();
-  }, [cargarDashboard]);
+  const cargarDashboard = useCallback(() => { recargarTablero(); }, [recargarTablero]);
 
   useEffect(() => {
     let timeoutId = null;
@@ -1548,7 +1395,7 @@ const DashboardAdmin = () => {
   const projectEntries = useMemo(() => (
     projects.map((project) => {
       const range = getProjectRange(project);
-      return { project, start: range.start, end: range.end };
+      return { project, start: range.start, end: range.end, origenFin: range.origenFin };
     })
   ), [projects]);
 
@@ -1557,281 +1404,94 @@ const DashboardAdmin = () => {
     [projects, selectedProjectId]
   );
 
-  const { proyectos, tareas, topUsuarios, actividadReciente, proyectosProgreso, actividadMiembros } = stats || {};
+  const { proyectos, tareas, proyectosProgreso, actividadMiembros, actividadPorMes } = stats || {};
 
-  const selectedProjectStats = selectedProject ? getProjectStats(selectedProject) : null;
   const globalDone = stats?.tareas?.estados?.find((estado) => estado.estado === 'HECHO')?._count || 0;
   const globalRemaining = Math.max((stats?.tareas?.total || 0) - globalDone, 0);
-  const completionRate = Math.round((globalDone / (stats?.tareas?.total || 1)) * 100);
-
-  if (cargando) return <PageSkeleton cards={4} />;
+  // El esqueleto solo la primera vez: al volver ya hay datos en cache y se
+  // pinta al instante mientras llega la version fresca.
+  if (cargando && !stats) return <PageSkeleton cards={4} />;
   if (!stats) return <div style={{ padding: '4rem', textAlign: 'center' }}>{t('dashboardConnectionError')}</div>;
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4">
-        <div>
-          <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">{t('dashboardAdminTitle')}</h1>
-          <p className="text-sm lg:text-base text-slate-500 mt-1">{t('dashboardAdminSubtitle')}</p>
+      {/* Titulo e indicadores en la misma franja: antes ocupaban casi 300px de
+          alto entre los dos, antes de llegar al contenido. */}
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl lg:text-2xl font-semibold text-[var(--color-text)] tracking-tight leading-tight">
+            {t('dashboardAdminTitle')}
+          </h1>
+          <p className="text-sm text-[var(--color-text-muted)] font-normal mt-0.5">
+            {t('dashboardAdminSubtitle')} · {capitalizar(new Date().toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }))}
+          </p>
         </div>
-        <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
-          {new Date().toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+
+        {/* Solo proyectos, tareas y pendientes; en una linea, valor y etiqueta juntos */}
+        <div className="flex items-center gap-1 shrink-0 flex-wrap">
+          <StatCard primero value={proyectos.total} icon={<IconProjects />} color="#2563eb" sub={t('dashboardProjects')} onClick={() => navigate('/proyectos')} />
+          <StatCard value={tareas.total} icon={<IconTasks />} color="var(--color-text-dim)" sub={t('dashboardTasksLabel')} onClick={() => navigate('/proyectos')} />
+          <StatCard value={globalRemaining} icon={<AlertCircle size={16} strokeWidth={2} />} color="#dc2626" sub={t('dashboardPending')} onClick={() => navigate('/proyectos')} />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-        <StatCard value={proyectos.total} icon={<IconProjects />} color="#2563eb" bg="rgba(37,99,235,0.10)" sub={t('dashboardProjects').toUpperCase()} helper={t('dashboardSeeProjects')} onClick={() => navigate('/proyectos')} />
-        <StatCard value={tareas.total} icon={<IconTasks />} color="#0f172a" bg="var(--color-surface-3)" sub={t('dashboardTasksLabel').toUpperCase()} helper={`${globalRemaining} ${t('dashboardPending').toLowerCase()}`} onClick={() => navigate('/proyectos')} />
-        <StatCard value={globalDone} icon={<IconCheck />} color="#10b981" bg="rgba(16,185,129,0.10)" sub={t('dashboardDone').toUpperCase()} helper={t('dashboardSeeProjects')} onClick={() => navigate('/proyectos')} />
-        <StatCard value={globalRemaining} icon={<AlertCircle size={20} strokeWidth={2.5} />} color="#dc2626" bg="rgba(239,68,68,0.10)" sub={t('dashboardPending').toUpperCase()} helper={t('dashboardOpenBoard')} onClick={() => navigate('/proyectos')} />
-        <StatCard value={topUsuarios.length} icon={<IconTeam />} color="#8b5cf6" bg="rgba(139,92,246,0.10)" sub={t('teamTitle').toUpperCase()} helper={t('teamTitle')} onClick={() => navigate('/equipo')} />
-        <StatCard value={`${completionRate}%`} icon={<IconChart />} color="#f59e0b" bg="rgba(245,158,11,0.10)" sub={t('dashboardDone').toUpperCase()} helper={t('dashboardSeeAgenda')} onClick={() => navigate('/agenda')} />
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '3rem' }}>
-        <div className="card" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-            <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '0.3rem' }}>{t('dashboardProjectGantt')}</h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-                {selectedProject ? t('dashboardFocusedView', { project: selectedProject.nombre }) : t('dashboardGlobalView')}
-              </p>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => setGanttCollapsed((value) => !value)}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200 flex items-center gap-2"
-              >
-                {ganttCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                {ganttCollapsed ? t('dashboardExpand') : t('dashboardMinimize')}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate(selectedProject ? `/proyectos/${selectedProject.id}` : '/proyectos')}
-                className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-black uppercase tracking-widest border border-blue-100"
-              >
-                {selectedProject ? t('dashboardOpenProject') : t('dashboardViewBoard')}
-              </button>
-            </div>
-          </div>
-
-          {!ganttCollapsed && (
-            <>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.55rem', marginBottom: '1rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProjectId(null)}
-                  style={{
-                    padding: '0.55rem 0.85rem',
-                    borderRadius: '999px',
-                    border: '1px solid #dbeafe',
-                    background: selectedProjectId === null ? '#2563eb' : '#eff6ff',
-                    color: selectedProjectId === null ? '#fff' : '#2563eb',
-                    fontSize: '0.72rem',
-                    fontWeight: '900',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t('dashboardAllProjects')}
-                </button>
-                {projects.map((project) => (
-                  <button
-                    key={project.id}
-                    type="button"
-                    onClick={() => setSelectedProjectId(project.id)}
-                    style={{
-                      padding: '0.55rem 0.85rem',
-                      borderRadius: '999px',
-                      border: '1px solid var(--color-border)',
-                      background: selectedProjectId === project.id ? 'var(--color-text)' : 'var(--color-surface)',
-                      color: selectedProjectId === project.id ? 'var(--color-surface)' : 'var(--color-text-dim)',
-                      fontSize: '0.72rem',
-                      fontWeight: '900',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {project.nombre}
-                  </button>
-                ))}
-              </div>
-
-              <ProjectTimeline projectEntries={projectEntries} selectedProjectId={selectedProjectId} onSelectProject={setSelectedProjectId} />
-            </>
-          )}
-
-          {ganttCollapsed && (
-            <div style={{ padding: '0.85rem 1rem', borderRadius: '16px', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-              {t('dashboardTimelineMinimized')}
-            </div>
-          )}
+      {/* Un solo panel con las cuatro vistas. Antes iban las cuatro apiladas y
+          había que bajar toda la página para llegar a la actividad, que es lo
+          primero que el admin quiere ver. Ahora esa es la vista de arranque. */}
+      <div className="card flex flex-col mb-8" style={{ height: ALTO_PANEL_INICIO }}>
+        <div className="shrink-0 border-b border-[var(--color-border)] pb-3 mb-5">
+          <Tabs value={vistaPanel} onValueChange={setVistaPanel}>
+            <TabsList>
+              {VISTAS_PANEL.map((v) => (
+                <TabsTrigger key={v.id} value={v.id} className="text-sm font-normal data-[state=active]:font-medium">
+                  {t(v.labelKey)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
 
-        <div>
-          {!calendarCollapsed && (
-            <div className="card" style={{ padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+        {/* Alto fijo e idéntico en las cuatro: la actividad se ajusta sola al
+            panel y las otras tres desplazan aquí dentro si no caben. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {vistaPanel === 'actividad' && (
+            <AdminMemberActivity
+              miembros={actividadDia ?? actividadMiembros}
+              fecha={fechaActividad}
+              onFechaChange={setFechaActividad}
+              cargando={cargandoActividad}
+              onOpenTask={openTaskProject}
+                />
+          )}
+
+          {vistaPanel === 'gantt' && (
+            <div className="flex h-full min-h-0 flex-col">
+              <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>{t('dashboardBoardCalendars')}</h3>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-                    {activeCalendarView === 'projects'
-                      ? t('dashboardProjectCalendarDesc')
-                      : t('dashboardTeamAvailabilityDesc')}
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '0.3rem' }}>{t('dashboardProjectGantt')}</h3>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: 400 }}>
+                {selectedProject ? t('dashboardFocusedView', { project: selectedProject.nombre }) : t('dashboardGlobalView')}
                   </p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveCalendarView('projects')}
-                    className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors"
-                    style={{
-                      background: activeCalendarView === 'projects' ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
-                      color: activeCalendarView === 'projects' ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                      borderColor: activeCalendarView === 'projects' ? '#bfdbfe' : 'var(--color-border)',
-                    }}
-                  >
-                    {t('dashboardProjectCalendar')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveCalendarView('team')}
-                    className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors"
-                    style={{
-                      background: activeCalendarView === 'team' ? 'rgba(37,99,235,0.12)' : 'var(--color-surface)',
-                      color: activeCalendarView === 'team' ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                      borderColor: activeCalendarView === 'team' ? '#bfdbfe' : 'var(--color-border)',
-                    }}
-                  >
-                    {t('dashboardTeamAvailability')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCalendarCollapsed(true)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200 flex items-center gap-2"
-                  >
-                    <ChevronUp size={14} />
-                    {t('dashboardMinimize')}
-                  </button>
-                </div>
-              </div>
-
-              {activeCalendarView === 'projects' ? (
-                <ProjectCalendarPanel
-                  monthDate={calendarMonth}
-                  onMonthChange={(delta) => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1))}
-                  projectEntries={projectEntries}
-                  onSelectProject={setSelectedProjectId}
-                  selectedProjectId={selectedProjectId}
-                  embedded
-                />
-              ) : (
-                <TeamOccupationCalendar miembros={actividadMiembros} embedded onRefresh={cargarDashboard} />
-              )}
-            </div>
-          )}
-
-          {calendarCollapsed && (
-            <div className="card" style={{ padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: '900', marginBottom: '0.2rem' }}>{t('dashboardBoardCalendars')}</h3>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{t('dashboardBoardCalendarsToggle')}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCalendarCollapsed(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200 flex items-center gap-2"
+                <Button
+                  size="sm"
+                onClick={() => navigate(selectedProject ? `/proyectos/${selectedProject.id}` : '/proyectos')}
                 >
-                  <ChevronDown size={14} />
-                  {t('dashboardExpand')}
-                </button>
+                {selectedProject ? t('dashboardOpenProject') : t('dashboardViewBoard')}
+                </Button>
               </div>
-              <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', borderRadius: '16px', background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>
-                {t('dashboardSectionMinimized')}
-              </div>
+
+              {/* El selector de proyecto vive dentro de ProjectTimeline, junto al
+                  de escala. El gantt ya no se minimiza: siempre esta visible. */}
+              <ProjectTimeline projectEntries={projectEntries} selectedProjectId={selectedProjectId} onSelectProject={setSelectedProjectId} />
             </div>
           )}
-        </div>
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', marginBottom: '3rem' }}>
-        <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '2rem' }}>{t('dashboardProjectProgress')}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {(selectedProject && selectedProjectStats
-              ? [{
-                  id: selectedProject.id,
-                  nombre: selectedProject.nombre,
-                  porcentaje: selectedProjectStats.porcentaje,
-                  totalTareas: selectedProjectStats.totalTareas,
-                  estado: selectedProjectStats.estado,
-                  miembros: selectedProjectStats.miembros,
-                  inicio: selectedProject.fechaInicio,
-                }]
-              : proyectosProgreso
-            ).map((p) => (
-              <button key={p.id} type="button" onClick={() => navigate(`/proyectos/${p.id}`)} style={{ width: '100%', textAlign: 'left', padding: '1rem 1.1rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '18px', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', fontSize: '0.9rem', fontWeight: '700', gap: '1rem' }}>
-                  <span>{p.nombre}</span>
-                  <span style={{ color: 'var(--color-primary-light)' }}>{p.porcentaje}%</span>
-                </div>
-                <div style={{ height: '8px', background: 'var(--color-surface-3)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0.8rem' }}>
-                  <div style={{ width: `${p.porcentaje}%`, height: '100%', background: 'var(--color-primary)', transition: 'width 1s ease' }} />
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#2563eb', background: 'rgba(37,99,235,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {(p.totalTareas ?? projects.find((project) => project.id === p.id)?._count?.tareas ?? 0)} {t('projectTaskPlural')}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {(p.completas ?? 0)} {t('dashboardDone').toLowerCase()}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#dc2626', background: 'rgba(239,68,68,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {(p.pendientes ?? 0)} {t('dashboardPending').toLowerCase()}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#8b5cf6', background: 'rgba(139,92,246,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {(p.enProgreso ?? 0)} {t('dashboardInProgress').toLowerCase()}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#16a34a', background: 'rgba(22,163,74,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {t(getEstadoProyecto(p.estado ?? projects.find((project) => project.id === p.id)?.estado ?? 'ACTIVO').labelKey)}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#8b5cf6', background: 'rgba(139,92,246,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {t('dashboardMembersCount', {
-                      count: (p.miembros ?? projects.find((project) => project.id === p.id)?.miembros?.length ?? 0),
-                      memberLabel: (p.miembros ?? projects.find((project) => project.id === p.id)?.miembros?.length ?? 0) === 1 ? t('teamMemberSingular') : t('teamMemberPlural'),
-                    })}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#f59e0b', background: 'rgba(245,158,11,0.10)', padding: '0.28rem 0.5rem', borderRadius: '999px' }}>
-                    {(p.inicio ?? projects.find((project) => project.id === p.id)?.fechaInicio)
-                      ? new Date(p.inicio ?? projects.find((project) => project.id === p.id)?.fechaInicio).toLocaleDateString(locale, { day: '2-digit', month: 'short' })
-                      : t('projectDateNoEnd')}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+          {vistaPanel === 'progreso' && (
+            <TablaProgresoProyectos proyectos={proyectosProgreso || []} onAbrirProyecto={(id) => navigate(`/proyectos/${id}`)} />
+          )}
 
-      </div>
-
-      <AdminMemberActivity miembros={actividadMiembros} onOpenTask={openTaskProject} />
-
-      <div className="card" style={{ padding: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '900' }}>{t('dashboardRecentActivity')}</h3>
-          <button type="button" onClick={() => navigate('/proyectos')} className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-widest border border-slate-200">
-            {t('dashboardGoProjects')}
-          </button>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-          {actividadReciente.map((log) => (
-            <div key={log.id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '1rem', border: '1px solid var(--color-border)' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: '900', color: 'var(--color-primary-light)', marginBottom: '0.25rem' }}>{log.accion}</div>
-              <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>{log.descripcion}</p>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <User size={14} /> {log.usuario.nombre}
-              </div>
-            </div>
-          ))}
+          {vistaPanel === 'mes' && <ActividadPorMes datos={actividadPorMes} />}
         </div>
       </div>
     </div>

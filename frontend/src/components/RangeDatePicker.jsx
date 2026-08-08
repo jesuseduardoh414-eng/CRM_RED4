@@ -43,7 +43,7 @@ const RangeDatePicker = ({
           alignItems: 'center',
           gap: '0.75rem',
           fontSize: '0.85rem',
-          fontWeight: '700',
+          fontWeight: 500,
           color: 'var(--color-text)',
           cursor: 'pointer',
           transition: 'all 0.2s',
@@ -93,7 +93,7 @@ const RangeDatePicker = ({
             }}
           >
             <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--color-text)', margin: 0 }}>{title}</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>{title}</h3>
               <button onClick={() => setIsOpen(false)} aria-label={t('close')} title={t('close')} style={{ background: 'none', border: 'none', color: 'var(--color-text-dim)', cursor: 'pointer', padding: '0.5rem' }}>
                 <X size={24} />
               </button>
@@ -138,7 +138,7 @@ const RangeDatePicker = ({
                       border: '1px solid var(--color-border)',
                       background: 'var(--color-surface-2)',
                       fontSize: '0.7rem',
-                      fontWeight: '800',
+                      fontWeight: 500,
                       color: 'var(--color-text-dim)',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
@@ -154,14 +154,14 @@ const RangeDatePicker = ({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                style={{ flex: 1, padding: '1rem', borderRadius: '1rem', border: '1px solid var(--color-border)', background: 'none', fontSize: '0.8rem', fontWeight: '800', color: 'var(--color-text-dim)', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '1rem', borderRadius: '1rem', border: '1px solid var(--color-border)', background: 'none', fontSize: '0.8rem', fontWeight: 500, color: 'var(--color-text-dim)', cursor: 'pointer' }}
               >
                 Cerrar
               </button>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                style={{ flex: 2, padding: '1rem', borderRadius: '1rem', border: 'none', background: 'var(--color-primary)', fontSize: '0.8rem', fontWeight: '900', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                style={{ flex: 2, padding: '1rem', borderRadius: '1rem', border: 'none', background: 'var(--color-primary)', fontSize: '0.8rem', fontWeight: 500, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
               >
                 Confirmar <Check size={18} />
               </button>

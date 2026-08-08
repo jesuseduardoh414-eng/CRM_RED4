@@ -41,7 +41,7 @@ const ResetPasswordPage = () => {
         borderRadius: '1.5rem', padding: '2.5rem', boxShadow: 'var(--shadow-xl)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)' }}>Nueva Contraseña</h1>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--color-text)' }}>Nueva Contraseña</h1>
           <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
             Ingresa tu nueva clave de acceso segura.
           </p>
@@ -68,7 +68,7 @@ const ResetPasswordPage = () => {
             fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'rgba(255,255,255,0.05)',
             padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.05)'
           }}>
-            <p style={{ marginBottom: '0.25rem', fontWeight: '700' }}>Requisitos de seguridad:</p>
+            <p style={{ marginBottom: '0.25rem', fontWeight: 400 }}>Requisitos de seguridad:</p>
             <ul style={{ paddingLeft: '1.25rem' }}>
               <li>Mínimo 8 caracteres</li>
               <li>Mayúsculas, minúsculas y números</li>

@@ -38,7 +38,7 @@ const navLinks = [
 
 const Layout = ({ children }) => {
   const { usuario, logout } = useAuth();
-  const { theme, setTheme, language, setLanguage, t } = usePreferences();
+  const { theme, setTheme, t } = usePreferences();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -150,7 +150,9 @@ const Layout = ({ children }) => {
             : '320px',
         }}
       >
-        <div className={`relative flex w-full flex-col items-center ${collapsed ? 'gap-5 px-3 pt-6 pb-6' : 'gap-4 px-4 pt-12 pb-6'}`}>
+        {/* Poco aire arriba a proposito: el usuario prefiere que el logo y el
+            menu suban para ganar alto util en la lista de secciones. */}
+        <div className={`relative flex w-full flex-col items-center ${collapsed ? 'gap-4 px-3 pt-4 pb-4' : 'gap-3 px-4 pt-4 pb-4'}`}>
           <img
             src={collapsed ? '/logo - sideber.png' : '/logo.png'}
             alt="Red 4 Design"
@@ -159,7 +161,7 @@ const Layout = ({ children }) => {
           />
 
           {!collapsed && (
-            <div className="text-[10px] lg:text-xs text-white/40 font-black uppercase tracking-[0.15em] text-center whitespace-nowrap">
+            <div className="text-[10px] lg:text-xs text-white/40 font-medium text-center whitespace-nowrap">
               {t('internalPanel')}
             </div>
           )}
@@ -169,7 +171,7 @@ const Layout = ({ children }) => {
             onClick={toggleSidebar}
             className={`
               hidden lg:flex items-center ${collapsed ? 'justify-center w-full px-5' : 'gap-4 w-full px-5'}
-              py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap
+              py-3.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap
               text-white/50 hover:text-white hover:bg-white/5
             `}
             title={collapsed ? 'Expandir menu' : undefined}
@@ -180,11 +182,41 @@ const Layout = ({ children }) => {
             </span>
             {!collapsed && <span className="flex-1 min-w-0 truncate text-left">{t('collapse')}</span>}
           </button>
+
+          {/* Buscador. Vivia en la barra superior; aqui cabe completo y libera
+              esos 70px de alto en todas las pantallas. Colapsado se reduce a la
+              lupa, que expande el menu para poder escribir. */}
+          {collapsed ? (
+            <button
+              type="button"
+            onClick={toggleSidebar}
+              title={t('searchPlaceholder')}
+              aria-label={t('searchPlaceholder')}
+              className="hidden lg:flex w-full items-center justify-center py-3 rounded-xl text-white/50 transition-all hover:text-white hover:bg-white/5"
+            >
+              <Search size={20} strokeWidth={2.5} />
+            </button>
+          ) : (
+            <div className="relative w-full group">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/35 transition-colors group-focus-within:text-white/60">
+                <Search size={17} />
+            </span>
+            <input
+              type="text"
+              placeholder={t('searchPlaceholder')}
+                aria-label={t('searchPlaceholder')}
+                className="w-full rounded-xl bg-white/5 py-2.5 pl-10 pr-14 text-sm text-white outline-none transition-all placeholder:text-white/35 focus:bg-white/10"
+              />
+              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/40">
+              Ctrl+K
+            </span>
+            </div>
+          )}
         </div>
 
         <nav className={`flex-1 flex flex-col gap-1 overflow-y-auto ${collapsed ? 'px-3' : 'px-4'}`}>
           {!collapsed && (
-            <div className="text-[10px] font-black text-white/30 px-3 py-4 uppercase tracking-widest whitespace-nowrap">
+            <div className="text-[10px] font-medium text-white/30 px-3 py-4 whitespace-nowrap">
               {t('mainMenu')}
             </div>
           )}
@@ -198,7 +230,7 @@ const Layout = ({ children }) => {
                 onClick={() => setOpen(false)}
                 title={collapsed ? label : undefined}
                 className={({ isActive }) => `
-                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap
+                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap
                   ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
                 `}
               >
@@ -211,7 +243,7 @@ const Layout = ({ children }) => {
           {usuario?.rol === 'ADMIN' && (
             <>
               {!collapsed && (
-                <div className="text-[10px] font-black text-white/30 px-3 py-4 mt-4 uppercase tracking-widest whitespace-nowrap">
+                <div className="text-[10px] font-medium text-white/30 px-3 py-4 mt-4 whitespace-nowrap">
                   {t('administration')}
                 </div>
               )}
@@ -221,7 +253,7 @@ const Layout = ({ children }) => {
                 onClick={() => setOpen(false)}
                 title={collapsed ? t('users') : undefined}
                 className={({ isActive }) => `
-                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap
+                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap
                   ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
                 `}
               >
@@ -230,6 +262,33 @@ const Layout = ({ children }) => {
               </NavLink>
             </>
           )}
+
+          {/* Notificaciones y tema van al final del menu, no en el pie fijo: en
+              el pie robaban alto y obligaban a desplazar para llegar a Inicio o
+              Proyectos, que es lo que de verdad se usa. */}
+          <div className="mt-4 pt-3 border-t border-white/5 flex flex-col gap-1">
+            {isDesktop && <NotificationCenter enSidebar colapsado={collapsed} />}
+            <button
+              type="button"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              title={collapsed ? (theme === 'dark' ? t('lightMode') : t('darkMode')) : undefined}
+                aria-label={theme === 'dark' ? t('lightMode') : t('darkMode')}
+              className={`
+                flex items-center ${collapsed ? 'justify-center' : 'gap-4'} w-full px-5 py-3.5 rounded-xl
+                text-sm font-medium transition-all whitespace-nowrap
+              text-white/50 hover:text-white hover:bg-white/5
+              `}
+            >
+            <span className="shrink-0 flex items-center justify-center">
+                {theme === 'dark' ? <SunMedium size={20} strokeWidth={2.5} /> : <Moon size={20} strokeWidth={2.5} />}
+            </span>
+              {!collapsed && (
+                <span className="flex-1 min-w-0 truncate text-left">
+                  {theme === 'dark' ? t('lightMode') : t('darkMode')}
+            </span>
+              )}
+            </button>
+          </div>
         </nav>
 
         <div className={`border-t border-white/5 ${collapsed ? 'p-3' : 'p-6'}`}>
@@ -253,7 +312,7 @@ const Layout = ({ children }) => {
 
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-white truncate">{usuario?.nombre}</div>
+                <div className="text-sm font-medium text-white truncate">{usuario?.nombre}</div>
                 <div className="text-[11px] text-white/40 font-medium truncate">
                   {usuario?.email?.split('@')[0]}
                 </div>
@@ -264,7 +323,7 @@ const Layout = ({ children }) => {
           <button
             onClick={handleLogout}
             title={collapsed ? t('logout') : undefined}
-            className={`w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-bold hover:bg-red-500/20 transition-all flex items-center justify-center whitespace-nowrap ${collapsed ? '' : 'gap-2'}`}
+            className={`w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-medium hover:bg-red-500/20 transition-all flex items-center justify-center whitespace-nowrap ${collapsed ? '' : 'gap-2'}`}
           >
             <span className="shrink-0 flex items-center justify-center"><IconLogout /></span>
             {!collapsed && <span className="truncate">{t('logout')}</span>}
@@ -273,70 +332,19 @@ const Layout = ({ children }) => {
       </aside>
 
       <main className="flex-1 min-w-0 flex flex-col h-screen bg-[var(--color-bg-base)] overflow-hidden">
-        <header className="h-16 lg:h-[70px] bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center px-4 lg:px-10 gap-4 lg:gap-8 sticky top-0 z-[90]">
+        {/* Solo en movil: ahi la barra lateral esta oculta tras el boton de
+            menu, asi que hace falta un sitio para abrirla y ver los avisos.
+            En escritorio ya no hay barra superior; todo vive en el sidebar. */}
+        <header className="lg:hidden h-16 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4 gap-4 sticky top-0 z-[90]">
           <button
             onClick={() => setOpen(true)}
-            className="lg:hidden p-2 -ml-2 text-[var(--color-text)] hover:bg-[var(--color-surface-3)] rounded-xl transition-colors"
-            aria-label="Abrir menu"
+            className="p-2 -ml-2 text-[var(--color-text)] hover:bg-[var(--color-surface-3)] rounded-xl transition-colors"
+            aria-label={t('openMenu')}
           >
             <IconMenu />
           </button>
 
-          <div className="relative flex-1 max-w-xl group">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-50 transition-opacity text-[var(--color-text-dim)]">
-              <Search size={18} />
-            </span>
-            <input
-              type="text"
-              placeholder={t('searchPlaceholder')}
-              className="w-full pl-10 pr-4 py-2.5 lg:py-3 rounded-xl bg-[var(--color-bg-base)] border border-[var(--color-border)] text-[var(--color-text)] text-xs lg:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            />
-            <span className="hidden lg:block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[var(--color-text-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] px-1.5 py-0.5 rounded shadow-sm">
-              Ctrl+K
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 lg:gap-5 ml-auto">
-            <div className="hidden md:flex items-center gap-2">
-              <select
-                value={language}
-                onChange={(event) => setLanguage(event.target.value)}
-                aria-label={t('language')}
-                className="h-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-bold text-[var(--color-text-dim)] outline-none transition-all hover:border-[var(--color-primary-light)] focus:border-[var(--color-primary)]"
-              >
-                <option value="es">{t('spanish')}</option>
-                <option value="en">{t('english')}</option>
-              </select>
-
-              <button
-                type="button"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-dim)] transition-all hover:border-[var(--color-primary-light)] hover:text-[var(--color-primary)]"
-                title={theme === 'dark' ? t('lightMode') : t('darkMode')}
-                aria-label={theme === 'dark' ? t('lightMode') : t('darkMode')}
-              >
-                {theme === 'dark' ? <SunMedium size={18} /> : <Moon size={18} />}
-              </button>
-            </div>
-
-            <NotificationCenter />
-            <button
-              type="button"
-              onClick={() => navigate('/perfil')}
-              className="hidden lg:flex rounded-full shadow-sm transition-all hover:scale-105"
-              title={t('goToProfile')}
-            >
-              <UserAvatar
-                usuario={usuario}
-                size={36}
-                radius={999}
-                fontSize="0.7rem"
-                color="var(--color-text-dim)"
-                background="var(--color-surface-3)"
-                borderColor="var(--color-border)"
-              />
-            </button>
-          </div>
+          {!isDesktop && <NotificationCenter />}
         </header>
 
         <div ref={contenidoRef} className="flex-1 overflow-y-auto p-4 lg:p-8 xl:p-12 max-w-[1600px] w-full mx-auto">

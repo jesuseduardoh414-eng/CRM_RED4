@@ -49,10 +49,10 @@ const LoginPage = () => {
           <div className="inline-flex items-center justify-center w-full max-w-[180px] lg:max-w-[220px] mb-6">
             <img src="/logo_login.jpeg" alt="Logo" className="w-full h-auto object-contain" />
           </div>
-          <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-2xl lg:text-3xl font-semibold text-slate-900 tracking-tight">
             Panel Interno
           </h1>
-          <p className="text-slate-400 font-medium mt-1 text-sm lg:text-base">
+          <p className="text-slate-400 font-normal mt-1 text-sm lg:text-base">
             Inicia sesión para continuar
           </p>
         </div>
@@ -63,14 +63,14 @@ const LoginPage = () => {
 
             {/* Error global */}
             {error && (
-              <div className="bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-center animate-shake">
+              <div className="bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl text-xs font-medium text-center animate-shake">
                 {error}
               </div>
             )}
 
             {/* Email */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="email">Correo electrónico</label>
+              <label className="text-[10px] font-medium text-slate-400 ml-1" htmlFor="email">Correo electrónico</label>
               <input
                 id="email"
                 name="email"
@@ -78,7 +78,7 @@ const LoginPage = () => {
                 autoComplete="email"
                 required
                 placeholder="tu@empresa.com"
-                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
+                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-medium focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
                 value={form.email}
                 onChange={handleChange}
               />
@@ -87,8 +87,8 @@ const LoginPage = () => {
             {/* Password */}
             <div className="space-y-2 relative">
               <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest" htmlFor="password">Contraseña</label>
-                <Link to="/forgot-password" size={18} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-700 transition-colors">
+                <label className="text-[10px] font-medium text-slate-400" htmlFor="password">Contraseña</label>
+                <Link to="/forgot-password" size={18} className="text-[10px] font-medium text-blue-600 hover:text-blue-700 transition-colors">
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
@@ -100,7 +100,7 @@ const LoginPage = () => {
                   autoComplete="current-password"
                   required
                   placeholder="••••••••"
-                  className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none pr-12"
+                  className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-medium focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none pr-12"
                   value={form.password}
                   onChange={handleChange}
                 />
@@ -118,7 +118,7 @@ const LoginPage = () => {
 
             <button
               type="submit"
-              className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 mt-2"
+              className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 mt-2"
               disabled={cargando}
             >
               {cargando ? 'Iniciando sesión...' : 'Iniciar sesión'}

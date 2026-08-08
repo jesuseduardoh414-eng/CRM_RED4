@@ -6,6 +6,18 @@ const PUBLIC_BASE_URL = API_URL.startsWith('http') ? API_URL.replace(/\/api\/?$/
 
 // ── Helpers internos ──────────────────────────────────────────────────────
 
+// Arma un querystring omitiendo valores vacios, para no mandar ?q=&estado=
+const construirQuery = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([clave, valor]) => {
+    if (valor !== undefined && valor !== null && String(valor).trim() !== '') {
+      query.append(clave, valor);
+    }
+  });
+  const texto = query.toString();
+  return texto ? `?${texto}` : '';
+};
+
 const getHeaders = (isMultipart = false) => {
   const token = localStorage.getItem('crm_token');
   const headers = {
@@ -101,8 +113,8 @@ export const authService = {
 // ── Proyectos ─────────────────────────────────────────────────────────────
 
 export const proyectosService = {
-  listar: async () => {
-    const res = await fetch(`${API_URL}/proyectos`, { headers: getHeaders() });
+  listar: async (params = {}) => {
+    const res = await fetch(`${API_URL}/proyectos${construirQuery(params)}`, { headers: getHeaders() });
     return handleResponse(res);
   },
 
@@ -270,8 +282,8 @@ export const tareasService = {
 // ── Usuarios ──────────────────────────────────────────────────────────────
 
 export const usuariosService = {
-  listar: async () => {
-    const res = await fetch(`${API_URL}/usuarios`, { headers: getHeaders() });
+  listar: async (params = {}) => {
+    const res = await fetch(`${API_URL}/usuarios${construirQuery(params)}`, { headers: getHeaders() });
     return handleResponse(res);
   },
   listarParaProyectos: async () => {
@@ -447,6 +459,13 @@ export const adjuntosService = {
 
 // ── Estadísticas ──────────────────────────────────────────────────────────
 export const statsService = {
+  // Actividad del equipo de un día concreto (sin fecha = hoy)
+  actividadEquipo: async (fecha) => {
+    const res = await fetch(`${API_URL}/stats/actividad-equipo${construirQuery({ fecha })}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
   getAdminStats: async () => {
     const res = await fetch(`${API_URL}/stats/admin?t=${Date.now()}`, {
       headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },

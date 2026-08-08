@@ -209,7 +209,7 @@ button {
   padding: 0.7rem 1.5rem;
   background: var(--color-primary);
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 500;
   border: none;
   border-radius: 0.85rem;
   cursor: pointer;
@@ -261,7 +261,7 @@ button {
 
 .form-label {
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-text-muted);
   margin-left: 0.25rem;
 }
@@ -364,3 +364,70 @@ button {
 [data-theme="dark"] .hover\:text-slate-700:hover { color: var(--color-text) !important; }
 [data-theme="dark"] .hover\:border-slate-300:hover,
 [data-theme="dark"] .hover\:border-slate-400:hover { border-color: var(--color-primary-light) !important; }
+
+/* ── Calendario de rango (react-day-picker) ─────────────────────────────────
+   IMPORTANTE: todas las reglas van calificadas con `.calendario-crm`, la clase
+   que `SelectorRangoFechas` le pone al DayPicker. La hoja de la libreria se
+   importa desde el componente y en el bundle acaba DESPUES de este archivo, asi
+   que a igualdad de especificidad ganaba ella y estos ajustes no se aplicaban.
+
+   `rdp-ocupado` marca los dias en que alguien ya tiene otro proyecto: se avisa
+   pero no se bloquea, solaparse es decision del admin. Los bloqueos duros usan
+   el `disabled` propio de la libreria. */
+.rdp-root.calendario-crm {
+  --rdp-accent-color: var(--color-primary);
+  --rdp-accent-background-color: rgba(37, 99, 235, 0.12);
+  --rdp-today-color: var(--color-primary);
+  --rdp-disabled-opacity: 0.35;
+  --rdp-day-height: 2.1rem;
+  --rdp-day-width: 2.1rem;
+  --rdp-nav-height: 2.1rem;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+/* La navegacion de la libreria va en `position: absolute` pegada arriba a la
+   derecha, y el titulo del mes viene con `font-size: large` en negrita. Con un
+   mes largo ("septiembre 2026") el texto se metia debajo de las flechas. Se
+   reserva el hueco de las flechas y se baja a la escala del sistema. */
+.calendario-crm .rdp-month_caption {
+  padding-inline-end: 5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Solo la inicial. Con `text-transform: capitalize` salia "Agosto De 2026",
+   porque en espanol el mes largo viene como "agosto de 2026". */
+.calendario-crm .rdp-month_caption::first-letter {
+  text-transform: uppercase;
+}
+
+/* La rejilla ocupa el ancho que le den y reparte las 7 columnas. Con un ancho
+   holgado los dias respiran; con uno justo, se encogen en vez de desbordar. */
+.calendario-crm .rdp-month_grid {
+  width: 100%;
+}
+
+.calendario-crm .rdp-day {
+  width: auto;
+}
+
+.calendario-crm .rdp-weekday {
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* Dia con otro proyecto en marcha: se avisa, pero se puede elegir */
+.calendario-crm .rdp-ocupado:not(.rdp-disabled) .rdp-day_button {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+  border-radius: 8px;
+}
+
+/* Dia en que alguien no esta disponible: no se puede elegir */
+.calendario-crm .rdp-day_button:disabled {
+  color: var(--color-error);
+  text-decoration: line-through;
+}

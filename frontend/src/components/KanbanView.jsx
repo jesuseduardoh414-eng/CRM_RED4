@@ -1,8 +1,7 @@
 import { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
 import UserAvatar from './UserAvatar';
 import ActionMenu from './ActionMenu';
-import {
-  Plus,
+import {
   ListTodo,
   Zap,
   CheckCircle2,
@@ -10,6 +9,8 @@ import {
   ArrowRight,
   Pencil,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
   Calendar
 } from 'lucide-react';
 import { usePreferences } from '../context/PreferencesContext';
@@ -55,6 +56,9 @@ const getTaskAssignees = (tarea) => {
   if (Array.isArray(tarea?.asignados) && tarea.asignados.length > 0) return tarea.asignados;
   return tarea?.asignado ? [tarea.asignado] : [];
 };
+
+// 10 tarjetas por pagina en cada columna, igual que la lista y el gantt.
+const TAREAS_POR_PAGINA = 10;
 
 const CICLO_ESTADOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 
@@ -143,14 +147,13 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
       {/* Badge de Prioridad */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ 
-          fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', 
-          letterSpacing: '0.05em', padding: '0.2rem 0.6rem', borderRadius: '4px',
+          fontSize: '0.65rem', fontWeight: 500, textTransform: '', padding: '0.2rem 0.6rem', borderRadius: '4px',
           background: prio.bg, color: prio.color
         }}>
           {t(prio.labelKey)}
         </span>
         {esVencida(tarea.venceEn) && tarea.estado !== 'HECHO' && (
-          <span style={{ color: 'var(--color-error)', fontSize: '0.65rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+          <span style={{ color: 'var(--color-error)', fontSize: '0.65rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
             <AlertCircle size={10} /> {t('taskOverdue')}
           </span>
         )}
@@ -159,7 +162,7 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
       {/* Título y Desc */}
       <div>
         <h4 style={{ 
-          fontSize: '0.95rem', fontWeight: '700', marginBottom: '0.25rem',
+          fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.25rem',
           textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none',
           opacity: tarea.estado === 'HECHO' ? 0.5 : 1
         }}>
@@ -190,7 +193,7 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
             background="var(--color-surface-3)"
             borderColor="var(--color-border)"
           />
-          <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>
             {getTaskAssignees(tarea).map((asignado) => asignado.nombre?.split(' ')[0]).filter(Boolean).join(', ') || 'S/A'}
           </span>
         </div>
@@ -218,7 +221,7 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
           onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
           style={{
             width: '100%', padding: '0.4rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)',
-            border: 'none', color: 'var(--color-text)', fontSize: '0.7rem', fontWeight: '600', cursor: 'pointer',
+            border: 'none', color: 'var(--color-text)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem'
           }}
         >
@@ -230,19 +233,27 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
 };
 
 // ── Columna Kanban ───────────────────────────────────────────────────────────
-const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, limite, onCargarMas, scrollRef }) => {
+const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, pagina, onCambiarPagina, scrollRef }) => {
   const { t } = usePreferences();
   const [dragOver, setDragOver] = useState(false);
-  const tareasVisibles = tareas.slice(0, (tareas.length > 20 && limite === 10) ? 10 : limite);
+
+  // Paginacion por columna. Antes era un "Ver mas" que solo alargaba la
+  // columna: no se podia volver atras ni saber cuantas quedaban por delante.
+  const totalPaginas = Math.max(1, Math.ceil(tareas.length / TAREAS_POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const tareasVisibles = tareas.slice(
+    (paginaActual - 1) * TAREAS_POR_PAGINA,
+    paginaActual * TAREAS_POR_PAGINA,
+  );
 
   return (
     <div className="w-[85vw] min-w-[85vw] max-w-[85vw] md:w-auto md:min-w-0 md:max-w-none flex-shrink-0 flex flex-col gap-4">
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-2">
           <span className="text-lg">{col.icon}</span>
-          <h3 className="text-sm font-black uppercase tracking-widest" style={{ color: col.color }}>{t(col.labelKey)}</h3>
+          <h3 className="text-sm font-semibold" style={{ color: col.color }}>{t(col.labelKey)}</h3>
         </div>
-        <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-500">
+        <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] font-medium text-slate-500">
           {tareas.length}
         </span>
       </div>
@@ -274,19 +285,36 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
 
         {tareas.length === 0 && (
           <div className="flex-1 min-h-[420px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 flex items-center justify-center px-6 text-center">
-            <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">
+            <span className="text-[11px] font-medium text-slate-300">
               {t('taskNoTasks')}
             </span>
           </div>
         )}
 
-        {tareas.length > tareasVisibles.length && (
-          <button 
-            onClick={onCargarMas}
-            className="w-full py-3 bg-white/50 border border-slate-200 border-dashed rounded-xl text-[10px] font-black text-slate-500 hover:bg-white hover:border-slate-300 transition-all uppercase tracking-widest flex items-center justify-center gap-2"
-          >
-            {t('loadMore')} ({tareas.length - tareasVisibles.length}) <Plus size={12} />
-          </button>
+        {totalPaginas > 1 && (
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => onCambiarPagina(Math.max(1, paginaActual - 1))}
+              disabled={paginaActual === 1}
+              aria-label={t('previous')}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <span className="text-xs font-medium text-[var(--color-text-muted)]">
+              {paginaActual} / {totalPaginas}
+            </span>
+            <button
+              type="button"
+              onClick={() => onCambiarPagina(Math.min(totalPaginas, paginaActual + 1))}
+              disabled={paginaActual === totalPaginas}
+              aria-label={t('next')}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+            >
+              <ChevronRight size={15} />
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -299,7 +327,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
   const [actualizando, setActualizando] = useState(null);
   const [optimisticMoves, setOptimisticMoves] = useState({});
   const [soloHoy, setSoloHoy] = useState(true);
-  const [limites, setLimites] = useState({ PENDIENTE: 10, EN_PROGRESO: 10, HECHO: 10 });
+  const [paginas, setPaginas] = useState({ PENDIENTE: 1, EN_PROGRESO: 1, HECHO: 1 });
   const dragId = useRef(null);
   const columnasRef = useRef({});
   const scrollRestoreRef = useRef(null);
@@ -366,12 +394,16 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
         previousEstado: tareaActual.estado,
         estado: nuevoEstado,
         completadoEn: nuevoEstado === 'HECHO' ? new Date().toISOString() : null,
-      },
+      }
     }));
 
-    setLimites((prev) => ({
+    // Al mover una tarjeta a otra columna, saltar a la pagina donde cae, para
+    // no perderla de vista. Antes se subia el tope de "Ver mas" con el mismo fin.
+    setPaginas((prev) => ({
       ...prev,
-      [nuevoEstado]: Math.max(prev[nuevoEstado], tareasConEstadoLocal.filter((item) => item.estado === nuevoEstado).length + 1),
+      [nuevoEstado]: Math.max(1, Math.ceil(
+        (tareasConEstadoLocal.filter((item) => item.estado === nuevoEstado).length + 1) / TAREAS_POR_PAGINA,
+      )),
     }));
   };
 
@@ -480,7 +512,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
         <button 
           onClick={() => setSoloHoy(true)}
           className={`
-            px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2
+            px-6 py-3 rounded-xl text-xs font-medium transition-all flex items-center gap-2
             ${soloHoy ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
           `}
         >
@@ -489,7 +521,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
         <button 
           onClick={() => setSoloHoy(false)}
           className={`
-            px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all border
+            px-5 py-3 rounded-xl text-xs font-medium transition-all border
             ${!soloHoy
               ? 'bg-slate-800 text-white border-slate-800 shadow-lg'
               : 'bg-white text-slate-700 border-slate-300 shadow-sm hover:bg-slate-50 hover:border-slate-400'}
@@ -513,8 +545,8 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
               onActualizarTarea={onActualizarTarea}
               onDragStart={handleDragStart}
               onDrop={handleDrop}
-              limite={limites[col.key]}
-              onCargarMas={() => setLimites(prev => ({ ...prev, [col.key]: prev[col.key] + 10 }))}
+              pagina={paginas[col.key]}
+              onCambiarPagina={(n) => setPaginas(prev => ({ ...prev, [col.key]: n }))}
               scrollRef={(el) => { columnasRef.current[col.key] = el; }}
             />
           </div>

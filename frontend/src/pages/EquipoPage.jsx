@@ -82,10 +82,10 @@ const MiembroCard = ({ miembro }) => {
           shadow={`0 8px 16px ${areaConf.color}15`}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: '800', fontSize: '1.1rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.02em' }}>
+          <div style={{ fontWeight: 500, fontSize: '1.1rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.02em' }}>
             {miembro.nombre}
           </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '600' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>
             {miembro.email}
           </div>
         </div>
@@ -95,7 +95,7 @@ const MiembroCard = ({ miembro }) => {
       <div style={{ display: 'flex', gap: '0.45rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
         <span style={{
           padding: '0.25rem 0.75rem', borderRadius: '999px',
-          fontSize: '0.8rem', fontWeight: '800',
+          fontSize: '0.8rem', fontWeight: 500,
           background: areaConf.bg, color: areaConf.color,
           display: 'flex', alignItems: 'center', gap: '0.4rem',
           border: `1px solid ${areaConf.color}20`
@@ -105,7 +105,7 @@ const MiembroCard = ({ miembro }) => {
         </span>
         <span style={{
           padding: '0.25rem 0.75rem', borderRadius: '999px',
-          fontSize: '0.8rem', fontWeight: '800',
+          fontSize: '0.8rem', fontWeight: 500,
           background: rolConf.bg, color: rolConf.color,
           border: `1px solid ${rolConf.color}20`,
           display: 'flex', alignItems: 'center'
@@ -117,7 +117,7 @@ const MiembroCard = ({ miembro }) => {
       {/* Barra de progreso tareas */}
       {miembro.tareas.total > 0 && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--color-text-dim)', marginBottom: '0.4rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--color-text-dim)', marginBottom: '0.4rem', fontWeight: 500, textTransform: '' }}>
             <span>{miembro.tareas.hechas}/{miembro.tareas.total} {t('teamTasksPlural')}</span>
             <span style={{ color: pct === 100 ? '#34d399' : areaConf.color }}>{pct}%</span>
           </div>
@@ -130,9 +130,9 @@ const MiembroCard = ({ miembro }) => {
             }} />
           </div>
           <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.6rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', alignItems: 'center' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: '600' }}><ClipboardList size={14} strokeWidth={2.5} /> {miembro.tareas.pendientes}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: '600' }}><Zap size={14} strokeWidth={2.5} /> {miembro.tareas.enProgreso}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: '600' }}><CheckCircle2 size={14} strokeWidth={2.5} /> {miembro.tareas.hechas}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}><ClipboardList size={14} strokeWidth={2.5} /> {miembro.tareas.pendientes}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}><Zap size={14} strokeWidth={2.5} /> {miembro.tareas.enProgreso}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}><CheckCircle2 size={14} strokeWidth={2.5} /> {miembro.tareas.hechas}</span>
           </div>
         </div>
       )}
@@ -166,20 +166,20 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
       >
         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: estadoColor, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: '800', fontSize: '0.95rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' }}>
+          <div style={{ fontWeight: 500, fontSize: '0.95rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' }}>
             {proyecto.nombre}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginTop: '0.15rem', fontWeight: '600' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginTop: '0.15rem', fontWeight: 600 }}>
             {equipoData.length} {equipoData.length !== 1 ? t('teamMemberPlural') : t('teamMemberSingular')}
           </div>
         </div>
         <span style={{
           padding: '0.35rem 0.85rem', borderRadius: '12px',
-          fontSize: '0.7rem', fontWeight: '900',
+          fontSize: '0.7rem', fontWeight: 500,
           background: areaConf.bg, color: areaConf.color, flexShrink: 0,
           display: 'flex', alignItems: 'center', gap: '0.45rem',
           border: `1.2px solid ${areaConf.color}30`,
-          textTransform: 'uppercase', letterSpacing: '0.06em',
+          textTransform: '',
           whiteSpace: 'nowrap'
         }}>
           {areaConf.icon && <span style={{ display: 'flex', opacity: 0.8 }}>{areaConf.icon}</span>}
@@ -253,7 +253,7 @@ const EquipoPage = () => {
   return (
     <div style={{ padding: '1.5rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', marginBottom: '0.25rem' }}>{t('teamTitle')}</h1>
+        <h1 style={{ fontSize: '2.2rem', fontWeight: 600, marginBottom: '0.25rem' }}>{t('teamTitle')}</h1>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '1.15rem' }}>
           {esAdmin
             ? t('teamSummary', { members: totalMiembros, memberLabel: totalMiembros !== 1 ? t('teamMemberPlural') : t('teamMemberSingular'), projects: datos.length, projectLabel: datos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular') })

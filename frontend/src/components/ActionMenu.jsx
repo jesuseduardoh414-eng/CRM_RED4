@@ -61,7 +61,7 @@ const ActionMenu = ({
                 key={item.label}
                 disabled={item.disabled}
                 onSelect={() => item.onSelect?.()}
-                className={`gap-2 font-bold ${item.danger ? 'text-[var(--color-error)] focus:text-[var(--color-error)]' : ''}`}
+                className={`gap-2 font-medium ${item.danger ? 'text-[var(--color-error)] focus:text-[var(--color-error)]' : ''}`}
               >
                 {item.icon}
                 <span>{item.label}</span>

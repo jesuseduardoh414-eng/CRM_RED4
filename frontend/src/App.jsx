@@ -3,6 +3,7 @@
 
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { SWRConfig } from 'swr';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PreferencesProvider } from './context/PreferencesContext';
 import { ToastProvider } from './context/ToastContext';
@@ -105,10 +106,30 @@ const App = () => (
     <PreferencesProvider>
       <AuthProvider>
         <ToastProvider>
-          {/* Requerido por los Tooltip de shadcn/Radix en toda la app */}
-          <TooltipProvider delayDuration={200}>
-            <AppRoutes />
-          </TooltipProvider>
+          {/* Cache compartido de datos. Sin esto cada pantalla volvia a pedir
+              todo desde cero al entrar, aunque ya hubieras estado ahi hace un
+              momento, y se quedaba en el esqueleto de carga.
+
+              - keepPreviousData: al volver, se pinta al instante lo que ya se
+                tenia y la actualizacion llega despues, sin pantalla en blanco.
+              - dedupingInterval: dos peticiones iguales seguidas cuentan como
+                una sola durante 30 segundos.
+              - revalidateOnFocus en false: cambiar de pestaña del navegador no
+                dispara una recarga; en un CRM interno molesta mas que ayuda. */}
+          <SWRConfig
+            value={{
+              keepPreviousData: true,
+              dedupingInterval: 30000,
+              revalidateOnFocus: false,
+              revalidateIfStale: true,
+              errorRetryCount: 2,
+            }}
+          >
+            {/* Requerido por los Tooltip de shadcn/Radix en toda la app */}
+            <TooltipProvider delayDuration={200}>
+              <AppRoutes />
+            </TooltipProvider>
+          </SWRConfig>
         </ToastProvider>
       </AuthProvider>
     </PreferencesProvider>

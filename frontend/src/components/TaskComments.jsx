@@ -82,8 +82,8 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
       {/* Título de sección con estilo premium */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
         <MessageSquare size={20} color="var(--color-primary)" />
-        <h3 style={{ fontSize: '1.15rem', fontWeight: '900', color: 'var(--color-text)' }}>
-          {type === 'proyectos' ? 'Muro del Proyecto' : 'Hilo de la Tarea'} <span style={{ color: 'var(--color-text-muted)', fontWeight: '400', fontSize: '0.9rem' }}>({comentarios.length})</span>
+        <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--color-text)' }}>
+          {type === 'proyectos' ? 'Muro del Proyecto' : 'Hilo de la Tarea'} <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, fontSize: '0.9rem' }}>({comentarios.length})</span>
         </h3>
       </div>
 
@@ -129,7 +129,7 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
                 {/* Burbuja */}
                 <div style={{ maxWidth: '85%', display: 'flex', flexDirection: 'column', alignItems: esMio ? 'flex-end' : 'flex-start' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', padding: '0 0.2rem' }}>
-                    <span style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--color-text)' }}>
+                    <span style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--color-text)' }}>
                       {esMio ? 'Tú' : c.autor.nombre}
                     </span>
                     <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
@@ -211,7 +211,7 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
               style={{
                 background: 'var(--color-primary)', color: '#fff',
                 border: 'none', borderRadius: '0.85rem', padding: '0.6rem 1.5rem',
-                fontSize: '0.9rem', fontWeight: '800', cursor: 'pointer',
+                fontSize: '0.9rem', fontWeight: 500, cursor: 'pointer',
                 opacity: !nuevo.trim() || enviando ? 0.4 : 1, 
                 transition: 'all 0.2s',
                 display: 'flex', alignItems: 'center', gap: '0.5rem'

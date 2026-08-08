@@ -9,25 +9,25 @@ import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
+import Tooltip from '../components/Tooltip';
 import ActionMenu from '../components/ActionMenu';
+import SelectorMultiple from '../components/SelectorMultiple';
+import SelectorRangoFechas from '../components/SelectorRangoFechas';
+import FiltrosTareas from '../components/FiltrosTareas';
 import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
 import { PageSkeleton } from '../components/Skeleton';
 import ModalImportar from '../components/ModalImportar';
-import RangeDatePicker from '../components/RangeDatePicker';
 import TaskAttachments from '../components/TaskAttachments';
 import TaskComments from '../components/TaskComments';
 import { sortTareas, sortTareasLista } from '../utils/sorters';
 import { getEstadoProyecto, estaListoParaRevision } from '../utils/estadosProyecto';
 import { 
-  Target, 
-  ListTodo, 
-  Zap, 
-  CheckCircle2, 
   ArrowRight, 
   RotateCcw, 
   Trash2, 
-  Download, 
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Plus,
   Save,
   FileJson,
@@ -36,10 +36,10 @@ import {
   LayoutGrid,
   CalendarRange,
   ChevronLeft,
+  ChevronRight,
   AlertTriangle,
   Search,
   User2,
-  SlidersHorizontal,
   Archive,
   ArchiveRestore,
   BadgeCheck
@@ -57,6 +57,9 @@ const ESTADOS_TAREA = [
   { value: 'EN_PROGRESO', labelKey: 'statusInProgress', color: '#00a2ff' },
   { value: 'HECHO',       labelKey: 'statusDone',       color: '#00d166' },
 ];
+
+// 10 por pagina, lo mismo que mostraba el antiguo "Ver mas tareas" por tanda.
+const TAREAS_POR_PAGINA = 10;
 
 const getPrioridad  = (v) => PRIORIDADES.find(p => p.value === v) || PRIORIDADES[1];
 const getEstadoConf = (v) => ESTADOS_TAREA.find(e => e.value === v) || ESTADOS_TAREA[0];
@@ -131,6 +134,47 @@ const getTaskAssigneeNames = (tarea, fallback) => {
   return nombres.length > 0 ? nombres.join(', ') : fallback;
 };
 
+/**
+ * Progreso en texto plano, sin tarjeta ni recuadro, igual que los indicadores
+ * del Inicio. Antes era un numero suelto dentro de una caja con icono de fondo;
+ * el usuario pidio el mismo tratamiento en las dos pantallas.
+ */
+const BarraProgreso = ({ etiqueta, porcentaje, detalle, color }) => (
+  <div className="min-w-0 flex-1">
+    <div className="flex items-baseline gap-2">
+      <span className="text-2xl font-semibold leading-none tracking-tight" style={{ color }}>
+        {porcentaje}%
+      </span>
+      <span className="text-sm font-medium text-[var(--color-text-dim)]">{etiqueta}</span>
+      <span className="ml-auto text-xs font-normal text-[var(--color-text-muted)]">{detalle}</span>
+    </div>
+    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-3)]">
+      <div
+        className="h-full rounded-full transition-all duration-700"
+        style={{ width: `${porcentaje}%`, background: color }}
+      />
+    </div>
+  </div>
+);
+
+/**
+ * Etiqueta de campo de formulario. Marca los opcionales, para no tener que
+ * adivinar cuales hacen falta de verdad para guardar.
+ */
+const EtiquetaCampo = ({ texto, opcional = false }) => {
+  const { t } = usePreferences();
+  return (
+    <label className="flex items-baseline gap-1.5 text-sm font-medium text-[var(--color-text-muted)]">
+      {texto}
+      {opcional && (
+        <span className="text-xs font-normal text-[var(--color-text-muted)] opacity-70">
+          · {t('fieldOptional')}
+        </span>
+      )}
+    </label>
+  );
+};
+
 // ── Tarjeta de Tarea (List View) ─────────────────────────────────────────────
 const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado }) => {
   const { t } = usePreferences();
@@ -142,8 +186,10 @@ const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado 
   const asignados = getTaskAssignees(tarea);
   const creadorEsUsuarioActual = tarea.creador?.id === usuarioActual?.id
     || (!tarea.creador?.id && (asignados.length === 0 || isTaskAssignedToUser(tarea, usuarioActual?.id)));
+  // Si la tarea la creaste tu, no se dice nada: ya lo sabes. Solo interesa
+  // saber quien la asigno cuando fue otra persona.
   const asignadorLabel = creadorEsUsuarioActual
-    ? t('taskCreatedByYou')
+    ? null
     : `${t('taskAssignedBy')} ${tarea.creador?.nombre || t('taskCreatedBySystem')}`;
   const responsableLabel = isTaskAssignedToUser(tarea, usuarioActual?.id)
     ? t('taskAssignedToYou')
@@ -161,14 +207,14 @@ const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado 
         />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h4 className={`text-sm lg:text-base font-bold text-[var(--color-text)] truncate ${tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}`}>
+            <h4 className={`text-sm lg:text-base font-semibold text-[var(--color-text)] truncate ${tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}`}>
               {tarea.titulo}
             </h4>
-            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md" style={{ background: prio.bg, color: prio.color }}>
+            <span className="text-[9px] font-medium px-2 py-0.5 rounded-md" style={{ background: prio.bg, color: prio.color }}>
               {t(prio.labelKey)}
             </span>
           </div>
-          <p className="text-xs text-[var(--color-text-muted)] truncate font-medium">
+          <p className="text-xs text-[var(--color-text-muted)] truncate font-normal">
             {tarea.descripcion || t('taskNoDescription')}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-[var(--color-text-muted)]">
@@ -176,17 +222,21 @@ const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado 
               <User2 size={12} />
               {responsableLabel}
             </span>
-            <span className="hidden text-[var(--color-border)] lg:inline">•</span>
-            <span className="inline-flex items-center gap-1 text-[var(--color-text-dim)]">
-              {asignadorLabel}
-            </span>
+            {asignadorLabel && (
+              <>
+                <span className="hidden text-[var(--color-border)] lg:inline">•</span>
+                <span className="inline-flex items-center gap-1 text-[var(--color-text-dim)]">
+                  {asignadorLabel}
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       <div className="flex items-center justify-between lg:justify-end gap-4 border-t lg:border-t-0 pt-3 lg:pt-0 border-[var(--color-border-light)]">
         {/* Fecha */}
-        <div className={`text-[10px] lg:text-xs font-black shrink-0 flex items-center gap-1 ${vencido ? 'text-red-500' : 'text-[var(--color-text-muted)]'}`}>
+        <div className={`text-[10px] lg:text-xs font-medium shrink-0 flex items-center gap-1 ${vencido ? 'text-red-500' : 'text-[var(--color-text-muted)]'}`}>
           {tarea.venceEn ? (
             <>
               {vencido && <AlertTriangle size={12} />}
@@ -226,7 +276,7 @@ const ToggleVista = ({ vista, onChange, t }) => (
       <button 
         key={v.k} onClick={() => onChange(v.k)}
         className={`
-          flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs lg:text-sm font-black transition-all
+          flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs lg:text-sm font-medium transition-all
           ${vista === v.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'}
         `}
       >
@@ -255,7 +305,10 @@ const ProyectoDetallePage = () => {
   const [tareaEditando, setTareaEditando] = useState(null);
   const [vista, setVista] = useState('lista');
   const [busqueda, setBusqueda] = useState('');
-  const [limite, setLimite] = useState(10);
+  const [pagina, setPagina] = useState(1);
+  // Renombrado desde setPaginaLista en el render para dejar claro que la pagina
+  // es solo de la vista de lista; el Kanban y el gantt tienen la suya.
+
   const [filtroPrioridad, setFiltroPrioridad] = useState('todas');
   const [filtroResponsable, setFiltroResponsable] = useState('todos');
   const [filtroFecha, setFiltroFecha] = useState({ from: null, to: null });
@@ -335,6 +388,15 @@ const ProyectoDetallePage = () => {
   const totalGeneral = stats.total;
   const totalMiembro = stats.totalMiembro;
 
+  // "Mi progreso" depende del rol:
+  //  - Admin: solo si tiene tareas suyas aqui. Entra a supervisar proyectos que
+  //    no trabaja, y ahi un 0% no significa nada.
+  //  - Miembro: siempre, porque solo ve proyectos en los que participa y el 0%
+  //    si le dice algo ("estoy dentro y no he tomado nada").
+  const mostrarMiProgreso = usuario?.rol === 'ADMIN'
+    ? totalMiembro > 0
+    : Boolean(usuario?.id);
+
   const tareasFiltradas = useMemo(() => {
     if (!busqueda) return tareas;
     const b = busqueda.toLowerCase();
@@ -373,6 +435,15 @@ const ProyectoDetallePage = () => {
   ), [filtroFecha, filtroPrioridad, filtroResponsable, tareasFiltradas]);
 
   const tareasListaFiltradas = useMemo(() => sortTareasLista(tareasFiltradasAvanzadas), [tareasFiltradasAvanzadas]);
+
+  // Se recorta en vez de reiniciar con un efecto: al filtrar, el total baja y
+  // esto deja la pagina en rango por si solo, sin renders extra.
+  const totalPaginasLista = Math.max(1, Math.ceil(tareasListaFiltradas.length / TAREAS_POR_PAGINA));
+  const paginaLista = Math.min(pagina, totalPaginasLista);
+  const tareasDeLaPagina = tareasListaFiltradas.slice(
+    (paginaLista - 1) * TAREAS_POR_PAGINA,
+    paginaLista * TAREAS_POR_PAGINA,
+  );
 
   const handleEliminar = async (tarea) => {
     if (!window.confirm(t('taskDeleteConfirm', { name: tarea.titulo }))) return;
@@ -525,48 +596,52 @@ const ProyectoDetallePage = () => {
       <div className="mb-10 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-8">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-4">
-            <Link to="/proyectos" className="text-blue-600 font-black text-[10px] lg:text-xs tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
-              <ChevronLeft size={14} /> {String(t('projects')).toUpperCase()}
+            <Link to="/proyectos" className="text-blue-600 font-medium text-[10px] lg:text-xs flex items-center gap-1 hover:gap-2 transition-all">
+              <ChevronLeft size={14} /> {t('projects')}
             </Link>
             <span className="text-[var(--color-border)]">/</span>
-            <span className="text-[10px] font-black text-[var(--color-text-muted)] tracking-widest truncate max-w-[200px]">ID #{proyecto?.id}</span>
+            <span className="text-[10px] font-medium text-[var(--color-text-muted)] truncate max-w-[200px]">ID #{proyecto?.id}</span>
           </div>
-          <h1 className="text-2xl lg:text-5xl font-black text-[var(--color-text)] tracking-tight leading-tight mb-2">
+          <h1 className="text-2xl lg:text-5xl font-semibold text-[var(--color-text)] tracking-tight leading-tight mb-2">
             {proyecto?.nombre}
           </h1>
 
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <span
-              className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md"
+              className="text-[10px] font-medium px-2.5 py-1 rounded-md"
               style={{ color: estadoProyecto.color, background: estadoProyecto.bg }}
             >
               {t(estadoProyecto.labelKey)}
             </span>
             {/* Mismo aviso que en la tarjeta: 100% de tareas pero sin visto bueno */}
             {listoParaRevision && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md text-amber-700 bg-amber-100">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-md text-amber-700 bg-amber-100">
                 <BadgeCheck size={12} /> {t('projectReadyForReview')}
               </span>
             )}
           </div>
 
-          <p className="text-sm lg:text-base text-[var(--color-text-dim)] font-medium max-w-2xl">{proyecto?.descripcion}</p>
+          <p className="text-sm lg:text-base text-[var(--color-text-dim)] font-normal max-w-2xl">{proyecto?.descripcion}</p>
         </div>
 
-        {/* Accion principal visible; importar/exportar/plantilla van al menu */}
+        {/* Importar y exportar viven en el menu: sacarlos como iconos sueltos
+            dejaba tres botones seguidos y se veia recargado. Lo que si cambio
+            son sus iconos, flechas que indican la direccion (entra / sale);
+            antes los dos usaban el mismo de descarga y no se distinguian. */}
         <div className="flex items-center gap-2 w-full lg:w-auto">
           <button
             onClick={() => { setTareaEditando(null); setModal(true); }}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-blue-600 text-white rounded-xl text-xs lg:text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-blue-600 text-white rounded-xl text-xs lg:text-sm font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
           >
             <Plus size={18} /> {t('projectNewTask')}
           </button>
+
           <ActionMenu
             size={18}
             className="shrink-0 p-3 lg:p-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm"
             items={[
-              { label: t('projectImport'), icon: <Download size={15} />, onSelect: () => setModalImportar(true) },
-              { label: t('projectExport'), icon: <Download size={15} />, onSelect: () => setModalExportar(true) },
+              { label: t('projectImport'), icon: <ArrowDownToLine size={15} />, onSelect: () => setModalImportar(true) },
+              { label: t('projectExport'), icon: <ArrowUpFromLine size={15} />, onSelect: () => setModalExportar(true) },
               usuario?.rol === 'ADMIN' && { separator: true },
               usuario?.rol === 'ADMIN' && { label: t('projectSaveTemplate'), icon: <Save size={15} />, onSelect: () => setModalPlantilla(true) },
               usuario?.rol === 'ADMIN' && { separator: true },
@@ -588,26 +663,27 @@ const ProyectoDetallePage = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10 overflow-x-auto pb-2 lg:pb-0">
-        {[
-          { l: t('projectGeneralProgress'), v: `${progresoGeneral}%`, sub: `${totalGeneral} ${totalGeneral === 1 ? t('projectTaskSingular') : t('projectTaskPlural')}`, i: <Target size={24} />, c: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-          { l: t('projectMyProgress'), v: `${progresoMiembro}%`, sub: `${totalMiembro} ${t('taskAssignedPlural')}`, i: <Target size={24} />, c: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-          { l: t('projectTodo'), v: stats.pendientes, i: <ListTodo size={24} />, c: '#64748b', bg: 'var(--color-surface-3)' },
-          { l: t('projectInProgress'), v: stats.progreso, i: <Zap size={24} />, c: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
-          { l: t('projectDone'), v: stats.hechas, i: <CheckCircle2 size={24} />, c: '#10b981', bg: 'rgba(16,185,129,0.12)' }
-        ].map((s, i) => (
-          <div key={i} className="bg-[var(--color-surface)] p-5 lg:p-6 rounded-[24px] shadow-sm border border-[var(--color-border)] flex items-center justify-between min-w-[140px]">
-            <div className="flex flex-col gap-0.5">
-              <div className="text-xl lg:text-2xl font-black text-[var(--color-text)] leading-none">{s.v}</div>
-              <div className="text-[9px] lg:text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{s.l}</div>
-              {s.sub && <div className="text-[9px] font-black text-[var(--color-text-muted)] opacity-70 uppercase tracking-widest">{s.sub}</div>}
-            </div>
-            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.bg, color: s.c }}>
-              {s.i}
-            </div>
-          </div>
-        ))}
+      {/* Solo los dos progresos. Las tres tarjetas de pendientes, en marcha y
+          hechas se quitaron: repetian lo que ya cuenta el Kanban columna a
+          columna, y ocupaban toda una franja de la pantalla.
+
+          "Mi progreso" solo sale si de verdad tienes tareas aqui. A un admin que
+          entra a supervisar le salia un 0% que no significaba nada. */}
+      <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:gap-10">
+        <BarraProgreso
+          etiqueta={t('projectGeneralProgress')}
+          porcentaje={progresoGeneral}
+          detalle={`${stats.hechas} ${t('projectOfTasksDone', { total: totalGeneral })}`}
+          color="#2563eb"
+        />
+        {mostrarMiProgreso && (
+          <BarraProgreso
+            etiqueta={t('projectMyProgress')}
+            porcentaje={progresoMiembro}
+            detalle={`${totalMiembro} ${t('taskAssignedPlural')}`}
+            color="#10b981"
+          />
+        )}
       </div>
 
       {/* Toolbar Vistas */}
@@ -629,7 +705,7 @@ const ProyectoDetallePage = () => {
                 border: '1px solid var(--color-border)',
                 borderRadius: '12px',
                 fontSize: '0.85rem',
-                fontWeight: '600',
+                fontWeight: 600,
                 outline: 'none',
                 transition: 'all 0.2s'
               }}
@@ -639,89 +715,46 @@ const ProyectoDetallePage = () => {
           </div>
         </div>
         
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-dim)' }}>
             {t('projectShowing')} {tareasFiltradasAvanzadas.length} {tareasFiltradasAvanzadas.length === 1 ? t('projectTaskSingular') : t('projectTaskPlural')}
           </span>
+
+          {/* Los tres filtros, antes en una franja fija, ahora tras este boton */}
+          <FiltrosTareas
+            fecha={filtroFecha}
+            onFechaChange={(rango) => setFiltroFecha(rango || { from: null, to: null })}
+            prioridad={filtroPrioridad}
+            onPrioridadChange={setFiltroPrioridad}
+            prioridades={PRIORIDADES}
+            responsable={filtroResponsable}
+            onResponsableChange={setFiltroResponsable}
+            responsables={responsablesFiltro}
+          />
         </div>
       </div>
 
-      <div className="mb-6 rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 lg:px-5 lg:py-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-surface-3)] text-[var(--color-text-dim)]">
-            <SlidersHorizontal size={18} />
-          </div>
-          <div>
-            <div className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectTaskFilters')}</div>
-            <div className="text-sm font-black text-[var(--color-text)]">{t('projectTaskFiltersDesc')}</div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectDate')}</label>
-            <RangeDatePicker
-              from={filtroFecha.from}
-              to={filtroFecha.to}
-              onChange={(range) => setFiltroFecha(range || { from: null, to: null })}
-              placeholder={t('projectSelectDate')}
-              title={t('projectSelectDate')}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectPriority')}</label>
-            <select
-              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-3)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-dim)] outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-              value={filtroPrioridad}
-              onChange={(e) => setFiltroPrioridad(e.target.value)}
-            >
-              <option value="todas">{t('projectAllPriorities')}</option>
-              {PRIORIDADES.map((prioridad) => (
-                <option key={prioridad.value} value={prioridad.value}>{t(prioridad.labelKey)}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('projectResponsible')}</label>
-            <select
-              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-3)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-dim)] outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-              value={filtroResponsable}
-              onChange={(e) => setFiltroResponsable(e.target.value)}
-            >
-              <option value="todos">{t('projectAllResponsibles')}</option>
-              <option value="sin_asignar">{t('projectUnassigned')}</option>
-              {responsablesFiltro.map((responsable) => (
-                <option key={responsable.id} value={String(responsable.id)}>{responsable.nombre}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Content Canvas */}
+      {/* Documentos del proyecto a la derecha, solo junto a la lista. El Kanban
+          y el gantt necesitan todo el ancho: con la columna al lado, las tres
+          columnas del tablero y las barras del gantt quedaban estrujadas. */}
+      <div className={`grid gap-6 ${vista === 'lista' ? 'xl:grid-cols-[minmax(0,1fr)_320px]' : ''}`}>
       <div style={{ minHeight: '500px' }}>
         {vista === 'lista' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '0.75rem', 
-              maxHeight: '70vh',
-              overflowY: 'auto',
-              paddingRight: '0.5rem'
-            }}>
+            {/* Sin tope de alto ni scroll propio: con 10 tareas por pagina la
+                lista ya no crece sin fin, y dos desplazamientos anidados (el de
+                la lista y el de la pagina) se estorbaban entre si. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {tareasListaFiltradas.length === 0 ? (
                 <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
                   <Search size={40} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
-                  <p style={{ fontWeight: '700' }}>{t('projectNoTasksFound')}</p>
+                  <p style={{ fontWeight: 400 }}>{t('projectNoTasksFound')}</p>
                 </div>
               ) : (
-                tareasListaFiltradas.slice(0, limite).map(t => (
-                  <TareaCard 
-                    key={t.id} 
-                    tarea={t} 
+                tareasDeLaPagina.map(t => (
+                  <TareaCard
+                    key={t.id}
+                    tarea={t}
                     usuarioActual={usuario}
                     onClick={(x) => { setTareaEditando(x); setModal(true); }}
                     onEliminar={handleEliminar}
@@ -730,21 +763,68 @@ const ProyectoDetallePage = () => {
                 ))
               )}
             </div>
-            
-            {tareasListaFiltradas.length > limite && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
-                <button 
-                  onClick={() => setLimite(prev => prev + 10)}
-                  className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm uppercase tracking-widest flex items-center gap-2"
-                >
-                  {t('projectLoadMoreTasks', { count: tareasFiltradasAvanzadas.length - limite })} <Plus size={14} />
-                </button>
+
+            {/* Paginacion en vez del antiguo "Ver mas tareas": con ese boton la
+                lista solo crecia y no habia forma de volver atras ni de saber
+                por donde ibas. */}
+            {totalPaginasLista > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <span className="text-sm font-normal text-[var(--color-text-muted)]">
+                  {t('timelineRange', {
+                    desde: (paginaLista - 1) * TAREAS_POR_PAGINA + 1,
+                    hasta: Math.min(paginaLista * TAREAS_POR_PAGINA, tareasListaFiltradas.length),
+                    total: tareasListaFiltradas.length,
+                  })}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Tooltip label={t('previous')}>
+                    <button
+                      type="button"
+                      onClick={() => setPagina((n) => Math.max(1, n - 1))}
+                      disabled={paginaLista === 1}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                  </Tooltip>
+                  <span className="min-w-[70px] text-center text-sm font-medium text-[var(--color-text)]">
+                    {paginaLista} / {totalPaginasLista}
+                  </span>
+                  <Tooltip label={t('next')}>
+                    <button
+                      type="button"
+                      onClick={() => setPagina((n) => Math.min(totalPaginasLista, n + 1))}
+                      disabled={paginaLista === totalPaginasLista}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </Tooltip>
+                </div>
               </div>
             )}
           </div>
         )}
         {vista === 'kanban' && <KanbanView tareas={tareasFiltradasAvanzadas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onEliminar={handleEliminar} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} onActualizarTarea={handleActualizarTarea} />}
-        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradasAvanzadas} />}
+        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradasAvanzadas} onSeleccionarTarea={(x) => { setTareaEditando(x); setModal(true); }} />}
+      </div>
+
+        {vista === 'lista' && (
+        <aside className="xl:sticky xl:top-6 xl:self-start">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <p className="mb-3 text-xs font-normal leading-relaxed text-[var(--color-text-muted)]">
+              {t('projectDocsHint')}
+            </p>
+            <TaskAttachments
+              compacto
+              tareaId={proyecto?.id}
+              type="proyectos"
+              title={t('projectFieldDocuments')}
+              uploadLabel={t('projectAddFiles')}
+            />
+          </div>
+        </aside>
+        )}
       </div>
 
       {/* Modales */}
@@ -844,7 +924,7 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
         <div className="flex flex-col-reverse lg:flex-row gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all uppercase tracking-widest"
+            className="flex-1 px-6 py-4 rounded-2xl text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all"
           >
             {t('cancel')}
           </button>
@@ -852,20 +932,21 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
             <button
               type="button"
               onClick={() => { onEliminar(tarea); onClose(); }}
-              className="flex-1 px-6 py-4 bg-red-50 text-red-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all"
+              className="flex-1 px-6 py-4 bg-red-50 text-red-600 rounded-2xl text-xs font-medium hover:bg-red-100 transition-all"
             >
               {t('delete')}
             </button>
           )}
-          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
+          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
             {cargando ? t('saving') : t('save')}
           </button>
         </div>
       )}
     >
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* ── Lo necesario para dar de alta la tarea ─────────────────── */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskTitle').toUpperCase()}</label>
+              <EtiquetaCampo texto={t('taskTitle')} />
               <input
                 className="form-input"
                 value={form.titulo}
@@ -876,108 +957,100 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskDescription').toUpperCase()}</label>
-              <textarea
-                className="form-input resize-none"
-                rows="3"
-                value={form.descripcion}
-                onChange={e => setForm({...form, descripcion: e.target.value})}
-                placeholder={t('taskDescriptionPlaceholder')}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskActivityNumber').toUpperCase()}</label>
-              <input
-                type="number"
-                min="1"
-                className="form-input"
-                value={form.numeroActividad}
-                onChange={e => setForm({ ...form, numeroActividad: e.target.value })}
-                placeholder={t('taskActivityPlaceholder')}
+              <EtiquetaCampo texto={t('taskAssignedTo')} />
+              {/* Antes eran todos los nombres del equipo como botones a la
+                  vista; con un equipo grande el bloque medía media ventana. */}
+              <SelectorMultiple
+                conBuscador
+                placeholder={t('taskUnassigned')}
+                seleccionados={form.asignadoIds}
+                onToggle={(id) => setForm((prev) => ({
+                  ...prev,
+                  asignadoIds: prev.asignadoIds.includes(id)
+                    ? prev.asignadoIds.filter((asignadoId) => asignadoId !== id)
+                    : [...prev.asignadoIds, id],
+                }))}
+                opciones={usuarios.map((u) => ({ valor: u.id, etiqueta: u.nombre }))}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskAssignedTo').toUpperCase()}</label>
-                <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-                  <div className="flex flex-wrap gap-2">
-                    {usuarios.map((u) => {
-                      const isSelected = form.asignadoIds.includes(u.id);
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => setForm((prev) => ({
-                            ...prev,
-                            asignadoIds: isSelected
-                              ? prev.asignadoIds.filter((idAsignado) => idAsignado !== u.id)
-                              : [...prev.asignadoIds, u.id],
-                          }))}
-                          className={`px-3 py-2 rounded-xl text-xs font-black transition-all border ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20' : 'bg-white text-[var(--color-text-dim)] border-[var(--color-border)] hover:bg-[var(--color-surface-3)]'}`}
-                        >
-                          {u.nombre}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-3 text-[11px] font-semibold text-[var(--color-text-muted)]">
-                    {form.asignadoIds.length > 0
-                      ? `${form.asignadoIds.length} ${form.asignadoIds.length === 1 ? 'responsable seleccionado' : 'responsables seleccionados'}`
-                      : t('taskUnassigned')}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskStatus').toUpperCase()}</label>
+                <EtiquetaCampo texto={t('taskStatus')} />
                 <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
                   {ESTADOS_TAREA.map(e => <option key={e.value} value={e.value}>{t(e.labelKey)}</option>)}
                 </select>
               </div>
-            </div>
 
-            {(tarea?.creador?.nombre || creadorEsUsuarioActual) && (
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
-                {creadorEsUsuarioActual ? t('taskCreatedByYou') : `${t('taskAssignedBy')} ${tarea.creador.nombre}`}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskPriority').toUpperCase()}</label>
+                <EtiquetaCampo texto={t('taskPriority')} />
                 <select className="form-input form-select" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
                   {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{t(p.labelKey)}</option>)}
                 </select>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskDuration').toUpperCase()}</label>
-                <RangeDatePicker 
-                  from={form.fechaInicio ? new Date(form.fechaInicio + 'T12:00:00') : null}
-                  to={form.venceEn ? new Date(form.venceEn + 'T12:00:00') : null}
-                  onChange={(range) => {
-                    setForm({
-                      ...form,
-                      fechaInicio: range?.from ? range.from.toISOString().slice(0, 10) : '',
-                      venceEn: range?.to ? range.to.toISOString().slice(0, 10) : ''
-                    });
-                  }}
-                />
-              </div>
             </div>
 
-            <TaskAttachments
-              tareaId={tarea?.id}
-              type="tareas"
-              title={t('taskSupportDocuments')}
-              pendingFiles={archivos}
-              onPendingFilesChange={setArchivos}
-              onAttachmentsChange={(adjuntos) => sincronizarTarea({ adjuntos })}
-              showUploader
-              showExisting={Boolean(tarea?.id)}
-              uploadLabel={tarea ? t('taskAddFiles') : t('taskSelectFiles')}
-            />
+            <div className="space-y-2">
+              <EtiquetaCampo texto={t('taskDuration')} />
+              {/* Calendario en linea. Antes abria una ventana sobre la ventana
+                  de la tarea: se veia encimado y los desplegables nativos del
+                  formulario (prioridad, estado) se dibujaban por encima. */}
+              <SelectorRangoFechas
+                plegable
+                conLeyenda={false}
+                desde={form.fechaInicio}
+                hasta={form.venceEn}
+                onChange={({ desde, hasta }) => setForm({ ...form, fechaInicio: desde, venceEn: hasta })}
+              />
+            </div>
+
+            {/* Igual que en la lista: solo se dice quien asigno si fue otro */}
+            {!creadorEsUsuarioActual && tarea?.creador?.nombre && (
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs font-medium text-blue-700">
+                {t('taskAssignedBy')} {tarea.creador.nombre}
+              </div>
+            )}
+
+            {/* ── Lo opcional, al final ─────────────────────────────────────
+                Antes la descripcion y el numero de actividad iban entre el
+                titulo y los responsables, asi que para llegar a lo que de
+                verdad hace falta habia que pasar por encima de ellos. */}
+            <div className="border-t border-[var(--color-border)] pt-5 space-y-6">
+              <div className="space-y-2">
+                <EtiquetaCampo texto={t('taskDescription')} opcional />
+                <textarea
+                  className="form-input resize-none"
+                  rows="3"
+                  value={form.descripcion}
+                  onChange={e => setForm({...form, descripcion: e.target.value})}
+                  placeholder={t('taskDescriptionPlaceholder')}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <EtiquetaCampo texto={t('taskActivityNumber')} opcional />
+                <input
+                  type="number"
+                  min="1"
+                  className="form-input"
+                  value={form.numeroActividad}
+                  onChange={e => setForm({ ...form, numeroActividad: e.target.value })}
+                  placeholder={t('taskActivityPlaceholder')}
+                />
+              </div>
+
+              <TaskAttachments
+                tareaId={tarea?.id}
+                type="tareas"
+                title={`${t('taskSupportDocuments')} · ${t('fieldOptional')}`}
+                pendingFiles={archivos}
+                onPendingFilesChange={setArchivos}
+                onAttachmentsChange={(adjuntos) => sincronizarTarea({ adjuntos })}
+                showUploader
+                showExisting={Boolean(tarea?.id)}
+                uploadLabel={tarea ? t('taskAddFiles') : t('taskSelectFiles')}
+              />
+            </div>
           </form>
 
           {tarea?.id && (
@@ -1003,7 +1076,7 @@ const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => {
     title={t('taskExportTitle')}
     subtitle={proyecto?.nombre}
     footer={(
-      <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-all">
+      <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-all">
         {t('close')}
       </button>
     )}
@@ -1013,15 +1086,15 @@ const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => {
           onClick={() => onExportar('excel')}
           className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-all"
         >
-          <span className="flex items-center gap-3 text-sm font-black text-[var(--color-text)]"><FileSpreadsheet size={18} /> Excel</span>
-          <span className="text-xs font-black text-[var(--color-text-muted)] uppercase tracking-widest">.xlsx</span>
+          <span className="flex items-center gap-3 text-sm font-medium text-[var(--color-text)]"><FileSpreadsheet size={18} /> Excel</span>
+          <span className="text-xs font-medium text-[var(--color-text-muted)]">.xlsx</span>
         </button>
         <button
           onClick={() => onExportar('json')}
           className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-all"
         >
-          <span className="flex items-center gap-3 text-sm font-black text-[var(--color-text)]"><FileJson size={18} /> JSON</span>
-          <span className="text-xs font-black text-[var(--color-text-muted)] uppercase tracking-widest">.json</span>
+          <span className="flex items-center gap-3 text-sm font-medium text-[var(--color-text)]"><FileJson size={18} /> JSON</span>
+          <span className="text-xs font-medium text-[var(--color-text-muted)]">.json</span>
         </button>
       </div>
   </Modal>
@@ -1055,7 +1128,7 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
     >
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('fieldName')}</label>
+            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldName')}</label>
             <input
               className="form-input"
               value={form.nombre}
@@ -1064,7 +1137,7 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t('taskDescription')}</label>
+            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('taskDescription')}</label>
             <input
               className="form-input"
               value={form.descripcion}
@@ -1072,10 +1145,10 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
             />
           </div>
           <div className="flex flex-col-reverse lg:flex-row gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-black text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-3)] transition-all uppercase tracking-widest">
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-3)] transition-all">
               {t('cancel')}
             </button>
-            <button type="submit" disabled={guardando} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20">
+            <button type="submit" disabled={guardando} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20">
               {guardando ? t('saving') : t('save')}
             </button>
           </div>

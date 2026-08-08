@@ -46,7 +46,7 @@ export const ToastProvider = ({ children }) => {
                 border: `1px solid ${conf.border}`,
                 borderRadius: '1rem',
                 color: conf.color,
-                fontSize: '0.9rem', fontWeight: '700',
+                fontSize: '0.9rem', fontWeight: 500,
                 boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
                 animation: 'toastIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
                 backdropFilter: 'blur(4px)',

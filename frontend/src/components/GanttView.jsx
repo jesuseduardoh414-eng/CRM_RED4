@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { usePreferences } from '../context/PreferencesContext';
+import Tooltip2 from './Tooltip';
 import {
   AlertTriangle,
   CalendarRange,
   CheckCircle2,
-  Circle,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Flag,
   Layers3,
@@ -41,7 +43,7 @@ const STATUS_CONF = {
     soft: 'rgba(22,163,74,0.16)',
     glow: 'rgba(22,163,74,0.24)',
     icon: <CheckCircle2 size={12} />,
-  },
+  }
 };
 
 const PRIORITY_CONF = {
@@ -49,6 +51,9 @@ const PRIORITY_CONF = {
   MEDIA: { labelKey: 'priorityMedium', solid: '#f59e0b', soft: 'rgba(245,158,11,0.14)' },
   ALTA:  { labelKey: 'priorityHigh',   solid: '#ef4444', soft: 'rgba(239,68,68,0.14)' },
 };
+
+// 10 filas por pagina, igual que la vista de lista.
+const TAREAS_POR_PAGINA = 10;
 
 const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
 const formatFecha = (value) =>
@@ -115,8 +120,8 @@ const Tooltip = ({ tarea, rect }) => {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.55rem' }}>
-        <div style={{ fontWeight: '900', color: '#fff', lineHeight: 1.25 }}>{tarea.titulo}</div>
-        <span style={{ flexShrink: 0, padding: '0.22rem 0.5rem', borderRadius: '999px', background: priority.soft, color: priority.solid, fontSize: '0.68rem', fontWeight: '900' }}>
+        <div style={{ fontWeight: 500, color: '#fff', lineHeight: 1.25 }}>{tarea.titulo}</div>
+        <span style={{ flexShrink: 0, padding: '0.22rem 0.5rem', borderRadius: '999px', background: priority.soft, color: priority.solid, fontSize: '0.68rem', fontWeight: 500 }}>
           {priority.label}
         </span>
       </div>
@@ -134,12 +139,12 @@ const Tooltip = ({ tarea, rect }) => {
           <Flag size={12} color={priority.solid} />
           Duración: {diffDays(start, end)} día{diffDays(start, end) === 1 ? '' : 's'}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: status.solid, fontWeight: '800' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: status.solid, fontWeight: 500 }}>
           {status.icon}
           {status.label}
         </div>
         {overdue && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fca5a5', fontWeight: '800' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fca5a5', fontWeight: 500 }}>
             <AlertTriangle size={12} />
             Vencida
           </div>
@@ -149,9 +154,10 @@ const Tooltip = ({ tarea, rect }) => {
   );
 };
 
-const GanttView = ({ proyecto, tareas }) => {
+const GanttView = ({ proyecto, tareas, onSeleccionarTarea }) => {
   const { t } = usePreferences();
   const [hoveredTask, setHoveredTask] = useState(null);
+  const [pagina, setPagina] = useState(1);
 
   const preparedTasks = useMemo(() => (
     tareas.map((tarea) => {
@@ -167,26 +173,25 @@ const GanttView = ({ proyecto, tareas }) => {
     }).sort((a, b) => a.start - b.start)
   ), [tareas]);
 
-  const range = useMemo(() => {
-    let start = new Date(proyecto.fechaInicio || proyecto.creadoEn || new Date());
-    let end = new Date(proyecto.fechaFin || start);
+  // Mes en pantalla. Antes se dibujaban de corrido todos los meses del
+  // proyecto, asi que con un proyecto de medio ano la tabla se iba varias
+  // pantallas a la derecha. Ahora se ve un mes y se navega entre ellos.
+  const [mesVisible, setMesVisible] = useState(() => {
+    const hoy = new Date();
+    const primeraTarea = tareas.length > 0
+      ? tareas.map((tarea) => getTaskDates(tarea).start).sort((a, b) => a - b)[0]
+      : null;
+    const fin = proyecto?.fechaFin ? new Date(proyecto.fechaFin) : null;
+    // Se arranca en el mes de hoy si el proyecto sigue vivo; si ya termino, en
+    // el de su primera tarea, que es donde hay algo que ver.
+    const base = (!fin || fin >= hoy) ? hoy : (primeraTarea || hoy);
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
 
-    if (preparedTasks.length > 0) {
-      preparedTasks.forEach((tarea) => {
-        if (tarea.start < start) start = tarea.start;
-        if (tarea.end > end) end = tarea.end;
-      });
-    }
-
-    if (end <= start) end = new Date(start.getTime() + (14 * 86400000));
-
-    start = new Date(start);
-    end = new Date(end);
-    start.setDate(start.getDate() - 3);
-    end.setDate(end.getDate() + 5);
-
-    return { start, end };
-  }, [preparedTasks, proyecto]);
+  const range = useMemo(() => ({
+    start: new Date(mesVisible.getFullYear(), mesVisible.getMonth(), 1),
+    end: new Date(mesVisible.getFullYear(), mesVisible.getMonth() + 1, 0),
+  }), [mesVisible]);
 
   const days = useMemo(() => {
     const arr = [];
@@ -200,19 +205,9 @@ const GanttView = ({ proyecto, tareas }) => {
 
   const totalDays = Math.max(1, days.length - 1);
 
-  const months = useMemo(() => {
-    const result = [];
-    days.forEach((day, index) => {
-      const label = formatMes(day);
-      const last = result[result.length - 1];
-      if (!last || last.label !== label) {
-        result.push({ label, startIndex: index, count: 1 });
-      } else {
-        last.count += 1;
-      }
-    });
-    return result;
-  }, [days]);
+  const moverMes = (delta) => setMesVisible((actual) => (
+    new Date(actual.getFullYear(), actual.getMonth() + delta, 1)
+  ));
 
   const metrics = useMemo(() => {
     const total = preparedTasks.length;
@@ -223,14 +218,30 @@ const GanttView = ({ proyecto, tareas }) => {
     return { total, hechas, enProgreso, vencidas, sinAsignar };
   }, [preparedTasks]);
 
+  // Recortado al mes visible: una tarea que empieza antes o acaba despues se
+  // dibuja pegada al borde en vez de salirse de la rejilla.
   const getPosition = (date) => {
     const target = startOfDay(date).getTime();
     const diff = (target - startOfDay(range.start).getTime()) / 86400000;
-    return (diff / totalDays) * 100;
+    return Math.min(100, Math.max(0, (diff / totalDays) * 100));
   };
 
+  /** ¿La tarea toca el mes que se esta viendo? */
+  const enElMes = (tarea) => (
+    startOfDay(tarea.end) >= startOfDay(range.start) && startOfDay(tarea.start) <= startOfDay(range.end)
+  );
+
+  const totalPaginas = Math.max(1, Math.ceil(preparedTasks.length / TAREAS_POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const tareasVisibles = preparedTasks.slice(
+    (paginaActual - 1) * TAREAS_POR_PAGINA,
+    paginaActual * TAREAS_POR_PAGINA,
+  );
+
   const todayPct = getPosition(new Date());
-  const DAY_WIDTH = 42;
+  // 26px por dia: 31 dias x 26 = 806px, que con la columna de nombres cabe en
+  // una pantalla de escritorio sin desplazamiento horizontal.
+  const DAY_WIDTH = 26;
   const NAME_WIDTH = 300;
 
   if (preparedTasks.length === 0) {
@@ -257,10 +268,10 @@ const GanttView = ({ proyecto, tareas }) => {
       >
         <div style={{ padding: '1.1rem 1.3rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: '900', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#2563eb', marginBottom: '0.25rem' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 500, textTransform: '', color: '#2563eb', marginBottom: '0.25rem' }}>
               {t('ganttVisualKey')}
             </div>
-            <div style={{ fontSize: '1rem', fontWeight: '900', color: 'var(--color-text)' }}>
+            <div style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--color-text)' }}>
               {t('ganttTimeline')}
             </div>
           </div>
@@ -273,31 +284,67 @@ const GanttView = ({ proyecto, tareas }) => {
               { label: t('ganttOverdue'),    value: metrics.vencidas,   color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
             ].map((item) => (
               <div key={item.label} style={{ minWidth: '92px', padding: '0.55rem 0.75rem', borderRadius: '0.95rem', background: item.bg, color: item.color }}>
-                <div style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.82 }}>{item.label}</div>
-                <div style={{ fontSize: '1rem', fontWeight: '900' }}>{item.value}</div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 500, textTransform: '', opacity: 0.82 }}>{item.label}</div>
+                <div style={{ fontSize: '1rem', fontWeight: 500 }}>{item.value}</div>
               </div>
             ))}
           </div>
         </div>
 
         <div style={{ padding: '0.9rem 1.3rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.76rem', fontWeight: '800', color: '#475569' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.76rem', fontWeight: 500, color: '#475569' }}>
             <Layers3 size={14} color="#2563eb" />
             {t('ganttBarStatus')}
           </div>
           {Object.entries(STATUS_CONF).map(([key, conf]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
               <div style={{ width: '10px', height: '10px', borderRadius: '999px', background: conf.solid, boxShadow: `0 0 0 4px ${conf.soft}` }} />
               {t(conf.labelKey)}
             </div>
           ))}
           <div style={{ width: '1px', height: '16px', background: 'var(--color-border)' }} />
           {Object.entries(PRIORITY_CONF).map(([key, conf]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
               <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: conf.solid }} />
               {t('projectPriority')} {t(conf.labelKey).toLowerCase()}
             </div>
           ))}
+        </div>
+
+        {/* Navegacion de mes. Reemplaza a la fila de cabeceras que dibujaba un
+            titulo por cada mes del proyecto y estiraba la tabla a lo ancho. */}
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+          <div className="flex items-center gap-1">
+            <Tooltip2 label={t('previous')}>
+              <button
+                type="button"
+                onClick={() => moverMes(-1)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
+              >
+                <ChevronLeft size={17} />
+              </button>
+            </Tooltip2>
+            <span className="min-w-[150px] text-center text-sm font-medium text-[var(--color-text)] first-letter:uppercase">
+              {formatMes(range.start)}
+            </span>
+            <Tooltip2 label={t('next')}>
+              <button
+                type="button"
+                onClick={() => moverMes(1)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
+              >
+                <ChevronRight size={17} />
+              </button>
+            </Tooltip2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { const h = new Date(); setMesVisible(new Date(h.getFullYear(), h.getMonth(), 1)); }}
+            className="rounded-lg px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+          >
+            {t('dashboardToday')}
+          </button>
         </div>
 
         <div style={{ overflowX: 'auto', width: '100%' }}>
@@ -314,33 +361,13 @@ const GanttView = ({ proyecto, tareas }) => {
                   zIndex: 30,
                 }}
               >
-                <div style={{ fontSize: '0.68rem', fontWeight: '900', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#94a3b8' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 500, textTransform: '', color: '#94a3b8' }}>
                   {t('ganttProjectTasks')}
                 </div>
-                <div style={{ marginTop: '0.3rem', fontSize: '0.92rem', fontWeight: '900', color: 'var(--color-text)' }}>{proyecto?.nombre}</div>
+                <div style={{ marginTop: '0.3rem', fontSize: '0.92rem', fontWeight: 500, color: 'var(--color-text)' }}>{proyecto?.nombre}</div>
               </div>
 
               <div className="flex-1">
-                <div className="flex border-b border-slate-100">
-                  {months.map((month) => (
-                    <div
-                      key={`${month.label}-${month.startIndex}`}
-                      style={{
-                        width: `${(month.count / days.length) * 100}%`,
-                        padding: '0.6rem 0.5rem',
-                        textAlign: 'left',
-                        fontSize: '0.76rem',
-                        fontWeight: '900',
-                        color: '#2563eb',
-                        textTransform: 'uppercase',
-                        borderRight: '1px solid var(--color-border)',
-                      }}
-                    >
-                      {month.label}
-                    </div>
-                  ))}
-                </div>
-
                 <div className="flex">
                   {days.map((day) => {
                     const isWeekend = day.getDay() === 0 || day.getDay() === 6;
@@ -353,7 +380,7 @@ const GanttView = ({ proyecto, tareas }) => {
                           padding: '0.5rem 0',
                           textAlign: 'center',
                           fontSize: '0.68rem',
-                          fontWeight: '800',
+                          fontWeight: 500,
                           color: isToday ? '#2563eb' : isWeekend ? '#ef4444' : '#94a3b8',
                           background: isToday ? 'rgba(37,99,235,0.06)' : isWeekend ? 'rgba(239,68,68,0.04)' : 'transparent',
                           borderRight: '1px solid rgba(226,232,240,0.55)',
@@ -382,21 +409,37 @@ const GanttView = ({ proyecto, tareas }) => {
                 ))}
               </div>
 
-              {preparedTasks.map((tarea, index) => {
+              {tareasVisibles.map((tarea, index) => {
                 const status = getStatusConf(tarea.estado);
                 const priority = getPriorityConf(tarea.prioridad);
                 const area = getAreaConf(getPrimaryAssignee(tarea)?.area);
                 const startPct = getPosition(tarea.start);
                 const endPct = getPosition(tarea.end);
                 const widthPct = Math.max(2.6, endPct - startPct + (100 / totalDays));
+                // Las tareas de otros meses conservan su fila para que la
+                // paginacion no cambie de contenido al navegar entre meses,
+                // pero en vez de barra muestran a que mes pertenecen.
+                const visibleEsteMes = enElMes(tarea);
 
                 return (
+                  // La fila entera abre la tarea, no solo la barra: en un mes
+                  // donde la tarea no cae, la barra ni siquiera se dibuja.
                   <div
                     key={tarea.id}
+                    role={onSeleccionarTarea ? 'button' : undefined}
+                    tabIndex={onSeleccionarTarea ? 0 : undefined}
+                    onClick={() => onSeleccionarTarea?.(tarea)}
+                    onKeyDown={(e) => {
+                      if (onSeleccionarTarea && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        onSeleccionarTarea(tarea);
+                      }
+                    }}
                     style={{
                       display: 'flex',
                       borderBottom: '1px solid rgba(226,232,240,0.65)',
                       background: index % 2 === 0 ? 'rgba(255,255,255,0.7)' : 'rgba(248,250,252,0.7)',
+                      cursor: onSeleccionarTarea ? 'pointer' : 'default',
                     }}
                   >
                     <div
@@ -412,19 +455,19 @@ const GanttView = ({ proyecto, tareas }) => {
                     >
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.95rem', fontWeight: '900', color: 'var(--color-text)', lineHeight: 1.2, textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none', opacity: tarea.estado === 'HECHO' ? 0.62 : 1 }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--color-text)', lineHeight: 1.2, textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none', opacity: tarea.estado === 'HECHO' ? 0.62 : 1 }}>
                             {tarea.titulo}
                           </div>
                           <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: status.soft, color: status.solid, fontSize: '0.68rem', fontWeight: '900' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: status.soft, color: status.solid, fontSize: '0.68rem', fontWeight: 500 }}>
                               {status.icon}
                               {t(status.labelKey)}
                             </span>
-                            <span style={{ padding: '0.22rem 0.45rem', borderRadius: '999px', background: priority.soft, color: priority.solid, fontSize: '0.68rem', fontWeight: '900' }}>
+                            <span style={{ padding: '0.22rem 0.45rem', borderRadius: '999px', background: priority.soft, color: priority.solid, fontSize: '0.68rem', fontWeight: 500 }}>
                               {t(priority.labelKey)}
                             </span>
                             {tarea.overdue && (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', fontSize: '0.68rem', fontWeight: '900' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem', padding: '0.22rem 0.45rem', borderRadius: '999px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', fontSize: '0.68rem', fontWeight: 500 }}>
                                 <AlertTriangle size={11} />
                                 {t('taskOverdue')}
                               </span>
@@ -432,10 +475,13 @@ const GanttView = ({ proyecto, tareas }) => {
                           </div>
                         </div>
 
-                        <div style={{ width: '10px', height: '10px', borderRadius: '999px', background: area.solid, boxShadow: `0 0 0 5px ${area.soft}`, marginTop: '0.25rem', flexShrink: 0 }} />
+                        {/* Aqui habia un punto con el color del area. Se quito:
+                            el area ya va escrita abajo en la misma fila, y su
+                            azul de DESARROLLO era el mismo de "En progreso" en
+                            la leyenda, asi que se leia como un estado. */}
                       </div>
 
-                      <div style={{ marginTop: '0.7rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.45rem 0.75rem', fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
+                      <div style={{ marginTop: '0.7rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.45rem 0.75rem', fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
                           <User size={12} color={area.solid} />
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getTaskAssigneeLabel(tarea, t('ganttUnassigned'))}</span>
@@ -450,6 +496,14 @@ const GanttView = ({ proyecto, tareas }) => {
                     </div>
 
                     <div className="flex-1 relative" style={{ minHeight: '86px' }}>
+                      {!visibleEsteMes && (
+                        <span
+                          className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-normal text-[var(--color-text-muted)] first-letter:uppercase"
+                        >
+                          {formatMes(tarea.start)}
+                        </span>
+                      )}
+                      {visibleEsteMes && (
                       <div
                         onMouseEnter={(e) => setHoveredTask({ tarea, rect: e.currentTarget.getBoundingClientRect() })}
                         onMouseLeave={() => setHoveredTask(null)}
@@ -486,13 +540,14 @@ const GanttView = ({ proyecto, tareas }) => {
                             opacity: 0.9,
                           }}
                         />
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.55rem', padding: '0 0.8rem 0 1rem', color: '#fff', fontSize: '0.72rem', fontWeight: '900' }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.55rem', padding: '0 0.8rem 0 1rem', color: '#fff', fontSize: '0.72rem', fontWeight: 500 }}>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {tarea.durationDays}d
                           </span>
                           <span>{formatFecha(tarea.start)}</span>
                         </div>
                       </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -518,9 +573,48 @@ const GanttView = ({ proyecto, tareas }) => {
             )}
           </div>
         </div>
+
+        {/* Paginacion de tareas. Con 10 filas la tabla ya no crece sin fin
+            hacia abajo, igual que en la vista de lista. */}
+        {totalPaginas > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-border)] px-4 py-3">
+            <span className="text-sm font-normal text-[var(--color-text-muted)]">
+              {t('timelineRange', {
+                desde: (paginaActual - 1) * TAREAS_POR_PAGINA + 1,
+                hasta: Math.min(paginaActual * TAREAS_POR_PAGINA, preparedTasks.length),
+                total: preparedTasks.length,
+              })}
+            </span>
+            <div className="flex items-center gap-2">
+              <Tooltip2 label={t('previous')}>
+                <button
+                  type="button"
+                  onClick={() => setPagina((n) => Math.max(1, n - 1))}
+                  disabled={paginaActual === 1}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+              </Tooltip2>
+              <span className="min-w-[70px] text-center text-sm font-medium text-[var(--color-text)]">
+                {paginaActual} / {totalPaginas}
+              </span>
+              <Tooltip2 label={t('next')}>
+                <button
+                  type="button"
+                  onClick={() => setPagina((n) => Math.min(totalPaginas, n + 1))}
+                  disabled={paginaActual === totalPaginas}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </Tooltip2>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div style={{ marginTop: '0.9rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', fontSize: '0.76rem', color: 'var(--color-text-muted)', fontWeight: '800' }}>
+      <div style={{ marginTop: '0.9rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', fontSize: '0.76rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
         <span>{t('ganttShowingTasks', { count: preparedTasks.length, tasks: preparedTasks.length === 1 ? t('projectTaskSingular') : t('projectTaskPlural'), days: days.length })}</span>
         <span>{t('ganttUnassignedCount', { count: metrics.sinAsignar })} · {metrics.vencidas === 1 ? t('ganttOverdueCount', { count: metrics.vencidas }) : t('ganttOverdueCountPlural', { count: metrics.vencidas })}</span>
       </div>

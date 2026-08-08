@@ -68,7 +68,12 @@ const getNotificationAccent = (notificacion) => {
   };
 };
 
-const NotificationCenter = () => {
+/**
+ * `enSidebar` adapta la campana a la barra lateral: fondo oscuro fijo (el
+ * sidebar no cambia con el tema) y panel que se abre hacia arriba y a la
+ * derecha, porque ahi el boton queda pegado a la esquina inferior izquierda.
+ */
+const NotificationCenter = ({ enSidebar = false, colapsado = false }) => {
   const { t } = usePreferences();
   const { usuario } = useAuth();
   const navigate = useNavigate();
@@ -184,54 +189,100 @@ const NotificationCenter = () => {
   };
 
   return (
-    <div style={{ position: 'relative' }} ref={dropdownRef}>
-      {/* Botón Bell */}
-      <button
+    <div style={{ position: 'relative', width: enSidebar ? '100%' : undefined }} ref={dropdownRef}>
+      {/* En el sidebar la campana es una fila mas del menu: mismo alto, mismo
+          icono a la izquierda y el texto al lado. El numero de pendientes va a
+          la derecha como contador, no encimado sobre el icono. */}
+      {enSidebar ? (
+        <button
+                            type="button"
         onClick={() => setOpen(!open)}
-        style={{
+          title={colapsado ? t('notificationsTitle') : undefined}
+          aria-label={t('notificationsTitle')}
+          className={`
+            flex items-center ${colapsado ? 'justify-center' : 'gap-4'} w-full px-5 py-3.5 rounded-xl
+            text-sm font-medium transition-all whitespace-nowrap
+            ${open ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
+          `}
+        >
+          <span className="relative shrink-0 flex items-center justify-center">
+            <Bell size={20} strokeWidth={2.5} fill={unreadCount > 0 ? 'currentColor' : 'none'} />
+            {/* Colapsado no hay sitio para el contador al lado: vuelve a la esquina */}
+            {colapsado && unreadCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-2 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-medium text-white"
+                style={{ background: 'var(--color-error)', border: '2px solid var(--color-sidebar)' }}
+              >
+            {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </span>
+
+          {!colapsado && (
+            <>
+              <span className="flex-1 min-w-0 truncate text-left">{t('notificationsTitle')}</span>
+              {unreadCount > 0 && (
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
+                  style={{ background: 'var(--color-error)' }}
+                >
+            {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </>
+          )}
+        </button>
+              ) : (
+        <button
+        onClick={() => setOpen(!open)}
+          title={t('notificationsTitle')}
+          aria-label={t('notificationsTitle')}
+          style={{
           background: open ? 'var(--color-surface-3)' : 'var(--color-bg-base)',
           border: '1px solid var(--color-border)',
-          cursor: 'pointer',
+            cursor: 'pointer',
           width: '42px', height: '42px',
           borderRadius: '12px',
-          position: 'relative',
+            position: 'relative',
           fontSize: '1.2rem',
           color: unreadCount > 0 ? 'var(--color-primary)' : 'var(--color-text-muted)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           boxShadow: open ? 'inset 0 2px 4px rgba(0,0,0,0.05)' : 'var(--shadow-sm)',
-        }}
+          }}
         onMouseOver={e => {
           e.currentTarget.style.background = 'var(--color-surface-3)';
           e.currentTarget.style.borderColor = 'var(--color-primary)';
-        }}
+          }}
         onMouseOut={e => {
-          if (!open) {
+            if (open) return;
             e.currentTarget.style.background = 'var(--color-bg-base)';
             e.currentTarget.style.borderColor = 'var(--color-border)';
-          }
-        }}
-      >
-        <Bell size={20} fill={unreadCount > 0 ? "currentColor" : "none"} />
-        {unreadCount > 0 && (
-          <span style={{
+          }}
+        >
+          <Bell size={20} fill={unreadCount > 0 ? 'currentColor' : 'none'} />
+          {unreadCount > 0 && (
+            <span style={{
             position: 'absolute', top: '-5px', right: '-5px',
             background: 'var(--color-error)', color: '#fff',
-            fontSize: '0.7rem', fontWeight: '900',
+              fontSize: '0.7rem', fontWeight: 500,
             width: '20px', height: '20px', borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid var(--color-surface)',
             boxShadow: '0 2px 8px rgba(255, 255, 255, 0.2)'
-          }}>
+            }}>
             {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
-      </button>
+            </span>
+          )}
+        </button>
+      )}
 
-      {/* Dropdown - Abre hacia ARRIBA porque está al fondo del sidebar */}
+      {/* En el sidebar el boton queda abajo a la izquierda: el panel tiene que
+          salir hacia arriba y hacia la derecha para no quedar fuera de pantalla. */}
       {open && (
         <div style={{
-          position: 'absolute', top: '120%', right: '0',
+          position: 'absolute',
+          ...(enSidebar ? { bottom: '120%', left: 0 } : { top: '120%', right: 0 }),
           width: '380px', background: 'var(--color-surface)',
           border: '1px solid rgba(148, 163, 184, 0.18)', borderRadius: '1.5rem',
           boxShadow: '0 24px 80px rgba(15, 23, 42, 0.18)',
@@ -250,7 +301,7 @@ const NotificationCenter = () => {
             display: 'flex', justifyContent: 'space-between', alignItems: 'center'
           }}>
             <div>
-              <div style={{ fontWeight: '900', fontSize: '1.1rem', color: 'var(--color-text)' }}>{t('notificationsTitle')}</div>
+              <div style={{ fontWeight: 500, fontSize: '1.1rem', color: 'var(--color-text)' }}>{t('notificationsTitle')}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
                 {unreadCount > 0 ? t('notificationsPending', { count: unreadCount }) : t('notificationsAllGood')}
               </div>
@@ -262,7 +313,7 @@ const NotificationCenter = () => {
                   background: 'rgba(37, 99, 235, 0.08)',
                   border: '1px solid rgba(37, 99, 235, 0.14)',
                   color: 'var(--color-primary)',
-                  fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer',
+                  fontSize: '0.72rem', fontWeight: 500, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: '0.35rem',
                   padding: '0.5rem 0.7rem',
                   borderRadius: '999px'
@@ -331,9 +382,8 @@ const NotificationCenter = () => {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
                             <span style={{
                               fontSize: '0.65rem',
-                              fontWeight: '900',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.08em',
+                              fontWeight: 500,
+                              textTransform: '',
                               color: accent.color,
                               background: accent.soft,
                               padding: '0.22rem 0.45rem',
@@ -398,7 +448,7 @@ const NotificationCenter = () => {
                                 background: 'rgba(241, 245, 249, 0.95)',
                                 padding: '0.28rem 0.5rem',
                                 borderRadius: '999px',
-                                fontWeight: '700'
+                                fontWeight: 500
                               }}>
                                 Proyecto: {proyectoNombre}
                               </span>
@@ -410,7 +460,7 @@ const NotificationCenter = () => {
                                 background: 'rgba(241, 245, 249, 0.95)',
                                 padding: '0.28rem 0.5rem',
                                 borderRadius: '999px',
-                                fontWeight: '700'
+                                fontWeight: 500
                               }}>
                                 {n.tipo === 'recordatorio' ? 'Invitó' : 'Asignó'}: {actorNombre}
                               </span>
@@ -419,7 +469,7 @@ const NotificationCenter = () => {
                         )}
 
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>
                             {new Date(n.creadaEn).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                           </div>
                           {destino && (
@@ -429,7 +479,7 @@ const NotificationCenter = () => {
                               gap: '0.3rem',
                               fontSize: '0.72rem',
                               color: accent.color,
-                              fontWeight: '800'
+                              fontWeight: 500
                             }}>
                               Ver detalle <ArrowUpRight size={13} />
                             </div>

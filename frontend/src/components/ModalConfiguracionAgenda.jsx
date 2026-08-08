@@ -232,13 +232,13 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
       title={t('agendaSettingsTitle')}
       subHeader={(
         <div style={{ display: 'flex' }}>
-          <button onClick={() => setTab('HORARIO')} style={{ flex: 1, padding: '1rem', border: 'none', background: 'transparent', fontSize: '0.9rem', fontWeight: '800', color: tab === 'HORARIO' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'HORARIO' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>HORARIO LABORAL</button>
-          <button onClick={() => setTab('DIAS')} style={{ flex: 1, padding: '1rem', border: 'none', background: 'transparent', fontSize: '0.9rem', fontWeight: '800', color: tab === 'DIAS' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'DIAS' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>DIAS ESPECIALES</button>
+          <button onClick={() => setTab('HORARIO')} style={{ flex: 1, padding: '1rem', border: 'none', background: 'transparent', fontSize: '0.9rem', fontWeight: 500, color: tab === 'HORARIO' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'HORARIO' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>HORARIO LABORAL</button>
+          <button onClick={() => setTab('DIAS')} style={{ flex: 1, padding: '1rem', border: 'none', background: 'transparent', fontSize: '0.9rem', fontWeight: 500, color: tab === 'DIAS' ? 'var(--color-primary)' : 'var(--color-text-dim)', cursor: 'pointer', borderBottom: tab === 'DIAS' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>DIAS ESPECIALES</button>
         </div>
       )}
     >
           {cargandoInicial ? (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-dim)', fontWeight: '700' }}>
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-dim)', fontWeight: 500 }}>
               Cargando configuración...
             </div>
           ) : tab === 'HORARIO' ? (
@@ -258,7 +258,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                             : [...(config.dias_laborales || []), diaId];
                           setConfig({ ...config, dias_laborales: nuevosDias });
                         }}
-                        style={{ width: '40px', height: '40px', borderRadius: '10px', border: '2px solid', borderColor: isActive ? 'var(--color-primary)' : 'var(--color-border)', background: isActive ? 'var(--color-primary)' : 'transparent', color: isActive ? '#fff' : 'var(--color-text-dim)', fontWeight: '900', cursor: 'pointer', transition: '0.2s' }}
+                        style={{ width: '40px', height: '40px', borderRadius: '10px', border: '2px solid', borderColor: isActive ? 'var(--color-primary)' : 'var(--color-border)', background: isActive ? 'var(--color-primary)' : 'transparent', color: isActive ? '#fff' : 'var(--color-text-dim)', fontWeight: 500, cursor: 'pointer', transition: '0.2s' }}
                       >
                         {dia}
                       </button>
@@ -272,11 +272,11 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Clock size={14} /> HORARIO LABORAL</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '50px', color: 'var(--color-text-dim)' }}>INICIO</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 500, width: '50px', color: 'var(--color-text-dim)' }}>INICIO</span>
                       <input type="time" className="form-input" style={{ flex: 1 }} value={config.hora_entrada} onChange={(e) => setConfig({ ...config, hora_entrada: e.target.value })} />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '50px', color: 'var(--color-text-dim)' }}>FIN</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 500, width: '50px', color: 'var(--color-text-dim)' }}>FIN</span>
                       <input type="time" className="form-input" style={{ flex: 1 }} value={config.hora_salida} onChange={(e) => setConfig({ ...config, hora_salida: e.target.value })} />
                     </div>
                   </div>
@@ -286,11 +286,11 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Coffee size={14} /> HORA DE COMIDA</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '50px', color: 'var(--color-text-dim)' }}>INICIO</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 500, width: '50px', color: 'var(--color-text-dim)' }}>INICIO</span>
                       <input type="time" className="form-input" style={{ flex: 1 }} value={config.hora_comida_inicio} onChange={(e) => setConfig({ ...config, hora_comida_inicio: e.target.value })} />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: '800', width: '50px', color: 'var(--color-text-dim)' }}>FIN</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 500, width: '50px', color: 'var(--color-text-dim)' }}>FIN</span>
                       <input type="time" className="form-input" style={{ flex: 1 }} value={config.hora_comida_fin} onChange={(e) => setConfig({ ...config, hora_comida_fin: e.target.value })} />
                     </div>
                   </div>
@@ -300,12 +300,12 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
               <div style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)', border: '1px solid var(--color-border)', borderRadius: '1.5rem', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.75rem' }}>
                   <div>
-                    <div style={{ fontSize: '0.78rem', fontWeight: '900', letterSpacing: '0.08em', color: 'var(--color-text-dim)' }}>GOOGLE CALENDAR</div>
-                    <div style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--color-text)', marginTop: '0.25rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text-dim)' }}>GOOGLE CALENDAR</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--color-text)', marginTop: '0.25rem' }}>
                       {googleCalendar.connected ? 'Cuenta conectada' : 'Sincronización desactivada'}
                     </div>
                   </div>
-                  <div style={{ padding: '0.4rem 0.75rem', borderRadius: '999px', background: googleCalendar.connected ? 'rgba(16,185,129,0.14)' : 'rgba(148,163,184,0.16)', color: googleCalendar.connected ? '#047857' : '#475569', fontSize: '0.72rem', fontWeight: '900' }}>
+                  <div style={{ padding: '0.4rem 0.75rem', borderRadius: '999px', background: googleCalendar.connected ? 'rgba(16,185,129,0.14)' : 'rgba(148,163,184,0.16)', color: googleCalendar.connected ? '#047857' : '#475569', fontSize: '0.72rem', fontWeight: 500 }}>
                     {googleCalendar.connected ? 'ACTIVA' : 'INACTIVA'}
                   </div>
                 </div>
@@ -315,7 +315,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                     : 'Conecta tu cuenta para enviar automáticamente tus eventos del CRM a tu calendario principal de Google.'}
                 </div>
                 {!googleCalendar.configured && (
-                  <div style={{ marginTop: '0.85rem', fontSize: '0.78rem', color: '#b45309', fontWeight: '700' }}>
+                  <div style={{ marginTop: '0.85rem', fontSize: '0.78rem', color: '#b45309', fontWeight: 500 }}>
                     El servidor aún no tiene configuradas las credenciales de Google Calendar.
                   </div>
                 )}
@@ -325,7 +325,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                       type="button"
                       onClick={handleConnectGoogle}
                       disabled={googleLoading || !googleCalendar.configured}
-                      style={{ flex: 1, height: '48px', borderRadius: '14px', border: 'none', background: '#111827', color: '#fff', fontWeight: '900', cursor: googleLoading || !googleCalendar.configured ? 'not-allowed' : 'pointer', opacity: googleLoading || !googleCalendar.configured ? 0.6 : 1 }}
+                      style={{ flex: 1, height: '48px', borderRadius: '14px', border: 'none', background: '#111827', color: '#fff', fontWeight: 500, cursor: googleLoading || !googleCalendar.configured ? 'not-allowed' : 'pointer', opacity: googleLoading || !googleCalendar.configured ? 0.6 : 1 }}
                     >
                       {googleLoading ? 'CONECTANDO...' : 'CONECTAR GOOGLE CALENDAR'}
                     </button>
@@ -334,7 +334,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                       type="button"
                       onClick={handleDisconnectGoogle}
                       disabled={googleLoading}
-                      style={{ flex: 1, height: '48px', borderRadius: '14px', border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', fontWeight: '900', cursor: googleLoading ? 'not-allowed' : 'pointer', opacity: googleLoading ? 0.6 : 1 }}
+                      style={{ flex: 1, height: '48px', borderRadius: '14px', border: '1px solid #fecaca', background: '#fff1f2', color: '#be123c', fontWeight: 500, cursor: googleLoading ? 'not-allowed' : 'pointer', opacity: googleLoading ? 0.6 : 1 }}
                     >
                       {googleLoading ? 'DESCONECTANDO...' : 'DESCONECTAR'}
                     </button>
@@ -385,7 +385,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.5rem',
-                    fontWeight: '900',
+                    fontWeight: 500
                   }}
                 >
                   <Plus size={18} /> MARCAR DIA ESPECIAL
@@ -394,7 +394,7 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
 
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h4 style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-text-dim)', textTransform: 'uppercase', margin: 0 }}>DIAS MARCADOS ESTE MES</h4>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-dim)', textTransform: '', margin: 0 }}>DIAS MARCADOS ESTE MES</h4>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {diasEspeciales.length === 0 ? (
@@ -408,10 +408,10 @@ const ModalConfiguracionAgenda = ({ onClose, showToast, initialData = null }) =>
                             {tipo?.icon}
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '0.85rem', fontWeight: '800' }}>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>
                               {new Date(dia.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })} - {dia.descripcion || tipo?.label}
                             </div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', fontWeight: '700' }}>{tipo?.label}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>{tipo?.label}</div>
                           </div>
                           <Tooltip label={t('delete')}><button onClick={() => handleDelDia(dia.id)} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', padding: '0.5rem' }}><Trash2 size={16} /></button></Tooltip>
                         </div>

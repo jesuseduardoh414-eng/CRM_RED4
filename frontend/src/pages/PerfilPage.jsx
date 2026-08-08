@@ -138,12 +138,12 @@ const PerfilPage = () => {
   if (!perfil) {
     return (
       <div className="mx-auto max-w-3xl rounded-[32px] border border-amber-200 bg-[var(--color-surface)] p-8 shadow-sm">
-        <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-amber-700">
+        <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700">
           <Sparkles size={12} />
           {t('profileNotAvailable')}
         </div>
-        <h1 className="mt-4 text-2xl font-black text-[var(--color-text)]">{t('profileLoadError')}</h1>
-        <p className="mt-2 text-sm font-medium text-slate-500">
+        <h1 className="mt-4 text-2xl font-semibold text-[var(--color-text)]">{t('profileLoadError')}</h1>
+        <p className="mt-2 text-sm font-normal text-slate-500">
           Intenta recargar la p&aacute;gina. Si el problema sigue, revisamos el backend para terminar de aplicar los cambios pendientes.
         </p>
       </div>
@@ -157,7 +157,7 @@ const PerfilPage = () => {
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
             <div className="relative">
-              <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-[28px] border-4 border-white bg-slate-100 text-2xl font-black text-slate-500 shadow-lg shadow-slate-200/70">
+              <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-[28px] border-4 border-white bg-slate-100 text-2xl font-medium text-slate-500 shadow-lg shadow-slate-200/70">
                 {previewFoto ? (
                   <img src={previewFoto} alt={perfil.nombre} className="h-full w-full object-cover" />
                 ) : (
@@ -180,22 +180,22 @@ const PerfilPage = () => {
             </div>
 
             <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-blue-700">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-medium text-blue-700">
                 <Sparkles size={12} />
                 {t('profileTitle')}
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-slate-900 lg:text-4xl">{perfil.nombre}</h1>
-              <p className="mt-2 max-w-2xl text-sm font-medium text-slate-500">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-900 lg:text-4xl">{perfil.nombre}</h1>
+              <p className="mt-2 max-w-2xl text-sm font-normal text-slate-500">
                 Administra tu información personal, tu foto de perfil y el contexto de trabajo que te acompaña dentro del CRM.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                   {t(perfil.rol === 'ADMIN' ? 'roleAdmin' : 'roleMember')}
                 </span>
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
                   {t(AREAS_KEY[perfil.area] || 'areaGeneral')}
                 </span>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
                   {perfil.estado === 'activo' ? t('profileActive') : t('profilePending')}
                 </span>
               </div>
@@ -213,8 +213,8 @@ const PerfilPage = () => {
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
                   {item.icon}
                 </div>
-                <div className="text-2xl font-black text-slate-900">{item.value}</div>
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">{item.label}</div>
+                <div className="text-2xl font-medium text-slate-900">{item.value}</div>
+                <div className="text-[11px] font-medium text-slate-400">{item.label}</div>
               </div>
             ))}
           </div>
@@ -224,58 +224,58 @@ const PerfilPage = () => {
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
         <form onSubmit={handleSubmit} className="rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm lg:p-8">
           <div className="mb-6">
-            <h2 className="text-xl font-black text-[var(--color-text)]">{t('profilePersonalInfo')}</h2>
+            <h2 className="text-xl font-semibold text-[var(--color-text)]">{t('profilePersonalInfo')}</h2>
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('fieldName')}</span>
+              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldName')}</span>
               <div className="relative">
                 <UserRound size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={form.nombre}
                   onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   required
                 />
               </div>
             </label>
 
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('fieldEmail')}</span>
+              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldEmail')}</span>
               <div className="relative">
                 <Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   required
                 />
               </div>
             </label>
 
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('fieldPhone')}</span>
+              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldPhone')}</span>
               <div className="relative">
                 <Phone size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={form.telefono}
                   onChange={(e) => setForm((prev) => ({ ...prev, telefono: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   placeholder={t('fieldPhonePlaceholder')}
                 />
               </div>
             </label>
 
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('fieldPosition')}</span>
+              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldPosition')}</span>
               <div className="relative">
                 <Briefcase size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={form.puesto}
                   onChange={(e) => setForm((prev) => ({ ...prev, puesto: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   placeholder={t('fieldPositionPlaceholder')}
                 />
               </div>
@@ -283,7 +283,7 @@ const PerfilPage = () => {
           </div>
 
           <label className="mt-5 block space-y-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">{t('fieldBio')}</span>
+            <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldBio')}</span>
             <textarea
               rows={5}
               value={form.biografia}
@@ -294,7 +294,7 @@ const PerfilPage = () => {
           </label>
 
           <div className="mt-5 flex flex-wrap gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:border-blue-300 hover:text-blue-700">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 transition-all hover:border-blue-300 hover:text-blue-700">
               <ImagePlus size={16} />
               {t('profileChangePhoto')}
               <input
@@ -317,7 +317,7 @@ const PerfilPage = () => {
                   setPreviewFoto('');
                   setRemoveFoto(true);
                 }}
-                className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600 transition-all hover:bg-rose-100"
+                className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600 transition-all hover:bg-rose-100"
               >
                 {t('profileRemovePhoto')}
               </button>
@@ -325,13 +325,13 @@ const PerfilPage = () => {
           </div>
 
           <div className="mt-8 flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-medium text-slate-400">
+            <p className="text-xs font-normal text-slate-400">
               Tu avatar, nombre y correo se reflejan en el layout y en el resto del CRM.
             </p>
             <button
               type="submit"
               disabled={guardando}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Save size={16} />
               {guardando ? t('saving') : t('profileSave')}
@@ -341,7 +341,7 @@ const PerfilPage = () => {
 
         <div className="space-y-6">
           <div className="rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-            <h2 className="text-lg font-black text-[var(--color-text)]">{t('profileAccountData')}</h2>
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t('profileAccountData')}</h2>
             <div className="mt-5 space-y-4">
               {[
                 { label: t('fieldArea'),           value: t(AREAS_KEY[perfil.area] || 'areaGeneral'), icon: <Building2 size={16} /> },
@@ -354,8 +354,8 @@ const PerfilPage = () => {
                     {item.icon}
                   </div>
                   <div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</div>
-                    <div className="mt-1 text-sm font-bold text-slate-700">{item.value}</div>
+                    <div className="text-[10px] font-medium text-slate-400">{item.label}</div>
+                    <div className="mt-1 text-sm font-medium text-slate-700">{item.value}</div>
                   </div>
                 </div>
               ))}
@@ -363,7 +363,7 @@ const PerfilPage = () => {
           </div>
 
           <div className="rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-            <h2 className="text-lg font-black text-[var(--color-text)]">{t('profileRelatedProjects')}</h2>
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t('profileRelatedProjects')}</h2>
             <p className="mt-1 text-sm text-slate-500">Vista rápida de los proyectos donde participas o que has creado.</p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -375,12 +375,12 @@ const PerfilPage = () => {
 
               {proyectosDestacados.map((proyecto) => (
                 <div key={proyecto.id} className="min-w-[180px] flex-1 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
-                  <div className="text-sm font-black text-slate-800">{proyecto.nombre}</div>
+                  <div className="text-sm font-medium text-slate-800">{proyecto.nombre}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-slate-500">
                       {t(AREAS_KEY[proyecto.area] || 'areaGeneral')}
                     </span>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-slate-500">
                       {proyecto.estado}
                     </span>
                   </div>

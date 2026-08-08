@@ -24,7 +24,7 @@ const Spinner = ({ texto = 'Cargando...' }) => (
         animation: 'spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite',
       }} />
     </div>
-    <span style={{ fontSize: '0.9rem', fontWeight: '500', letterSpacing: '0.01em' }}>{texto}</span>
+    <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{texto}</span>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
   </div>
 );

@@ -41,7 +41,7 @@ const VerifyAccountPage = () => {
             <div style={{ width: '64px', height: '64px', background: '#f0fdf4', color: '#10b981', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
               <CheckCircle2 size={40} strokeWidth={2.5} />
             </div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>¡Cuenta Verificada!</h1>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '1rem' }}>¡Cuenta Verificada!</h1>
             <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>
               {mensaje}<br />
               <span style={{ fontSize: '0.85rem', marginTop: '0.5rem', display: 'block' }}>Redirigiendo al login en 3 segundos...</span>
@@ -57,9 +57,9 @@ const VerifyAccountPage = () => {
             <div style={{ width: '64px', height: '64px', background: '#fef2f2', color: '#ef4444', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
               <XCircle size={40} strokeWidth={2.5} />
             </div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'var(--color-text)', marginBottom: '1rem' }}>Error de Verificación</h1>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '1rem' }}>Error de Verificación</h1>
             <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>{mensaje}</p>
-            <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: '700', textDecoration: 'none' }}>
+            <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: 500, textDecoration: 'none' }}>
               Intentar registrarse de nuevo
             </Link>
           </div>

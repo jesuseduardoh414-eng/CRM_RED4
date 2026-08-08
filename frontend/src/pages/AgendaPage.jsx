@@ -936,27 +936,45 @@ const AgendaPage = () => {
   if (cargando && !eventos.length) return <AgendaSkeleton />;
 
   return (
-    <div className="page-container" style={{ padding: '2rem' }}>
+    // Sin padding propio: el contenedor de la pagina ya lo pone, y sumar otros
+    // 2rem por lado era justo lo que dejaba a la cabecera sin sitio.
+    <div className="page-container">
+      {/* En escritorio la fila NO baja de linea: el usuario prefiere perder
+          margen antes que ver la cabecera partirse en dos al cambiar de mes.
+          Para que quepa, el titulo puede encogerse y recortarse con puntos
+          suspensivos en vez de empujar al resto. En movil si envuelve. */}
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: isMobile ? '1.75rem' : '3rem',
+          marginBottom: isMobile ? '1.75rem' : '2rem',
           flexWrap: isMobile ? 'wrap' : 'nowrap',
-          gap: '1rem',
+          gap: isMobile ? '1rem' : '0.75rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '2rem', flexWrap: isMobile ? 'wrap' : 'nowrap', flexShrink: 0 }}>
-          <h1 style={{ fontSize: isMobile ? '1.5rem' : '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0, width: isMobile ? 'auto' : '380px', whiteSpace: 'nowrap' }}>
-            {view === 'MES' ? formatMesAnio(currentDate, locale).toUpperCase() : formatFechaLarga(currentDate, locale)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '0.85rem', flexWrap: isMobile ? 'wrap' : 'nowrap', minWidth: 0 }}>
+          <h1
+            className="first-letter:uppercase"
+            style={{
+              fontSize: isMobile ? '1.5rem' : '1.6rem',
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              margin: 0,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {view === 'MES' ? formatMesAnio(currentDate, locale) : formatFechaLarga(currentDate, locale)}
           </h1>
           <div style={{ display: 'flex', background: 'var(--color-surface-2)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
             <div style={{ display: 'flex', gap: '2px' }}>
               <Tooltip label={t('previous')}><button onClick={nav.prev} className="btn-icon-sm" style={{ width: '28px', height: '28px' }}><ChevronLeft size={16} /></button></Tooltip>
               <button
                 onClick={nav.hoy}
-                style={{ padding: '0 0.8rem', fontSize: '0.7rem', fontWeight: '800', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)' }}
+                style={{ padding: '0 0.8rem', fontSize: '0.7rem', fontWeight: 500, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)' }}
               >
                 {t('agendaToday')}
               </button>
@@ -965,7 +983,9 @@ const AgendaPage = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap', justifyContent: 'flex-end', flexShrink: 0 }}>
+        {/* shrink 0 aqui si: los botones no se pueden encoger sin romperse, y
+            quien cede espacio es el titulo, que se recorta. */}
+        <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap', justifyContent: 'flex-end', flexShrink: 0 }}>
           <button
             type="button"
             onClick={googleCalendar.connected ? handleDisconnectGoogle : handleConnectGoogle}
@@ -986,7 +1006,7 @@ const AgendaPage = () => {
               background: googleCalendar.connected ? 'rgba(16,185,129,0.08)' : 'var(--color-surface-2)',
               color: googleCalendar.connected ? '#047857' : 'var(--color-text)',
               fontSize: '0.78rem',
-              fontWeight: '900',
+              fontWeight: 500,
               cursor: googleLoading || !googleCalendar.configured ? 'not-allowed' : 'pointer',
               opacity: googleLoading || !googleCalendar.configured ? 0.65 : 1,
               boxShadow: googleCalendar.connected ? '0 10px 24px rgba(16,185,129,0.10)' : 'none',
@@ -1006,7 +1026,7 @@ const AgendaPage = () => {
           >
             <Mail size={18} color={invitaciones.length > 0 ? 'var(--color-primary)' : 'var(--color-text-dim)'} />
             {invitaciones.length > 0 && (
-              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--color-error)', color: '#fff', fontSize: '0.6rem', fontWeight: '900', padding: '1px 5px', borderRadius: '10px', border: '2px solid var(--color-surface)' }}>
+              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--color-error)', color: '#fff', fontSize: '0.6rem', fontWeight: 500, padding: '1px 5px', borderRadius: '10px', border: '2px solid var(--color-surface)' }}>
                 {invitaciones.length}
               </span>
             )}
@@ -1036,7 +1056,7 @@ const AgendaPage = () => {
                   borderRadius: '8px',
                   border: 'none',
                   fontSize: '0.75rem',
-                  fontWeight: '700',
+                  fontWeight: 500,
                   cursor: 'pointer',
                   background: view === vista.id ? 'var(--color-primary)' : 'transparent',
                   color: view === vista.id ? '#ffffff' : 'var(--color-text-muted)',
@@ -1064,7 +1084,7 @@ const AgendaPage = () => {
       {showInvitaciones && (
         <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: isMobile ? '100%' : '400px', background: 'var(--color-surface)', boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', zIndex: 1100, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontWeight: '900', fontSize: '1.5rem' }}>{t('agendaInvitations')}</h2>
+            <h2 style={{ fontWeight: 600, fontSize: '1.5rem' }}>{t('agendaInvitations')}</h2>
             <Tooltip label={t('close')}><button onClick={() => setShowInvitaciones(false)} className="btn-icon-sm"><X size={20} /></button></Tooltip>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1073,14 +1093,14 @@ const AgendaPage = () => {
             ) : (
               invitaciones.map((inv) => (
                 <div key={inv.id} style={{ padding: '1.25rem', background: 'var(--color-surface-2)', borderRadius: '1.25rem', border: '1px solid var(--color-border)' }}>
-                  <div style={{ fontWeight: '800', marginBottom: '0.25rem' }}>{inv.evento.titulo}</div>
+                  <div style={{ fontWeight: 500, marginBottom: '0.25rem' }}>{inv.evento.titulo}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginBottom: '1rem' }}>
                     {t('agendaOrganizer')} <b>{inv.evento.creador?.nombre}</b><br />
                     {new Date(inv.evento.fechaInicio).toLocaleString(locale)}
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => handleResponder(inv.evento.id, 'aceptado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: 'none', background: 'var(--color-success)', color: '#fff', fontWeight: '800', cursor: 'pointer', fontSize: '0.75rem' }}>{t('agendaAcceptInvitation').toUpperCase()}</button>
-                    <button onClick={() => handleResponder(inv.evento.id, 'rechazado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-dim)', fontWeight: '800', cursor: 'pointer', fontSize: '0.75rem' }}>{t('agendaRejectInvitation').toUpperCase()}</button>
+                    <button onClick={() => handleResponder(inv.evento.id, 'aceptado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: 'none', background: 'var(--color-success)', color: '#fff', fontWeight: 500, cursor: 'pointer', fontSize: '0.75rem' }}>{t('agendaAcceptInvitation')}</button>
+                    <button onClick={() => handleResponder(inv.evento.id, 'rechazado')} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-dim)', fontWeight: 500, cursor: 'pointer', fontSize: '0.75rem' }}>{t('agendaRejectInvitation')}</button>
                   </div>
                 </div>
               ))
@@ -1101,10 +1121,10 @@ const AgendaPage = () => {
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: '0.72rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 500, textTransform: '', color: 'var(--color-text-muted)' }}>
               {t('agendaCalendarFilters')}
             </div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--color-text)', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--color-text)', marginTop: '0.2rem' }}>
               {agendaProjectFilter === 'todos'
                 ? t('agendaFilterFirstDesc')
                 : t('agendaShowingContext', { project: agendaProjectOptions.find((project) => project.id === agendaProjectFilter)?.nombre || '' })}
@@ -1127,9 +1147,8 @@ const AgendaPage = () => {
                     borderRadius: '999px',
                     padding: '0.55rem 0.85rem',
                     fontSize: '0.7rem',
-                    fontWeight: 900,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
+                    fontWeight: 500,
+                    textTransform: '',
                     cursor: 'pointer',
                     boxShadow: active ? `0 10px 22px ${filter.color}22` : 'none',
                   }}
@@ -1145,10 +1164,10 @@ const AgendaPage = () => {
           <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eef2f7' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               <div>
-                <div style={{ fontSize: '0.68rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 500, textTransform: '', color: 'var(--color-text-muted)' }}>
                   {t('agendaProjectFilterLabel')}
                 </div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--color-text-dim)', marginTop: '0.12rem' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text-dim)', marginTop: '0.12rem' }}>
                   {agendaFilterType === 'proyecto'
                     ? t('agendaChooseProjectRange')
                     : agendaFilterType === 'tarea'
@@ -1167,8 +1186,8 @@ const AgendaPage = () => {
                     borderRadius: '999px',
                     padding: '0.45rem 0.75rem',
                     fontSize: '0.68rem',
-                    fontWeight: 900,
-                    textTransform: 'uppercase',
+                    fontWeight: 500,
+                    textTransform: '',
                     cursor: 'pointer',
                   }}
                 >
@@ -1190,7 +1209,7 @@ const AgendaPage = () => {
                   borderRadius: '999px',
                   padding: '0.55rem 0.85rem',
                   fontSize: '0.72rem',
-                  fontWeight: 900,
+                  fontWeight: 500,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                 }}
@@ -1213,7 +1232,7 @@ const AgendaPage = () => {
                       borderRadius: '999px',
                       padding: '0.55rem 0.85rem',
                       fontSize: '0.72rem',
-                      fontWeight: 900,
+                      fontWeight: 500,
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
                       boxShadow: active ? '0 10px 22px rgba(37,99,235,0.12)' : 'none',
@@ -1401,7 +1420,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
   return (
     <div className="grid grid-cols-7 gap-2.5 lg:gap-4">
       {diasSemana.map((diaSemana) => (
-        <div key={diaSemana} className="pb-1 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+        <div key={diaSemana} className="pb-1 text-center text-[10px] font-medium text-slate-400">
           {isMobile ? diaSemana.charAt(0) : diaSemana}
         </div>
       ))}
@@ -1532,7 +1551,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
               <>
                 <div className="flex justify-between items-start mb-2">
                   <span className={`
-                    min-w-6 h-6 lg:min-w-7 lg:h-7 px-1 flex items-center justify-center rounded-lg text-[10px] lg:text-xs font-black transition-all
+                    min-w-6 h-6 lg:min-w-7 lg:h-7 px-1 flex items-center justify-center rounded-lg text-[10px] lg:text-xs font-medium transition-all
                     ${circleBg} ${circleColor}
                     ${esHoy ? 'shadow-lg shadow-blue-500/30' : ''}
                   `}>
@@ -1550,7 +1569,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                 </div>
 
                 {diaEsp && (
-                  <div style={{ fontSize: '0.65rem', fontWeight: '800', color: diaEsp.tipo === 'festivo' ? '#ef4444' : '#6366f1', marginBottom: '4px', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '0.65rem', fontWeight: 500, color: diaEsp.tipo === 'festivo' ? '#ef4444' : '#6366f1', marginBottom: '4px', textTransform: '' }}>
                     {diaEsp.descripcion}
                   </div>
                 )}
@@ -1592,7 +1611,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                               background: item.bg, 
                               color: item.color, 
                               fontSize: '0.55rem', 
-                              fontWeight: '900',
+                              fontWeight: 500,
                               borderLeft: `2px solid ${item.color}`,
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
@@ -1619,10 +1638,10 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                               background: 'transparent',
                               fontSize: '0.6rem',
                               color: 'var(--color-primary)',
-                              fontWeight: '900',
+                              fontWeight: 500,
                               padding: '0 0 0 4px',
                               textAlign: 'left',
-                              cursor: 'pointer',
+                              cursor: 'pointer'
                             }}
                           >
                             {t('agendaMoreItems', { count: ocultos })}
@@ -1666,9 +1685,9 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                     style={{ width: '100%', textAlign: 'left', padding: '0.95rem 1rem', borderRadius: '16px', border: '1px solid var(--color-border)', background: 'var(--color-surface)', cursor: item.tipoVista === 'tarea' || item.tipoVista === 'proyecto' ? 'default' : 'pointer', position: 'relative' }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', alignItems: 'flex-start' }}>
-                      <span style={{ fontWeight: '900', color: 'var(--color-text)', lineHeight: 1.35, overflowWrap: 'anywhere', paddingRight: item.tipoVista === 'tarea' ? '0.5rem' : 0 }}>{item.tituloVista}</span>
+                      <span style={{ fontWeight: 500, color: 'var(--color-text)', lineHeight: 1.35, overflowWrap: 'anywhere', paddingRight: item.tipoVista === 'tarea' ? '0.5rem' : 0 }}>{item.tituloVista}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                        <span style={{ fontSize: '0.6rem', fontWeight: '900', textTransform: 'uppercase', color, background: `${color}14`, padding: '0.2rem 0.5rem', borderRadius: '999px' }}>{item.tipoVista}</span>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 500, textTransform: '', color, background: `${color}14`, padding: '0.2rem 0.5rem', borderRadius: '999px' }}>{item.tipoVista}</span>
                         {(item.tipoVista === 'tarea' || item.tipoVista === 'evento' || item.tipoVista === 'reunion') && (
                           <button
                             type="button"
@@ -1685,7 +1704,7 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                         )}
                       </div>
                     </div>
-                    <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', fontWeight: '800', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                       <span style={{ width: '7px', height: '7px', borderRadius: '999px', background: color }} />
                       {item.proyecto?.nombre || (item.todoElDia ? t('agendaAllDay') : `${formatHora(item.fechaInicio)} - ${formatHora(item.fechaFin || item.fechaInicio)}`)}
                     </div>
@@ -1694,9 +1713,9 @@ const VistaMensual = ({ date, eventos, diasEspeciales, configLaboral, isMobile, 
                         onClick={(ev) => ev.stopPropagation()}
                         style={{ position: 'absolute', top: '3rem', right: '1rem', minWidth: '180px', background: 'var(--color-surface)', border: '1px solid #dbeafe', borderRadius: '14px', boxShadow: '0 18px 40px rgba(15,23,42,0.14)', padding: '0.35rem', zIndex: 5 }}
                       >
-                        <button type="button" onClick={() => ejecutarMovimiento(item, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
-                        <button type="button" onClick={() => ejecutarMovimiento(item, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
-                        <button type="button" onClick={() => pedirMovimientoPersonalizadoItem(item)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
+                        <button type="button" onClick={() => ejecutarMovimiento(item, 1)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +1 día</button>
+                        <button type="button" onClick={() => ejecutarMovimiento(item, 2)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Mover +2 días</button>
+                        <button type="button" onClick={() => pedirMovimientoPersonalizadoItem(item)} disabled={movingTasks} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.65rem 0.75rem', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text)', cursor: movingTasks ? 'wait' : 'pointer' }}>Elegir cantidad...</button>
                       </div>
                     )}
                   </div>
@@ -1764,11 +1783,11 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
 
           return (
             <div key={i} style={{ flex: 1, padding: '1rem', textAlign: 'center', borderRight: i < 6 ? '1px solid var(--color-border-light)' : 'none', background: headerBg, boxShadow: esHoy ? 'inset 0 -2px 0 rgba(37,99,235,0.35)' : 'none' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: '900', color: labelColor }}>{diasSemana[i]?.toUpperCase()}</div>
-              <div style={{ width: '32px', height: '32px', margin: '0.4rem auto', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontSize: '1.1rem', fontWeight: '900', background: circleBg, color: circleColor }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 500, color: labelColor }}>{diasSemana[i]}</div>
+              <div style={{ width: '32px', height: '32px', margin: '0.4rem auto', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontSize: '1.1rem', fontWeight: 500, background: circleBg, color: circleColor }}>
                 {d.getDate()}
               </div>
-              {!esLaboral && <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#ef4444' }}>{diaEspecial?.descripcion || 'NO LABORAL'}</div>}
+              {!esLaboral && <div style={{ fontSize: '0.6rem', fontWeight: 500, color: '#ef4444' }}>{diaEspecial?.descripcion || 'NO LABORAL'}</div>}
             </div>
           );
         })}
@@ -1782,13 +1801,13 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
               <div
                 key={evento.id}
                 onClick={() => onSelectEvent(evento)}
-                style={{ fontSize: '0.68rem', fontWeight: '800', color: '#fff', background: evento.color, borderRadius: '8px', padding: '0.25rem 0.4rem', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                style={{ fontSize: '0.68rem', fontWeight: 500, color: '#fff', background: evento.color, borderRadius: '8px', padding: '0.25rem 0.4rem', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
                 {evento.titulo}
               </div>
             ))}
             {eventosTodoElDiaPorDia[dayIdx].length > 2 && (
-              <div style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--color-primary)' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 500, color: 'var(--color-primary)' }}>
                 + {eventosTodoElDiaPorDia[dayIdx].length - 2} mas
               </div>
             )}
@@ -1799,7 +1818,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
       <div style={{ display: 'flex', maxHeight: '600px', overflowY: 'auto' }}>
         <div style={{ width: '60px', borderRight: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
           {horas.map((h) => (
-            <div key={h} style={{ height: '50px', padding: '0.5rem', fontSize: '0.65rem', fontWeight: '800', color: 'var(--color-text-dim)', textAlign: 'right', borderBottom: '1px solid var(--color-border-light)' }}>
+            <div key={h} style={{ height: '50px', padding: '0.5rem', fontSize: '0.65rem', fontWeight: 500, color: 'var(--color-text-dim)', textAlign: 'right', borderBottom: '1px solid var(--color-border-light)' }}>
               {h}
             </div>
           ))}
@@ -1873,7 +1892,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
                         padding: height < 18 ? '1px 4px' : '3px 6px',
                         color: '#fff',
                         fontSize: height < 18 ? '0.55rem' : '0.62rem',
-                        fontWeight: 800,
+                        fontWeight: 500,
                         zIndex: 4,
                         boxShadow: '0 6px 12px rgba(22,163,74,0.18)',
                         overflow: 'hidden',
@@ -1897,7 +1916,7 @@ const VistaSemanal = ({ date, eventos, diasEspeciales, configLaboral, currentUse
                       <div
                         key={evento.id}
                         onClick={() => onSelectEvent(evento)}
-                        style={{ position: 'absolute', top, height: Math.max(height, 20), left: '2px', right: '2px', background: evento.color, borderRadius: '4px', padding: '4px', color: '#fff', fontSize: '0.65rem', fontWeight: '700', zIndex: 5, boxShadow: 'var(--shadow-sm)', opacity: isInvited ? 0.9 : 1, border: isInvited ? '2px dashed rgba(255,255,255,0.5)' : 'none', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}
+                        style={{ position: 'absolute', top, height: Math.max(height, 20), left: '2px', right: '2px', background: evento.color, borderRadius: '4px', padding: '4px', color: '#fff', fontSize: '0.65rem', fontWeight: 500, zIndex: 5, boxShadow: 'var(--shadow-sm)', opacity: isInvited ? 0.9 : 1, border: isInvited ? '2px dashed rgba(255,255,255,0.5)' : 'none', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}
                       >
                         {evento.tipo === 'reunion' ? <Users size={10} /> : evento.tipo === 'actividad' ? <Activity size={10} /> : evento.tipo === 'tarea' ? <CheckSquare size={10} /> : evento.esGlobal ? <Globe size={10} /> : evento.esCompartido ? <Users size={10} /> : null}
                         {evento.esOcurrencia ? <Repeat size={10} /> : null}
@@ -1962,7 +1981,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
       <div style={{ flex: 1, display: 'flex', overflowY: 'auto' }}>
         <div style={{ width: isMobile ? '50px' : '80px', borderRight: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
           {horas.map((h) => (
-            <div key={h} style={{ height: '80px', padding: '0.5rem', fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-text-dim)', textAlign: 'right', borderBottom: '1px solid var(--color-border-light)' }}>
+            <div key={h} style={{ height: '80px', padding: '0.5rem', fontSize: '0.7rem', fontWeight: 500, color: 'var(--color-text-dim)', textAlign: 'right', borderBottom: '1px solid var(--color-border-light)' }}>
               {h}
             </div>
           ))}
@@ -1999,7 +2018,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                   padding: height < 22 ? '2px 8px' : '6px 10px',
                   color: '#fff',
                   fontSize: height < 22 ? '0.62rem' : '0.78rem',
-                  fontWeight: 800,
+                  fontWeight: 500,
                   zIndex: 5,
                   boxShadow: '0 8px 16px rgba(22,163,74,0.18)',
                   overflow: 'hidden',
@@ -2022,7 +2041,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                 onClick={() => onSelectEvent(evento)}
                 style={{ position: 'absolute', top, height, left: '10px', right: '10px', background: evento.color, borderRadius: '12px', padding: '1rem', color: '#fff', boxShadow: 'var(--shadow-lg)', zIndex: 10, cursor: 'pointer', border: evento.usuarioId !== currentUserId ? '2px dashed rgba(255,255,255,0.4)' : 'none' }}
               >
-                <div style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {evento.tipo === 'reunion' ? <Users size={14} /> : evento.tipo === 'actividad' ? <Activity size={14} /> : evento.tipo === 'tarea' ? <CheckSquare size={14} /> : evento.esGlobal ? <Globe size={14} /> : evento.esCompartido ? <Users size={14} /> : null}
                   {evento.esOcurrencia ? <Repeat size={10} /> : null}
                   {evento.titulo}
@@ -2038,18 +2057,18 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
 
       <div style={{ width: isMobile ? '100%' : '350px', background: 'var(--color-surface-2)', padding: '1.5rem', borderLeft: isMobile ? 'none' : '1px solid var(--color-border)', borderTop: isMobile ? '1px solid var(--color-border)' : 'none', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: colorHeader, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: '900' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: colorHeader, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 500 }}>
             {date.getDate()}
           </div>
           <div>
-            <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{formatFechaLarga(date, locale)}</div>
-            <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: '800' }}>
+            <div style={{ fontWeight: 500, fontSize: '1.1rem' }}>{formatFechaLarga(date, locale)}</div>
+            <div style={{ fontSize: '0.7rem', color: colorHeader, fontWeight: 500 }}>
               {esLaboral ? 'DIA LABORAL' : diaEspecial?.descripcion || 'DIA DE DESCANSO'}
             </div>
           </div>
         </div>
 
-        <h3 style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--color-text-dim)', textTransform: 'uppercase', marginBottom: '1.5rem' }}>
+        <h3 style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-text-dim)', textTransform: '', marginBottom: '1.5rem' }}>
           Agenda del día
         </h3>
 
@@ -2062,7 +2081,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
               .map((evento) => (
                 <div key={evento.id} style={{ padding: '1.25rem', background: 'var(--color-surface)', borderRadius: '1.25rem', borderLeft: `5px solid ${evento.color}`, boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <div style={{ fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       {evento.tipo === 'reunion' ? <Users size={14} color="var(--color-primary)" /> : evento.tipo === 'actividad' ? <Activity size={14} color="var(--color-primary)" /> : evento.tipo === 'tarea' ? <CheckSquare size={14} color="var(--color-primary)" /> : null}
                       {evento.esOcurrencia ? <Repeat size={10} /> : null}
                       {evento.titulo}
@@ -2084,9 +2103,9 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                   </div>
 
                   {evento.esGlobal ? (
-                    <div style={{ fontSize: '0.7rem', color: 'var(--color-primary)', fontWeight: '800', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}><Globe size={12} /> EVENTO GLOBAL</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--color-primary)', fontWeight: 500, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}><Globe size={12} /> EVENTO GLOBAL</div>
                   ) : evento.esCompartido ? (
-                    <div style={{ fontSize: '0.7rem', color: 'var(--color-primary)', fontWeight: '800', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}><Users size={12} /> EVENTO COMPARTIDO</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--color-primary)', fontWeight: 500, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}><Users size={12} /> EVENTO COMPARTIDO</div>
                   ) : null}
 
                   {evento.usuarioId !== currentUserId && (
@@ -2111,7 +2130,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                   {(evento.modalidad || evento.ubicacion || evento.urlReunion || evento.instruccionesAcceso) && (
                     <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                       {evento.modalidad && (
-                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--color-primary)' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--color-primary)' }}>
                           {evento.modalidad === 'virtual' ? 'REUNION VIRTUAL' : 'REUNION PRESENCIAL'}
                         </div>
                       )}
@@ -2127,7 +2146,7 @@ const VistaDiaria = ({ date, eventos, diasEspeciales, configLaboral, currentUser
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            style={{ color: 'var(--color-primary)', fontWeight: '800', textDecoration: 'none' }}
+                            style={{ color: 'var(--color-primary)', fontWeight: 500, textDecoration: 'none' }}
                           >
                             Abrir enlace de reunion
                           </a>

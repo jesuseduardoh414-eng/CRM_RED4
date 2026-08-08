@@ -78,7 +78,7 @@ const InvitationPage = () => {
           <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-10 h-10 text-red-500" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Enlace no válido</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 mb-2">Enlace no válido</h1>
           <p className="text-gray-600 mb-8">
             Este enlace de invitación ha expirado o no es válido.
             Contacta a tu administrador para recibir una nueva invitación.
@@ -102,7 +102,7 @@ const InvitationPage = () => {
       <div className="max-w-lg w-full">
         <div className="text-center mb-8">
           <img src="/logo_login.jpeg" alt="Logo" className="h-16 mx-auto mb-4 object-contain" />
-          <h1 className="text-3xl font-bold text-slate-900">Activa tu cuenta</h1>
+          <h1 className="text-3xl font-semibold text-slate-900">Activa tu cuenta</h1>
           <p className="text-slate-500 mt-2">Completa tu perfil para unirte al equipo</p>
         </div>
 
@@ -113,7 +113,7 @@ const InvitationPage = () => {
                 <ShieldCheck className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Invitación para</p>
+                <p className="text-slate-400 text-sm font-normal tracking-wider">Invitación para</p>
                 <p className="text-xl font-semibold">{invitacion?.nombre}</p>
               </div>
             </div>
@@ -165,7 +165,7 @@ const InvitationPage = () => {
                     />
                   ))}
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">
+                <p className="text-[10px] text-slate-400 font-normal tracking-tight">
                   {strength === 0 && 'Ingresa una contraseña'}
                   {strength === 1 && 'Contraseña muy débil'}
                   {strength === 2 && 'Contraseña aceptable'}
@@ -191,7 +191,7 @@ const InvitationPage = () => {
             <button
               type="submit"
               disabled={submitting || strength < 2}
-              className={`w-full py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] ${
+              className={`w-full py-4 rounded-2xl font-medium text-white shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] ${
                 submitting || strength < 2
                   ? 'bg-slate-300 cursor-not-allowed shadow-none'
                   : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'

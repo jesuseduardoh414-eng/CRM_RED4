@@ -55,12 +55,12 @@ const ProjectActivityLog = ({ proyectoId }) => {
   return (
     <div style={{ background: 'var(--color-surface-2)', borderRadius: '1.25rem', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
       <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: '800' }}>Historial de Actividad</h3>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Historial de Actividad</h3>
         <button 
           onClick={fetchLogs} 
           style={{ 
             background: 'none', border: 'none', color: 'var(--color-primary)', 
-            cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600',
+            cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
             display: 'flex', alignItems: 'center', gap: '0.4rem'
           }}
         >
@@ -113,9 +113,9 @@ const ProjectActivityLog = ({ proyectoId }) => {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.25rem' }}>
                     <span style={{ 
-                      fontSize: '0.65rem', fontWeight: '800', padding: '0.1rem 0.5rem', 
+                      fontSize: '0.65rem', fontWeight: 500, padding: '0.1rem 0.5rem', 
                       borderRadius: '4px', background: getBadgeColor(log.accion) + '22', color: getBadgeColor(log.accion),
-                      textTransform: 'uppercase', letterSpacing: '0.05em'
+                      textTransform: ''
                     }}>
                       {log.accion.replace('_', ' ')}
                     </span>

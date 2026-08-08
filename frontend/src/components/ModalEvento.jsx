@@ -4,7 +4,6 @@ import {
   Save,
   Calendar,
   Users,
-  Check,
   AlertTriangle,
   Trash2,
   Globe,
@@ -12,16 +11,20 @@ import {
   MapPin,
   Video,
   Link2,
+  ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import { agendaService, adjuntosService, usuariosService } from '../services/api';
-import UserAvatar from './UserAvatar';
 import Modal from './Modal';
 import Tooltip from './Tooltip';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferences } from '../context/PreferencesContext';
 import TaskAttachments from './TaskAttachments';
-import RangeDatePicker from './RangeDatePicker';
+import SelectorRangoFechas from './SelectorRangoFechas';
+import SelectorMultiple from './SelectorMultiple';
+import { Button } from './ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 const COLOR_CATEGORIA = {
   tarea: '#16a34a',
@@ -31,127 +34,61 @@ const COLOR_CATEGORIA = {
 
 const getColorCategoria = (tipo) => COLOR_CATEGORIA[tipo] || COLOR_CATEGORIA.evento;
 
-const toPickerDate = (dateValue, timeValue = '12:00') => {
-  if (!dateValue) return null;
-  return new Date(`${dateValue}T${timeValue}`);
-};
-
 const formatTimeRangeLabel = (start, end, label) => {
   if (!start || !end) return label;
   return `${start} - ${end}`;
 };
 
+/**
+ * Rango de horas, plegado y en linea.
+ *
+ * Antes abria una ventana a pantalla completa sobre la ventana del evento. Ya
+ * no se usan modales para elegir datos: se despliega aqui mismo, igual que el
+ * calendario.
+ */
 const TimeRangePicker = ({ start, end, onChange }) => {
   const { t } = usePreferences();
-  const [isOpen, setIsOpen] = useState(false);
+  const [abierto, setAbierto] = useState(false);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        style={{
-          width: '100%',
-          padding: '0.85rem 1rem',
-          background: 'var(--color-surface-2)',
-          border: '1px solid var(--color-border)',
-          borderRadius: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          fontSize: '0.85rem',
-          fontWeight: '700',
-          color: 'var(--color-text)',
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
-      >
-        <Clock size={18} style={{ color: 'var(--color-primary)', opacity: 0.85 }} />
-        <span style={{ flex: 1 }}>{formatTimeRangeLabel(start, end, t('eventSelectTime'))}</span>
-      </button>
-
-      {isOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1100,
-            background: 'rgba(15, 23, 42, 0.6)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
+    <Popover open={abierto} onOpenChange={setAbierto}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--color-surface-3)]"
         >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '460px',
-              background: 'var(--color-surface)',
-              borderRadius: '1.75rem',
-              border: '1px solid var(--color-border)',
-              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.45)',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ padding: '1.4rem 1.5rem', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900' }}>{t('eventSelectTime')}</h3>
-              <button type="button" onClick={() => setIsOpen(false)} aria-label={t('close')} title={t('close')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-dim)' }}>
-                <X size={22} />
-              </button>
-            </div>
+          <Clock size={16} className="shrink-0 text-[var(--color-primary)]" />
+          <span className="flex-1 truncate text-sm font-medium text-[var(--color-text)]">
+            {formatTimeRangeLabel(start, end, t('eventSelectTime'))}
+          </span>
+          <ChevronDown size={15} className={`shrink-0 text-[var(--color-text-muted)] transition-transform ${abierto ? 'rotate-180' : ''}`} />
+        </button>
+      </PopoverTrigger>
 
-            <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-dim)', letterSpacing: '0.06em' }}>{t('eventFrom').toUpperCase()}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'var(--color-surface-2)', borderRadius: '0.95rem', border: '1px solid var(--color-border)', padding: '0 0.9rem' }}>
-                  <Clock size={15} color="var(--color-primary)" />
-                  <input
-                    type="time"
-                    className="form-input"
-                    style={{ border: 'none', background: 'transparent', paddingLeft: 0 }}
-                    value={start}
-                    onChange={(e) => onChange({ start: e.target.value, end })}
-                  />
-                </div>
-              </div>
+      <PopoverContent align="start" className="z-[1500] w-auto p-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-[var(--color-text-dim)]">{t('eventFrom')}</span>
+            <input
+              type="time"
+              value={start}
+              onChange={(e) => onChange({ start: e.target.value, end })}
+              className="h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm font-normal text-[var(--color-text)] outline-none focus:border-blue-500"
+            />
+          </label>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: 'var(--color-text-dim)', letterSpacing: '0.06em' }}>{t('eventTo').toUpperCase()}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'var(--color-surface-2)', borderRadius: '0.95rem', border: '1px solid var(--color-border)', padding: '0 0.9rem' }}>
-                  <Clock size={15} color="var(--color-primary)" />
-                  <input
-                    type="time"
-                    className="form-input"
-                    style={{ border: 'none', background: 'transparent', paddingLeft: 0 }}
-                    value={end}
-                    onChange={(e) => onChange({ start, end: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ padding: '1.25rem 1.5rem 1.5rem', borderTop: '1px solid var(--color-border-light)', display: 'flex', gap: '0.75rem' }}>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                style={{ flex: 1, padding: '0.9rem', borderRadius: '1rem', border: '1px solid var(--color-border)', background: 'transparent', fontWeight: '800', cursor: 'pointer', color: 'var(--color-text-dim)' }}
-              >
-                {t('close')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                style={{ flex: 1.4, padding: '0.9rem', borderRadius: '1rem', border: 'none', background: 'var(--color-primary)', color: '#fff', fontWeight: '900', cursor: 'pointer' }}
-              >
-                {t('confirm')}
-              </button>
-            </div>
-          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-[var(--color-text-dim)]">{t('eventTo')}</span>
+            <input
+              type="time"
+              value={end}
+              onChange={(e) => onChange({ start, end: e.target.value })}
+              className="h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm font-normal text-[var(--color-text)] outline-none focus:border-blue-500"
+            />
+          </label>
         </div>
-      )}
-    </>
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -254,6 +191,16 @@ const buildInitialForm = ({ evento, prefill }) => {
   };
 };
 
+/**
+ * Pasos del alta de evento. El usuario eligio este agrupamiento: primero lo que
+ * define el evento, luego donde ocurre y al final quien participa.
+ */
+const PASOS_EVENTO = [
+  { id: 1, labelKey: 'eventStepBasics' },
+  { id: 2, labelKey: 'eventStepWhere' },
+  { id: 3, labelKey: 'eventStepWho' },
+];
+
 const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
   const { t } = usePreferences();
   const [form, setForm] = useState(() => buildInitialForm({ evento, prefill }));
@@ -263,6 +210,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
   const [usuarios, setUsuarios] = useState([]);
   const [disponibilidad, setDisponibilidad] = useState([]);
   const [archivos, setArchivos] = useState([]);
+  const [paso, setPaso] = useState(1);
 
   const esDuenio = !evento || evento.usuarioId === usuario?.id || evento.creadoPorId === usuario?.id;
   const esVirtual = form.modalidad === 'virtual';
@@ -380,6 +328,24 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
     }
   };
 
+  // Al editar no hay pasos: se ve todo de corrido, igual que en proyectos.
+  const conPasos = !evento;
+  const enPaso = (n) => !conPasos || paso === n;
+
+  const validarPaso = (n) => {
+    if (n === 1 && !form.titulo.trim()) return t('eventTitleRequired');
+    return null;
+  };
+
+  const avanzar = () => {
+    const error = validarPaso(paso);
+    if (error) { showToast?.(error, 'error'); return; }
+    setPaso((n) => Math.min(PASOS_EVENTO.length, n + 1));
+  };
+
+  // Uno mismo nunca aparece en la lista: ya esta dentro por ser el creador.
+  const miembrosElegibles = usuarios.filter((u) => u.id !== usuario?.id);
+
   const togggleInvitado = (userId) => {
     setForm((prev) => {
       const ids = [...prev.invitados_ids];
@@ -395,21 +361,52 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
       open
       onClose={onClose}
       maxWidth="760px"
+      // Alto fijo mientras se crea: cada paso tiene distinto largo y sin esto la
+      // ventana crecia y encogia al avanzar, moviendo los botones de sitio.
+      // Al consultar o editar se deja crecer con el contenido.
+      height={conPasos ? 'min(680px, 90vh)' : undefined}
       title={!evento ? t('eventNew') : esDuenio ? t('eventEdit') : t('eventDetails')}
     >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Indicador de pasos. Solo al crear: para consultar o editar es mas
+              comodo ver todo de corrido. */}
+          {conPasos && (
+            <div className="flex items-center gap-2">
+              {PASOS_EVENTO.map((item, indice) => {
+                const activo = paso === item.id;
+                const cumplido = paso > item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => cumplido && setPaso(item.id)}
+                    disabled={!cumplido}
+                    className={`flex min-w-0 flex-1 flex-col gap-1.5 text-left ${cumplido ? 'cursor-pointer' : 'cursor-default'}`}
+                  >
+                    <span className={`h-1 rounded-full transition-colors ${activo || cumplido ? 'bg-blue-600' : 'bg-[var(--color-surface-3)]'}`} />
+                    <span className={`truncate text-xs ${activo ? 'font-medium text-[var(--color-text)]' : 'font-normal text-[var(--color-text-muted)]'}`}>
+                      {indice + 1}. {t(item.labelKey)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Paso 1: lo basico ───────────────────────────────────────── */}
+          {enPaso(1) && (<>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventTitleLabel').toUpperCase()}</label>
+              <label className="form-label" style={{ }}>{t('eventTitleLabel')}</label>
               {esDuenio ? (
-                <input className="form-input" style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }} value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required placeholder={t('eventTitlePlaceholder')} />
+                <input className="form-input" value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required placeholder={t('eventTitlePlaceholder')} />
               ) : (
-                <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--color-text)', padding: '0.5rem 0' }}>{form.titulo}</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 500, color: 'var(--color-text)', padding: '0.5rem 0' }}>{form.titulo}</div>
               )}
             </div>
             {esDuenio && (
               <div className="form-group">
-                <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventCategory').toUpperCase()}</label>
+                <label className="form-label" style={{ }}>{t('eventCategory')}</label>
                 <select
                   className="form-input form-select"
                   style={{ fontSize: '1rem', padding: '0.85rem 1.25rem' }}
@@ -424,11 +421,11 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
           </div>
 
           <div className="form-group">
-            <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('taskDescription').toUpperCase()}</label>
+            <label className="form-label" style={{ }}>{t('taskDescription')}</label>
             {esDuenio ? (
               <textarea
                 className="form-input"
-                style={{ minHeight: '96px', resize: 'vertical', padding: '1rem 1.25rem' }}
+                style={{ minHeight: '84px', resize: 'vertical' }}
                 value={form.descripcion}
                 onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
                 placeholder={t('eventDescriptionPlaceholder')}
@@ -440,22 +437,23 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventDuration').toUpperCase()}</label>
+              <label className="form-label" style={{ }}>{t('eventDuration')}</label>
               {esDuenio ? (
-                <RangeDatePicker
-                  from={toPickerDate(form.fecha_inicio, form.hora_inicio || '12:00')}
-                  to={toPickerDate(form.fecha_fin, form.hora_fin || form.hora_inicio || '12:00')}
-                  placeholder={t('eventDatePlaceholder')}
-                  title={t('eventDatePlaceholder')}
-                  onChange={(range) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      fecha_inicio: range?.from ? range.from.toISOString().slice(0, 10) : '',
-                      fecha_fin: range?.to ? range.to.toISOString().slice(0, 10) : (range?.from ? range.from.toISOString().slice(0, 10) : ''),
-                    }));
-                  }}
+                // Calendario plegado en linea. Antes abria una ventana sobre la
+                // ventana del evento; ya no se usan modales para esto.
+                <SelectorRangoFechas
+                  plegable
+                  conLeyenda={false}
+                  desde={form.fecha_inicio}
+                  hasta={form.fecha_fin && form.fecha_fin !== form.fecha_inicio ? form.fecha_fin : ''}
+                  onChange={({ desde, hasta }) => setForm((prev) => ({
+                    ...prev,
+                    fecha_inicio: desde,
+                    // Un evento de un solo dia comparte inicio y fin
+                    fecha_fin: hasta || desde,
+                  }))}
                 />
               ) : (
                 <div style={{
@@ -463,7 +461,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                   borderRadius: '1rem',
                   border: '1px solid var(--color-border)',
                   background: 'var(--color-surface-2)',
-                  fontWeight: '800',
+                  fontWeight: 500,
                   color: 'var(--color-text)'
                 }}>
                   {new Date(form.fecha_inicio).toLocaleDateString()} - {new Date(form.fecha_fin || form.fecha_inicio).toLocaleDateString()}
@@ -473,7 +471,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
 
             {form.tipo !== 'dia_completo' && (
               <div className="form-group">
-                <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventSelectTime').toUpperCase()}</label>
+                <label className="form-label" style={{ }}>{t('eventSelectTime')}</label>
                 {esDuenio ? (
                   <TimeRangePicker
                     start={form.hora_inicio}
@@ -486,7 +484,7 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     borderRadius: '1rem',
                     border: '1px solid var(--color-border)',
                     background: 'var(--color-surface-2)',
-                    fontWeight: '800',
+                    fontWeight: 500,
                     color: 'var(--color-text)'
                   }}>
                     {form.hora_inicio} - {form.hora_fin}
@@ -496,60 +494,67 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
             )}
           </div>
 
+          </>)}
+
+          {/* ── Paso 2: donde ocurre ────────────────────────────────────── */}
+          {enPaso(2) && (<>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>{t('eventModality').toUpperCase()}</label>
+              <label className="form-label" style={{ }}>{t('eventModality')}</label>
               {esDuenio ? (
-                <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--color-bg-base)', padding: '0.4rem', borderRadius: '14px', border: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', gap: '0.35rem', height: '48px', background: 'var(--color-bg-base)', padding: '0.25rem', borderRadius: '0.85rem', border: '1px solid var(--color-border)' }}>
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, modalidad: 'presencial' })}
                     style={{
                       flex: 1,
-                      padding: '0.85rem',
-                      borderRadius: '10px',
+                      height: '100%',
+                      padding: '0 0.75rem',
+                      borderRadius: '0.6rem',
                       border: 'none',
                       fontSize: '0.85rem',
-                      fontWeight: '900',
+                      fontWeight: 500,
                       cursor: 'pointer',
                       background: !esVirtual ? 'var(--color-primary)' : 'transparent',
                       color: !esVirtual ? '#fff' : 'var(--color-text-dim)',
                     }}
                   >
-                    {t('eventInPerson').toUpperCase()}
+                    {t('eventInPerson')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, modalidad: 'virtual' })}
                     style={{
                       flex: 1,
-                      padding: '0.85rem',
-                      borderRadius: '10px',
+                      height: '100%',
+                      padding: '0 0.75rem',
+                      borderRadius: '0.6rem',
                       border: 'none',
                       fontSize: '0.85rem',
-                      fontWeight: '900',
+                      fontWeight: 500,
                       cursor: 'pointer',
                       background: esVirtual ? 'var(--color-primary)' : 'transparent',
                       color: esVirtual ? '#fff' : 'var(--color-text-dim)',
                     }}
                   >
-                    {t('eventRemote').toUpperCase()}
+                    {t('eventRemote')}
                   </button>
                 </div>
               ) : (
-                <div style={{ fontWeight: '700' }}>{esVirtual ? t('eventRemote') : t('eventInPerson')}</div>
+                <div style={{ fontWeight: 500 }}>{esVirtual ? t('eventRemote') : t('eventInPerson')}</div>
               )}
             </div>
 
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 {esVirtual ? <Link2 size={14} /> : <MapPin size={14} />}
-                {esVirtual ? t('eventLinkLabel').toUpperCase() : t('eventLocation').toUpperCase()}
+                {esVirtual ? t('eventLinkLabel') : t('eventLocation')}
               </label>
               {esDuenio ? (
                 esVirtual ? (
                   <input
                     className="form-input"
+                    style={{ height: '48px' }}
                     value={form.url_reunion}
                     onChange={(e) => setForm({ ...form, url_reunion: e.target.value })}
                     placeholder={t('eventLinkPlaceholder')}
@@ -557,28 +562,46 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                 ) : (
                   <input
                     className="form-input"
+                    style={{ height: '48px' }}
                     value={form.ubicacion}
                     onChange={(e) => setForm({ ...form, ubicacion: e.target.value })}
                     placeholder={t('eventLocationPlaceholder')}
                   />
                 )
               ) : (
-                <div style={{ fontWeight: '700', wordBreak: 'break-word' }}>
+                <div style={{ fontWeight: 500, wordBreak: 'break-word' }}>
                   {esVirtual ? (form.url_reunion || t('taskNoDescription')) : (form.ubicacion || t('taskNoDescription'))}
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
+          {esDuenio && !esVirtual && (
             <div className="form-group">
-              <label className="form-label" style={{ letterSpacing: '0.05em' }}>
-                {esVirtual ? t('eventInstructions').toUpperCase() : t('eventLogistics').toUpperCase()}
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Video size={14} />
+                {t('eventOptionalLink')}
+              </label>
+              <input
+                className="form-input"
+                value={form.url_reunion}
+                onChange={(e) => setForm({ ...form, url_reunion: e.target.value })}
+                placeholder={t('eventOptionalRemotePlaceholder')}
+              />
+            </div>
+          )}
+
+          {/* La nota va sola a lo ancho: es el unico campo de varias lineas del
+              paso y emparejarlo con uno de una dejaba medio hueco vacio. */}
+          <div>
+            <div className="form-group">
+              <label className="form-label" style={{ }}>
+                {esVirtual ? t('eventInstructions') : t('eventLogistics')}
               </label>
               {esDuenio ? (
                 <textarea
                   className="form-input"
-                  style={{ minHeight: '90px', resize: 'vertical', padding: '1rem 1.25rem' }}
+                  style={{ minHeight: '84px', resize: 'vertical' }}
                   value={form.instrucciones_acceso}
                   onChange={(e) => setForm({ ...form, instrucciones_acceso: e.target.value })}
                   placeholder={esVirtual ? t('eventVirtualAccessPlaceholder') : t('eventInPersonAccessPlaceholder')}
@@ -590,44 +613,18 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
               )}
             </div>
 
-            {esDuenio && !esVirtual && (
-              <div className="form-group">
-                <label className="form-label" style={{ letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Video size={14} />
-                  {t('eventOptionalLink').toUpperCase()}
-                </label>
-                <input
-                  className="form-input"
-                  value={form.url_reunion}
-                  onChange={(e) => setForm({ ...form, url_reunion: e.target.value })}
-                  placeholder={t('eventOptionalRemotePlaceholder')}
-                />
-              </div>
-            )}
           </div>
 
-          <TaskAttachments
-            tareaId={evento?.id}
-            type="agenda"
-            title="Documentos del evento"
-            pendingFiles={archivos}
-            onPendingFilesChange={setArchivos}
-            showUploader={esDuenio}
-            showExisting={Boolean(evento?.id)}
-            uploadLabel={evento ? 'Agregar archivos' : 'Seleccionar archivos'}
-          />
+          </>)}
 
-          <hr style={{ border: 'none', borderTop: '1px solid var(--color-border-light)', margin: '0.5rem 0' }} />
-
-          {esDuenio && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px solid var(--color-border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.1)', borderRadius: '12px' }}>
-                  <Users size={22} color="var(--color-primary)" />
-                </div>
-                <div>
-                  <div style={{ fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.01em' }}>{t('eventCollaboration')}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>{t('eventCollaborationDesc')}</div>
+          {/* ── Paso 3: quien participa ─────────────────────────────────── */}
+          {enPaso(3) && esDuenio && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.9rem 1rem', background: 'var(--color-surface-2)', borderRadius: '1rem', border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                <Users size={18} color="var(--color-primary)" style={{ flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{t('eventCollaboration')}</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-dim)', fontWeight: 400 }}>{t('eventCollaborationDesc')}</div>
                 </div>
               </div>
               <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px' }}>
@@ -640,120 +637,96 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
           )}
 
           {esDuenio && form.es_compartido && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem', border: '1px solid var(--color-border)', borderRadius: '1.5rem', background: 'var(--color-surface)' }}>
-              <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--color-bg-base)', padding: '0.5rem', borderRadius: '14px', border: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', border: '1px solid var(--color-border)', borderRadius: '1rem', background: 'var(--color-surface)' }}>
+              <div style={{ display: 'flex', gap: '0.35rem', height: '44px', background: 'var(--color-bg-base)', padding: '0.25rem', borderRadius: '0.8rem', border: '1px solid var(--color-border)' }}>
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, es_global: true, invitados_ids: [] })}
                   style={{
                     flex: 1,
-                    padding: '0.85rem',
-                    borderRadius: '10px',
+                    height: '100%',
+                    padding: '0 0.75rem',
+                    borderRadius: '0.55rem',
                     border: 'none',
-                    fontSize: '0.85rem',
-                    fontWeight: '900',
+                    fontSize: '0.82rem',
+                    fontWeight: 500,
                     cursor: 'pointer',
                     background: form.es_global ? 'var(--color-primary)' : 'transparent',
                     color: form.es_global ? '#fff' : 'var(--color-text-dim)',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: form.es_global ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
+                    transition: 'all 0.2s ease',
                   }}
                 >
-                  {t('eventAllTeam').toUpperCase()}
+                  {t('eventAllTeam')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, es_global: false })}
                   style={{
                     flex: 1,
-                    padding: '0.85rem',
-                    borderRadius: '10px',
+                    height: '100%',
+                    padding: '0 0.75rem',
+                    borderRadius: '0.55rem',
                     border: 'none',
-                    fontSize: '0.85rem',
-                    fontWeight: '900',
+                    fontSize: '0.82rem',
+                    fontWeight: 500,
                     cursor: 'pointer',
                     background: !form.es_global ? 'var(--color-primary)' : 'transparent',
                     color: !form.es_global ? '#fff' : 'var(--color-text-dim)',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: !form.es_global ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
+                    transition: 'all 0.2s ease',
                   }}
                 >
-                  {t('eventSpecificMembers').toUpperCase()}
+                  {t('eventSpecificMembers')}
                 </button>
               </div>
 
               {!form.es_global ? (
                 <>
+                  {/* Antes era la lista completa del equipo dentro de la
+                      ventana, una fila con foto y correo por persona. Con diez
+                      o mas ocupaba toda la pantalla. Ahora es un campo que se
+                      despliega, con buscador, y los elegidos salen como fichas
+                      debajo. */}
                   <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--color-primary)', letterSpacing: '0.05em' }}>{t('eventSelectMembers').toUpperCase()}</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', padding: '0.75rem', background: 'var(--color-bg-base)', borderRadius: '1.25rem', border: '1px solid var(--color-border)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
-                      {usuarios.length === 0 ? (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dim)', textAlign: 'center', padding: '2rem' }}>{t('eventNoMembers')}</div>
-                      ) : (
-                        usuarios
-                          .filter((u) => u.id !== usuario?.id)
-                          .map((u) => (
-                            <div
-                              key={u.id}
-                              onClick={() => togggleInvitado(u.id)}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '1rem',
-                                padding: '0.75rem 1rem',
-                                borderRadius: '12px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                background: form.invitados_ids.includes(u.id) ? 'var(--color-surface)' : 'transparent',
-                                border: '1px solid',
-                                borderColor: form.invitados_ids.includes(u.id) ? 'var(--color-primary)' : 'transparent',
-                                boxShadow: form.invitados_ids.includes(u.id) ? 'var(--shadow-sm)' : 'none',
-                              }}
-                            >
-                              <UserAvatar
-                                usuario={u}
-                                size={36}
-                                radius={999}
-                                fontSize="0.8rem"
-                                color="#fff"
-                                background="linear-gradient(135deg, var(--color-primary) 0%, #4338ca 100%)"
-                                borderColor="transparent"
-                                shadow="0 4px 6px -1px rgba(99,102,241,0.2)"
-                              />
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: form.invitados_ids.includes(u.id) ? 'var(--color-primary)' : 'var(--color-text)' }}>{u.nombre}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', fontWeight: '500' }}>{u.email}</div>
-                              </div>
-                              <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid', borderColor: form.invitados_ids.includes(u.id) ? 'var(--color-success)' : 'var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: form.invitados_ids.includes(u.id) ? 'var(--color-success)' : 'transparent', transition: 'all 0.2s' }}>
-                                {form.invitados_ids.includes(u.id) && <Check size={14} color="#fff" strokeWidth={3} />}
-                              </div>
-                            </div>
-                          ))
-                      )}
-                    </div>
+                    <label className="form-label">{t('eventSelectMembers')}</label>
+                    <SelectorMultiple
+                      conBuscador
+                      placeholder={t('eventPickMembers')}
+                      vacioTexto={t('eventNoMembers')}
+                      seleccionados={form.invitados_ids}
+                      onToggle={togggleInvitado}
+                      opciones={miembrosElegibles.map((u) => ({ valor: u.id, etiqueta: u.nombre }))}
+                    />
                   </div>
 
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                    {form.invitados_ids.map((id) => {
-                      const u = usuarios.find((x) => x.id === id);
-                      if (!u) return null;
-                      return (
-                        <div key={`chip-${id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.9rem', background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid rgba(99,102,241,0.2)' }}>
-                          {u.nombre}
-                          <X size={14} style={{ cursor: 'pointer', opacity: 0.7 }} onClick={() => togggleInvitado(id)} />
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {/* Las fichas van en una sola fila que desplaza en horizontal.
+                      Envolviendo, cada cinco invitados se anadia un renglon y el
+                      paso crecia hacia abajo sin control. */}
+                  {form.invitados_ids.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.35rem' }}>
+                      {form.invitados_ids.map((id) => {
+                        const u = usuarios.find((x) => x.id === id);
+                        if (!u) return null;
+                        return (
+                          <div
+                            key={`chip-${id}`}
+                            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.4rem 0.7rem', background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 500, border: '1px solid rgba(99,102,241,0.2)', whiteSpace: 'nowrap' }}
+                          >
+                            {u.nombre}
+                            <X size={13} style={{ cursor: 'pointer', opacity: 0.7 }} onClick={() => togggleInvitado(id)} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {form.invitados_ids.length > 0 && disponibilidad.length > 0 && (
                     <div style={{ padding: '1rem', background: 'rgba(245, 158, 11, 0.05)', borderRadius: '1rem', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 500, color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                         <AlertTriangle size={16} /> {t('eventConflicts')} ({disponibilidad.length})
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                         {disponibilidad.slice(0, 3).map((d, idx) => (
-                          <div key={`disp-${d.id || idx}`} style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: '600', paddingLeft: '0.5rem', borderLeft: '2px solid #b45309' }}>
+                          <div key={`disp-${d.id || idx}`} style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: 600, paddingLeft: '0.5rem', borderLeft: '2px solid #b45309' }}>
                             {t('eventBusyFrom')} {new Date(d.fechaInicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {new Date(d.fechaFin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         ))}
@@ -767,8 +740,8 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
                     <Globe size={18} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: '900', marginBottom: '0.2rem' }}>{t('eventPublicLabel')}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', opacity: 0.8, fontWeight: '500', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: 500, marginBottom: '0.2rem' }}>{t('eventPublicLabel')}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', opacity: 0.8, fontWeight: 500, lineHeight: 1.4 }}>
                       {t('eventPublicDesc')}
                     </div>
                   </div>
@@ -777,33 +750,53 @@ const ModalEvento = ({ evento, prefill, onClose, onSave, onDelete }) => {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', paddingBottom: '1rem' }}>
+          {/* Los documentos cierran el paso 3: son lo mas opcional de todo */}
+          {enPaso(3) && (
+            <TaskAttachments
+              tareaId={evento?.id}
+              type="agenda"
+              title={`${t('eventDocuments')} · ${t('fieldOptional')}`}
+              pendingFiles={archivos}
+              onPendingFilesChange={setArchivos}
+              showUploader={esDuenio}
+              showExisting={Boolean(evento?.id)}
+              uploadLabel={evento ? t('projectAddFiles') : t('projectSelectFiles')}
+            />
+          )}
+
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1rem', paddingBottom: '0.5rem' }}>
             {evento && esDuenio && (
               <Tooltip label={t('delete')}>
                 <button
                   type="button"
                   onClick={() => onDelete(evento.id)}
-                  style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#f87171', width: '56px', height: '56px', borderRadius: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                  style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#f87171', width: '40px', height: '40px', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', flexShrink: 0 }}
                   onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'; }}
                   onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
                 >
-                  <Trash2 size={24} />
+                  <Trash2 size={18} />
                 </button>
               </Tooltip>
             )}
-            <button
+            <Button
               type="button"
-              onClick={onClose}
-              style={{ flex: 1, padding: '1rem', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '1.25rem', fontWeight: '800', fontSize: '0.9rem', color: 'var(--color-text-dim)', cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseOver={(e) => { e.currentTarget.style.background = 'var(--color-surface-3)'; e.currentTarget.style.color = 'var(--color-text)'; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-dim)'; }}
+              variant="outline"
+              size="lg"
+              className="flex-1"
+              onClick={() => (conPasos && paso > 1 ? setPaso(paso - 1) : onClose())}
             >
-              {esDuenio ? t('cancel').toUpperCase() : t('close').toUpperCase()}
-            </button>
-            {esDuenio && (
-              <button type="submit" disabled={cargando} className="btn-primary" style={{ flex: 2, padding: '1rem', fontSize: '0.95rem', letterSpacing: '0.02em' }}>
-                <Save size={20} /> {cargando ? t('saving').toUpperCase() : evento ? t('eventUpdateButton').toUpperCase() : t('eventCreateButton').toUpperCase()}
-              </button>
+              {conPasos && paso > 1 ? t('back') : esDuenio ? t('cancel') : t('close')}
+            </Button>
+
+            {/* Siguiente mientras queden pasos; en el ultimo, guardar */}
+            {esDuenio && conPasos && paso < PASOS_EVENTO.length ? (
+              <Button type="button" size="lg" className="flex-[2]" onClick={avanzar}>
+                {t('next')} <ChevronRight size={16} />
+              </Button>
+            ) : esDuenio && (
+              <Button type="submit" size="lg" className="flex-[2]" disabled={cargando}>
+                <Save size={16} /> {cargando ? t('saving') : evento ? t('eventUpdateButton') : t('eventCreateButton')}
+              </Button>
             )}
           </div>
         </form>
