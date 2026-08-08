@@ -2,6 +2,7 @@ const prisma = require('../lib/prisma');
 const { sortTareas } = require('../utils/sort.utils');
 const { buildScopeProyectoParaAdmin, esAdminDeArea } = require('../utils/permissions.utils');
 const { ESTADOS_PROYECTO_OCULTOS } = require('../utils/estados.utils');
+const { rangoDiaMexico, claveDiaMexico } = require('../utils/fechas.utils');
 
 const finDelDia = (fecha) => {
   const d = new Date(fecha);
@@ -151,12 +152,22 @@ const getTopUsuariosProductividad = async (usuario) => {
     .slice(0, 5);
 };
 
-const getActividadMiembros = async (usuario) => {
-  const ahora = new Date();
-  const hoyFin = finDelDia(ahora);
-  const hoyInicio = new Date(ahora);
-  hoyInicio.setHours(0, 0, 0, 0);
-  const semanaFin = finDeSemana(ahora);
+/**
+ * Actividad por miembro para un dia concreto.
+ *
+ * `fecha` ('YYYY-MM-DD') permite mirar dias pasados; sin ella se usa hoy.
+ * Los limites del dia salen de `rangoDiaMexico`: antes se usaba
+ * `setHours(0,0,0,0)`, que en el servidor (UTC) cortaba el dia a las 18:00 hora
+ * de Mexico y mandaba al dia siguiente todo lo cerrado por la tarde-noche.
+ */
+const getActividadMiembros = async (usuario, fecha = null) => {
+  const { inicio: hoyInicio, fin: hoyFin } = rangoDiaMexico(fecha);
+  // El dia siguiente al consultado, para la vista de "mañana"
+  const { inicio: mananaInicio, fin: mananaFin } = rangoDiaMexico(
+    claveDiaMexico(new Date(hoyFin.getTime() + 1)),
+  );
+  const ahora = hoyFin;
+  const semanaFin = finDeSemana(hoyFin);
   const calendarioInicio = new Date(ahora);
   calendarioInicio.setMonth(calendarioInicio.getMonth() - 6);
   calendarioInicio.setHours(0, 0, 0, 0);
@@ -288,9 +299,19 @@ const getActividadMiembros = async (usuario) => {
   return miembros.map((miembro) => {
     const tareasDelMiembro = tareasPorMiembro.get(miembro.id) || [];
     const hechas = tareasDelMiembro.filter((tarea) => tarea.estado === 'HECHO');
-    const hechasHoy = hechas.filter((tarea) => tarea.completadoEn && tarea.completadoEn >= hoyInicio);
+    // Cerradas dentro del dia consultado (no "de hoy en adelante")
+    const hechasHoy = hechas.filter((tarea) => (
+      tarea.completadoEn && tarea.completadoEn >= hoyInicio && tarea.completadoEn <= hoyFin
+    ));
     const enProgreso = tareasDelMiembro.filter((tarea) => tarea.estado === 'EN_PROGRESO');
     const faltanHoy = tareasDelMiembro.filter((tarea) => tarea.estado === 'PENDIENTE');
+    // Vencen dentro del dia siguiente al consultado
+    const faltanManana = tareasDelMiembro.filter((tarea) =>
+      tarea.estado !== 'HECHO'
+      && tarea.venceEn
+      && tarea.venceEn >= mananaInicio
+      && tarea.venceEn <= mananaFin
+    );
     const faltanSemana = tareasDelMiembro.filter((tarea) =>
       tarea.estado !== 'HECHO'
       && tarea.venceEn
@@ -313,6 +334,7 @@ const getActividadMiembros = async (usuario) => {
       hechasHoy: sortTareas(hechasHoy).map(resumenTarea),
       enProgreso: sortTareas(enProgreso).map(resumenTarea),
       faltanHoy: sortTareas(faltanHoy).map(resumenTarea),
+      faltanManana: sortTareas(faltanManana).map(resumenTarea),
       faltanSemana: sortTareas(faltanSemana).map(resumenTarea),
       todasConFecha: tareasDelMiembro.map(resumenTarea),
       ocupacionCalendario,
@@ -321,6 +343,7 @@ const getActividadMiembros = async (usuario) => {
         hechasHoy: hechasHoy.length,
         enProgreso: enProgreso.length,
         faltanHoy: faltanHoy.length,
+        faltanManana: faltanManana.length,
         faltanSemana: faltanSemana.length,
         totalHechas: hechas.length,
         pendientes: tareasDelMiembro.filter((tarea) => tarea.estado === 'PENDIENTE').length,
@@ -414,6 +437,44 @@ const getMemberStats = async (req, res) => {
   }
 };
 
+/**
+ * Cuenta las tareas terminadas agrupadas por mes de cierre.
+ *
+ * Se agrupa en la base (no trayendo las ~1150 filas) y se resta el offset de
+ * Mexico antes de truncar: la columna es `timestamp without time zone` en UTC,
+ * asi que una tarea cerrada a las 8 pm del ultimo dia del mes caeria en el mes
+ * siguiente si se truncara en UTC.
+ *
+ * Las tareas HECHO sin `completadoEn` no se pueden ubicar en ningun mes; se
+ * devuelven aparte en vez de repartirlas o inventarles fecha.
+ */
+const getActividadPorMes = async (scopeProyecto) => {
+  const proyectos = await prisma.proyecto.findMany({
+    where: scopeProyecto || undefined,
+    select: { id: true },
+  });
+  const ids = proyectos.map((p) => p.id);
+  if (ids.length === 0) return { meses: [], sinFecha: 0 };
+
+  const [filas, sinFecha] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT to_char(date_trunc('month', "completadoEn" - interval '6 hours'), 'YYYY-MM') AS mes,
+             COUNT(*)::int AS total
+        FROM tareas
+       WHERE estado = 'HECHO'
+         AND "completadoEn" IS NOT NULL
+         AND "proyectoId" = ANY(${ids})
+       GROUP BY 1
+       ORDER BY 1
+    `,
+    prisma.tarea.count({
+      where: { estado: 'HECHO', completadoEn: null, proyectoId: { in: ids } },
+    }),
+  ]);
+
+  return { meses: filas.map((f) => ({ mes: f.mes, total: Number(f.total) })), sinFecha };
+};
+
 const getAdminStats = async (req, res) => {
   try {
     const scopeProyecto = buildScopeProyectoParaAdmin(req.usuario);
@@ -437,6 +498,9 @@ const getAdminStats = async (req, res) => {
     // 3. Top Usuarios (Productividad)
     // Usuarios con más tareas completadas
     const topUsuarios = await getTopUsuariosProductividad(req.usuario);
+
+    // 3-bis. Actividades completadas por mes (para la vista mensual del inicio)
+    const actividadPorMes = await getActividadPorMes(scopeProyecto);
 
     // 4. Actividad Reciente
     const actividadReciente = await prisma.logActividad.findMany({
@@ -476,6 +540,10 @@ const getAdminStats = async (req, res) => {
         pendientes,
         enProgreso,
         miembros: p.miembros.length,
+        // La tabla del inicio muestra estas fechas; antes no se enviaban y la
+        // columna salia vacia para todos los proyectos.
+        fechaInicio: p.fechaInicio,
+        fechaFin: p.fechaFin,
         porcentaje: total > 0 ? Math.round((completas / total) * 100) : 0
       };
     }).sort((a, b) =>
@@ -498,7 +566,8 @@ const getAdminStats = async (req, res) => {
       topUsuarios,
       actividadReciente,
       proyectosProgreso,
-      actividadMiembros
+      actividadMiembros,
+      actividadPorMes
     });
 
   } catch (error) {
@@ -507,4 +576,23 @@ const getAdminStats = async (req, res) => {
   }
 };
 
-module.exports = { getAdminStats, getMemberStats };
+// €€ GET /api/stats/actividad-equipo?fecha=YYYY-MM-DD €€€€€€€€€€€€€€€€€€€€€€€€
+// Endpoint aparte para que cambiar de dia no obligue a recalcular todo el
+// tablero (que hace bastantes consultas mas).
+const getActividadEquipoPorDia = async (req, res) => {
+  try {
+    const fecha = req.query.fecha || null;
+
+    if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return res.status(400).json({ error: 'Formato de fecha inválido. Se espera YYYY-MM-DD' });
+    }
+
+    const miembros = await getActividadMiembros(req.usuario, fecha);
+    return res.json({ fecha: fecha || claveDiaMexico(), miembros });
+  } catch (error) {
+    console.error('[stats.getActividadEquipoPorDia]', error);
+    return res.status(500).json({ error: 'Error al obtener la actividad del equipo' });
+  }
+};
+
+module.exports = { getAdminStats, getMemberStats, getActividadEquipoPorDia };

@@ -6,6 +6,7 @@
 // PATCH  /api/tareas/:id/estado     → actualizar solo el estado
 
 const prisma = require('../lib/prisma');
+const { parsearPaginacion, paginar, construirBusqueda, combinarWhere } = require('../utils/paginacion.utils');
 const { registrarActividad } = require('../utils/logger');
 const { sortTareas } = require('../utils/sort.utils');
 const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
@@ -227,11 +228,24 @@ const listar = async (req, res) => {
       }
     }
 
+    // Filtros opcionales (?q= &estado= &prioridad=). Sin ellos se comporta como antes.
+    // Ojo: solo recortan la lista `tareas`; los contadores de `progreso` se
+    // calculan mas abajo sobre otra consulta sin filtrar, y deben seguir asi.
+    const busqueda = construirBusqueda(req.query.q, ['titulo', 'descripcion']);
+    const filtroEstado = req.query.estado ? { estado: String(req.query.estado).toUpperCase() } : null;
+    const filtroPrioridad = req.query.prioridad ? { prioridad: String(req.query.prioridad).toUpperCase() } : null;
+    const paginacion = parsearPaginacion(req.query, { limitePorDefecto: 25 });
+
     const tareas = await prisma.tarea.findMany({
-      where: {
-        proyectoId,
-        ...(usuarioEsAdmin ? {} : visibilidadTareasPara(req.usuario.id)),
-      },
+      where: combinarWhere(
+        {
+          proyectoId,
+          ...(usuarioEsAdmin ? {} : visibilidadTareasPara(req.usuario.id)),
+        },
+        busqueda,
+        filtroEstado,
+        filtroPrioridad,
+      ),
       orderBy: { creadoEn: 'asc' },
       include: INCLUDE_ASIGNADO,
     });
@@ -277,9 +291,12 @@ const listar = async (req, res) => {
     const pendientesMiembro = tareasMiembro.filter(t => t.estado === 'PENDIENTE').length;
     const enProgresoMiembro = tareasMiembro.filter(t => t.estado === 'EN_PROGRESO').length;
 
+    const paginaTareas = paginar(sortTareas(tareasAjustadas), paginacion);
+
     return res.json({
       proyecto,
-      tareas: sortTareas(tareasAjustadas),
+      tareas: paginaTareas.items,
+      ...(paginaTareas.meta && { meta: paginaTareas.meta }),
       progreso: {
         general: {
           total: totalGeneral,

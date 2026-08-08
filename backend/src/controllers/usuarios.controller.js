@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { parsearPaginacion, paginar, construirBusqueda, combinarWhere } = require('../utils/paginacion.utils');
 const bcrypt = require('bcryptjs');
 const { sortTareas } = require('../utils/sort.utils');
 const { esAdmin, esAdminDeArea, puedeGestionarArea } = require('../utils/permissions.utils');
@@ -285,19 +286,38 @@ const listar = async (req, res) => {
   try {
     const ahoraMs = Date.now();
     const filtroGestion = obtenerFiltroUsuariosGestion(req.usuario);
+
+    // Filtros opcionales (?q= &area= &rol= &estado=) y paginacion.
+    // Sin parametros la respuesta sale completa, como antes.
+    const paginacion = parsearPaginacion(req.query, { limitePorDefecto: 10 });
+    const busqueda = construirBusqueda(req.query.q, ['nombre', 'email']);
+    const filtrosExtra = combinarWhere(
+      busqueda,
+      req.query.area ? { area: String(req.query.area).toUpperCase() } : null,
+      req.query.rol ? { rol: String(req.query.rol).toUpperCase() } : null,
+      req.query.estado ? { estado: String(req.query.estado).toLowerCase() } : null,
+    );
+    const hayFiltros = Boolean(filtrosExtra);
+    const responder = (lista, extra = {}) => {
+      const { items, meta } = paginar(lista, paginacion);
+      return res.json({ usuarios: items, ...extra, ...(meta && { meta }) });
+    };
     
     // Si hay datos en caché y no han expirado, devolverlos de inmediato
+    // La cache guarda la lista completa, asi que solo sirve cuando no hay
+    // filtros; paginar sobre ella si es correcto porque es el mismo conjunto.
     if (
       cacheUsuarios
+      && !hayFiltros
       && (ahoraMs - ultimaActualizacion < CACHE_TTL)
       && req.usuario?.rol === 'ADMIN'
       && !esAdminDeArea(req.usuario)
     ) {
-      return res.json({ usuarios: cacheUsuarios, cached: true });
+      return responder(cacheUsuarios, { cached: true });
     }
 
     const usuarios = await prisma.usuario.findMany({
-      where: req.usuario?.rol === 'ADMIN' ? filtroGestion : undefined,
+      where: combinarWhere(req.usuario?.rol === 'ADMIN' ? filtroGestion : undefined, filtrosExtra),
       orderBy: { nombre: 'asc' },
       select: {
         id:     true,
@@ -312,7 +332,7 @@ const listar = async (req, res) => {
     });
 
     if (req.usuario?.rol !== 'ADMIN') {
-      return res.json({ usuarios });
+      return responder(usuarios);
     }
 
     // OPTIMIZACIÓN: Obtener solo tareas relevantes (activas o terminadas hoy) en una sola consulta
@@ -378,11 +398,14 @@ const listar = async (req, res) => {
       };
     });
 
-    // Guardar en caché antes de responder
-    cacheUsuarios = usuariosConActividad;
-    ultimaActualizacion = Date.now();
+    // Solo se cachea la lista completa: guardar un resultado filtrado haria que
+    // la siguiente peticion sin filtros recibiera datos incompletos.
+    if (!hayFiltros) {
+      cacheUsuarios = usuariosConActividad;
+      ultimaActualizacion = Date.now();
+    }
 
-    return res.json({ usuarios: usuariosConActividad });
+    return responder(usuariosConActividad);
   } catch (error) {
     console.error('[usuarios.listar]', error);
     return res.status(500).json({ error: 'Error interno del servidor' });

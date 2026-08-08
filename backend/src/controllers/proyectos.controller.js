@@ -8,6 +8,7 @@ const { sortProyectos } = require('../utils/sort.utils');
 const { addDays, buildTemplateTasksFromProject } = require('../utils/plantillas.utils');
 const { esAdmin, buildScopeProyectoParaAdmin, puedeAdministrarProyecto, puedeGestionarArea } = require('../utils/permissions.utils');
 const { ESTADOS_PROYECTO, ESTADO_PROYECTO_DEFAULT, normalizarEstadoProyecto, esEstadoProyectoValido } = require('../utils/estados.utils');
+const { parsearPaginacion, paginar, construirBusqueda, combinarWhere } = require('../utils/paginacion.utils');
 
 // Campos comunes del include
 const INCLUDE_PROYECTO = {
@@ -180,7 +181,7 @@ const listar = async (req, res) => {
     const usuarioEsAdmin = esAdmin(req.usuario);
     const scopeAdmin = buildScopeProyectoParaAdmin(req.usuario);
 
-    const where = usuarioEsAdmin
+    const alcance = usuarioEsAdmin
       ? scopeAdmin
       : {
           OR: [
@@ -191,13 +192,38 @@ const listar = async (req, res) => {
           ],
         };
 
+    // Filtros opcionales (?q= &estado= &area= &excluirEstado=). Sin ellos, se
+    // comporta exactamente como antes.
+    const busqueda = construirBusqueda(req.query.q, ['nombre', 'descripcion']);
+    const filtroEstado = req.query.estado
+      ? { estado: normalizarEstadoProyecto(req.query.estado) }
+      : null;
+
+    // `area` guarda varias areas separadas por coma ("DESARROLLO,MARKETING"),
+    // por eso se busca por contenido y no por igualdad. Los cuatro codigos son
+    // distintos entre si, ninguno es prefijo de otro, asi que no hay falsos.
+    const filtroArea = req.query.area
+      ? { area: { contains: String(req.query.area).trim().toUpperCase() } }
+      : null;
+
+    // "Todos" en la pantalla de Proyectos significa "todo menos archivados":
+    // archivar sirve justamente para sacarlos de la vista diaria. Va como
+    // parametro explicito para no cambiar lo que recibe quien llama sin filtros
+    // (por ejemplo el gantt del Inicio).
+    const filtroExcluir = req.query.excluirEstado
+      ? { NOT: { estado: normalizarEstadoProyecto(req.query.excluirEstado) } }
+      : null;
+
+    const where = combinarWhere(alcance, busqueda, filtroEstado, filtroArea, filtroExcluir);
+    const paginacion = parsearPaginacion(req.query);
+
     const proyectos = await prisma.proyecto.findMany({
       where,
       orderBy: { creadoEn: 'desc' },
       include: {
         ...INCLUDE_PROYECTO,
         tareas: {
-          select: { estado: true, asignadoId: true }
+          select: { estado: true, asignadoId: true, completadoEn: true }
         }
       },
     });
@@ -211,7 +237,15 @@ const listar = async (req, res) => {
       const progresoMiembro = tareasMiembro.length > 0
         ? Math.round((hechasMiembro / tareasMiembro.length) * 100)
         : 0;
-      
+
+      // Fecha del ultimo cierre real. Sirve para que un proyecto sin fechaFin
+      // no tenga que dibujarse con una duracion inventada en la linea de tiempo.
+      const cierres = p.tareas
+        .map((t) => t.completadoEn)
+        .filter(Boolean)
+        .map((f) => new Date(f).getTime());
+      const ultimaTareaCompletadaEn = cierres.length ? new Date(Math.max(...cierres)) : null;
+
       // Eliminamos el array de tareas para no sobrecargar la respuesta JSON
       const { tareas, ...resto } = p;
       return {
@@ -220,10 +254,19 @@ const listar = async (req, res) => {
         progresoGeneral: progreso,
         progresoMiembro: usuarioEsAdmin ? null : progresoMiembro,
         tareasMiembro: usuarioEsAdmin ? null : tareasMiembro.length,
+        totalTareas: total,
+        tareasHechas: hechas,
+        ultimaTareaCompletadaEn,
       };
     });
 
-    return res.json({ proyectos: sortProyectos(proyectosConProgreso), filtradoPorUsuario: !usuarioEsAdmin });
+    const { items, meta } = paginar(sortProyectos(proyectosConProgreso), paginacion);
+
+    return res.json({
+      proyectos: items,
+      filtradoPorUsuario: !usuarioEsAdmin,
+      ...(meta && { meta }),
+    });
   } catch (error) {
     console.error('[proyectos.listar]', error);
     return res.status(500).json({ error: 'Error interno del servidor' });
