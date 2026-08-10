@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
 import UserAvatar from './UserAvatar';
 import ActionMenu from './ActionMenu';
-import {
+import {
   ListTodo,
   Zap,
   CheckCircle2,
@@ -107,7 +107,19 @@ const sortKanbanColumnTasks = (tareas = [], columna) => {
 };
 
 // ── Tarjeta Kanban (Material Style) ──────────────────────────────────────────
-const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart }) => {
+const KanbanCard = ({
+  tarea,
+  actualizando,
+  onClick,
+  onEditar,
+  onEliminar,
+  onCambiarEstado,
+  onActualizarTarea,
+  onDragStart,
+  seleccionable = false,
+  seleccionada = false,
+  onAlternarSeleccion,
+}) => {
   const { t } = usePreferences();
   const prio = PRIORIDAD_CONFIG[tarea.prioridad] || PRIORIDAD_CONFIG.MEDIA;
   const idxActual = CICLO_ESTADOS.indexOf(tarea.estado);
@@ -116,29 +128,34 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
   return (
     <div
       data-task-id={tarea.id}
-      draggable
+      // Sin arrastre mientras se seleccionan: mover y marcar tarjetas con el
+      // mismo gesto se pisan y acabas cambiando de columna sin querer.
+      draggable={!seleccionable}
       onDragStart={(e) => onDragStart(e, tarea.id)}
-      onClick={() => onClick(tarea)}
+      onClick={() => (seleccionable ? onAlternarSeleccion?.(tarea.id) : onClick(tarea))}
       style={{
         background: 'var(--color-surface-2)',
-        border: '1px solid var(--color-border)',
+        border: `1px solid ${seleccionada ? 'var(--color-primary)' : 'var(--color-border)'}`,
         borderRadius: '1rem',
         padding: '1rem',
-        cursor: actualizando ? 'wait' : 'grab',
+        cursor: actualizando ? 'wait' : (seleccionable ? 'pointer' : 'grab'),
         opacity: actualizando ? 0.6 : 1,
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex', flexDirection: 'column', gap: '0.75rem',
-        boxShadow: 'var(--shadow-sm)',
+        boxShadow: seleccionada ? '0 0 0 2px rgba(37,99,235,0.25)' : 'var(--shadow-sm)',
         position: 'relative'
       }}
+      // El realce de la seleccion se pinta con el mismo borde y sombra que toca
+      // el hover, asi que en una tarjeta marcada se deja quieto.
       onMouseOver={e => {
-        if (!actualizando) {
+        if (!actualizando && !seleccionada) {
           e.currentTarget.style.transform = 'translateY(-3px)';
           e.currentTarget.style.boxShadow = 'var(--shadow-md)';
           e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
         }
       }}
       onMouseOut={e => {
+        if (seleccionada) return;
         e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
         e.currentTarget.style.borderColor = 'var(--color-border)';
@@ -146,12 +163,24 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
     >
       {/* Badge de Prioridad */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ 
-          fontSize: '0.65rem', fontWeight: 500, textTransform: '', padding: '0.2rem 0.6rem', borderRadius: '4px',
-          background: prio.bg, color: prio.color
-        }}>
-          {t(prio.labelKey)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {seleccionable && (
+            <input
+              type="checkbox"
+              checked={seleccionada}
+              onChange={() => onAlternarSeleccion?.(tarea.id)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={tarea.titulo}
+              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+            />
+          )}
+          <span style={{
+            fontSize: '0.65rem', fontWeight: 500, textTransform: '', padding: '0.2rem 0.6rem', borderRadius: '4px',
+            background: prio.bg, color: prio.color
+          }}>
+            {t(prio.labelKey)}
+          </span>
+        </div>
         {esVencida(tarea.venceEn) && tarea.estado !== 'HECHO' && (
           <span style={{ color: 'var(--color-error)', fontSize: '0.65rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
             <AlertCircle size={10} /> {t('taskOverdue')}
@@ -205,13 +234,17 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
               {formatFecha(tarea.venceEn)}
             </span>
           )}
-          <ActionMenu
-            size={14}
-            items={[
-              { label: t('edit'), icon: <Pencil size={14} />, onSelect: () => onEditar(tarea) },
-              { label: t('delete'), icon: <Trash2 size={14} />, onSelect: () => onEliminar(tarea), danger: true },
-            ]}
-          />
+          {/* En modo seleccion manda la barra de arriba: un "Eliminar" aqui que
+              borra solo esta tarjeta despista. */}
+          {!seleccionable && (
+            <ActionMenu
+              size={14}
+              items={[
+                { label: t('edit'), icon: <Pencil size={14} />, onSelect: () => onEditar(tarea) },
+                { label: t('delete'), icon: <Trash2 size={14} />, onSelect: () => onEliminar(tarea), danger: true },
+              ]}
+            />
+          )}
         </div>
       </div>
 
@@ -233,7 +266,7 @@ const KanbanCard = ({ tarea, actualizando, onClick, onEditar, onEliminar, onCamb
 };
 
 // ── Columna Kanban ───────────────────────────────────────────────────────────
-const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, pagina, onCambiarPagina, scrollRef }) => {
+const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, pagina, onCambiarPagina, scrollRef, seleccionable, seleccionadas, onAlternarSeleccion }) => {
   const { t } = usePreferences();
   const [dragOver, setDragOver] = useState(false);
 
@@ -280,6 +313,9 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
             onCambiarEstado={onCambiarEstado}
             onActualizarTarea={onActualizarTarea}
             onDragStart={onDragStart}
+            seleccionable={seleccionable}
+            seleccionada={!!seleccionadas?.has(t.id)}
+            onAlternarSeleccion={onAlternarSeleccion}
           />
         ))}
 
@@ -322,7 +358,7 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
 };
 
 // ── View Principal ───────────────────────────────────────────────────────────
-const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea }) => {
+const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, seleccionable = false, seleccionadas, onAlternarSeleccion }) => {
   const { t } = usePreferences();
   const [actualizando, setActualizando] = useState(null);
   const [optimisticMoves, setOptimisticMoves] = useState({});
@@ -548,6 +584,9 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
               pagina={paginas[col.key]}
               onCambiarPagina={(n) => setPaginas(prev => ({ ...prev, [col.key]: n }))}
               scrollRef={(el) => { columnasRef.current[col.key] = el; }}
+              seleccionable={seleccionable}
+              seleccionadas={seleccionadas}
+              onAlternarSeleccion={onAlternarSeleccion}
             />
           </div>
         ))}

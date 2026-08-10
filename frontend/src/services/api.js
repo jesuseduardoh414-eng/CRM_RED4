@@ -204,6 +204,17 @@ export const tareasService = {
     return data;
   },
 
+  // Borrado en bloque. Va por POST y no por DELETE porque el cuerpo con la
+  // lista de ids no viaja fiable en un DELETE.
+  eliminarVarias: async (ids) => {
+    const res = await fetch(`${API_URL}/tareas/eliminar-multiples`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ ids }),
+    });
+    const data = await handleResponse(res);
+    (data.ids || ids).forEach((id) => emitScheduleSync({ entity: 'tarea', action: 'eliminar', id }));
+    return data;
+  },
+
   // Cambio rápido de estado inline
   actualizarEstado: async (id, estado) => {
     const res = await fetch(`${API_URL}/tareas/${id}/estado`, {

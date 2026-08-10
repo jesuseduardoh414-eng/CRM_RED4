@@ -2,7 +2,7 @@
 // DELETE y operaciones destructivas requieren rol ADMIN
 
 const express = require('express');
-const { listar, crear, editar, eliminar, actualizarEstado } = require('../controllers/tareas.controller');
+const { listar, crear, editar, eliminar, eliminarVarias, actualizarEstado } = require('../controllers/tareas.controller');
 const { importar, vistaPreviaImportacion, confirmarImportacion, plantillaJSON, plantillaExcel, exportarJSON, exportarExcel } = require('../controllers/importar.controller');
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin }      = require('../middlewares/roles.middleware');
@@ -37,6 +37,9 @@ routerTarea.put('/:id',          editar);
 routerTarea.patch('/:id/estado', actualizarEstado);
 
 // Eliminar tarea (ADMIN o Miembro del proyecto)
+// El borrado en bloque va como POST y antes que '/:id' para que la ruta fija
+// no se confunda con un identificador.
+routerTarea.post('/eliminar-multiples', eliminarVarias);
 routerTarea.delete('/:id', eliminar);
 
 // Comentarios de una tarea

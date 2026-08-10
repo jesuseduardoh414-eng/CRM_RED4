@@ -341,7 +341,6 @@ const crear = async (req, res) => {
     });
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
     const asignadoIdsNormalizados = normalizarAsignadoIds(asignadoIds, asignadoId);
-    const asignadoPrincipalId = asignadoIdsNormalizados?.[0] ?? null;
 
     // Si es MIEMBRO, verificar que pertenece a la lista de miembros del proyecto
     if (esAdmin(req.usuario)) {
@@ -363,6 +362,17 @@ const crear = async (req, res) => {
     if (!asignadosPertenecenAProyecto(proyecto, asignadoIdsNormalizados || [])) {
       return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
     }
+
+    // Sin responsable elegido la tarea queda a nombre de quien la crea. Antes se
+    // guardaba "sin asignar", pero el panel de actividad igual se la contaba al
+    // creador: la tarjeta y los totales decian cosas distintas.
+    // Solo si es miembro del proyecto: el selector de responsables unicamente
+    // ofrece miembros, asi que un ajeno se perderia al reeditar la tarea.
+    const creadorEsMiembroDelProyecto = proyecto.miembros.some((m) => m.id === req.usuario.id);
+    const asignadosFinales = asignadoIdsNormalizados?.length
+      ? asignadoIdsNormalizados
+      : (creadorEsMiembroDelProyecto ? [req.usuario.id] : []);
+    const asignadoPrincipalId = asignadosFinales[0] ?? null;
 
     const numeroActividadNormalizado = normalizarNumeroActividad(numeroActividad);
 
@@ -388,7 +398,7 @@ const crear = async (req, res) => {
         proyectoId,
         asignadoId:  asignadoPrincipalId,
         asignados:   {
-          connect: (asignadoIdsNormalizados || []).map((idAsignado) => ({ id: idAsignado })),
+          connect: asignadosFinales.map((idAsignado) => ({ id: idAsignado })),
         },
         creadorId:   req.usuario.id,
         dependeDeId: dependeDeId ? parseInt(dependeDeId) : null,
@@ -425,7 +435,7 @@ const crear = async (req, res) => {
 
     // Notificar al asignado si no es quien la crea
     await crearNotificacionesAsignacion({
-      asignadoIds: asignadoIdsNormalizados || [],
+      asignadoIds: asignadosFinales,
       actorId: req.usuario.id,
       mensaje: `Te han asignado una nueva tarea: "${tarea.titulo}"`,
       tipo: 'ASIGNACION',
@@ -553,6 +563,30 @@ const editar = async (req, res) => {
   }
 };
 
+/**
+ * Borra tareas con todo lo que cuelga de ellas. Va por conjuntos para servir
+ * igual al borrado suelto y al de varias a la vez.
+ *
+ * Las notificaciones no se borran, se desligan: el aviso ya lo recibio alguien
+ * y quitarselo de la campana seria mas raro que dejarlo sin enlace.
+ */
+const borrarTareasEnCascada = async (tx, ids) => {
+  await tx.tarea.updateMany({
+    where: { dependeDeId: { in: ids } },
+    data: { dependeDeId: null },
+  });
+
+  await tx.comentario.deleteMany({ where: { tareaId: { in: ids } } });
+  await tx.adjunto.deleteMany({ where: { tareaId: { in: ids } } });
+  await tx.logActividad.deleteMany({ where: { tareaId: { in: ids } } });
+  await tx.notificacion.updateMany({
+    where: { tareaId: { in: ids } },
+    data: { tareaId: null },
+  });
+
+  await tx.tarea.deleteMany({ where: { id: { in: ids } } });
+};
+
 // €€ DELETE /api/tareas/:id €€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
 const eliminar = async (req, res) => {
   const id = parseInt(req.params.id);
@@ -580,22 +614,7 @@ const eliminar = async (req, res) => {
       }
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.tarea.updateMany({
-        where: { dependeDeId: id },
-        data: { dependeDeId: null },
-      });
-
-      await tx.comentario.deleteMany({ where: { tareaId: id } });
-      await tx.adjunto.deleteMany({ where: { tareaId: id } });
-      await tx.logActividad.deleteMany({ where: { tareaId: id } });
-      await tx.notificacion.updateMany({
-        where: { tareaId: id },
-        data: { tareaId: null },
-      });
-
-      await tx.tarea.delete({ where: { id } });
-    });
+    await prisma.$transaction((tx) => borrarTareasEnCascada(tx, [id]));
 
     // Registrar en el Log de Actividad
     await registrarActividad(
@@ -607,6 +626,79 @@ const eliminar = async (req, res) => {
     return res.json({ mensaje: 'Tarea eliminada' });
   } catch (error) {
     console.error('[tareas.eliminar]', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// POST /api/tareas/eliminar-multiples   body: { ids: [1, 2, 3] }
+// Borrado en bloque desde la vista de lista o el Kanban, para no ir de una en
+// una. Cada tarea pasa por el mismo permiso que el borrado suelto: las que no
+// se pueden tocar se omiten y se informan, en vez de tumbar toda la operacion.
+const LIMITE_BORRADO_MASIVO = 200;
+
+const eliminarVarias = async (req, res) => {
+  const ids = [...new Set(
+    parseArrayValue(req.body?.ids)
+      .map((valor) => parseInt(valor, 10))
+      .filter((valor) => !Number.isNaN(valor))
+  )];
+
+  if (!ids.length) return res.status(400).json({ error: 'No se recibió ninguna tarea' });
+  if (ids.length > LIMITE_BORRADO_MASIVO) {
+    return res.status(400).json({
+      error: `Solo puedes eliminar ${LIMITE_BORRADO_MASIVO} tareas a la vez`,
+    });
+  }
+
+  try {
+    const tareas = await prisma.tarea.findMany({
+      where: { id: { in: ids } },
+      include: {
+        proyecto: { include: { miembros: { select: { id: true } } } },
+        asignados: { select: { id: true } },
+      },
+    });
+    if (!tareas.length) return res.status(404).json({ error: 'No se encontró ninguna de las tareas' });
+
+    const permitidas = tareas.filter((tarea) => (
+      esAdmin(req.usuario)
+        ? puedeAdministrarProyecto(req.usuario, tarea.proyecto)
+        : tarea.proyecto.miembros.some((m) => m.id === req.usuario.id)
+          && puedeAccederTarea(tarea, req.usuario.id)
+    ));
+    if (!permitidas.length) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar estas tareas' });
+    }
+
+    const idsPermitidos = permitidas.map((tarea) => tarea.id);
+    await prisma.$transaction((tx) => borrarTareasEnCascada(tx, idsPermitidos));
+
+    // Un apunte por proyecto y no uno por tarea: el registro sirve para saber
+    // que paso, no para dejar treinta lineas casi identicas seguidas.
+    const titulosPorProyecto = new Map();
+    permitidas.forEach((tarea) => {
+      const acumulado = titulosPorProyecto.get(tarea.proyectoId) || [];
+      acumulado.push(tarea.titulo);
+      titulosPorProyecto.set(tarea.proyectoId, acumulado);
+    });
+
+    for (const [proyectoId, titulos] of titulosPorProyecto) {
+      const detalle = titulos.length === 1 ? `la tarea "${titulos[0]}"` : `${titulos.length} tareas`;
+      await registrarActividad(
+        req.usuario.id,
+        proyectoId,
+        'ELIMINAR_TAREA',
+        `${req.usuario.nombre} eliminó ${detalle}`
+      );
+    }
+
+    return res.json({
+      ids: idsPermitidos,
+      eliminadas: idsPermitidos.length,
+      omitidas: ids.length - idsPermitidos.length,
+    });
+  } catch (error) {
+    console.error('[tareas.eliminarVarias]', error);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
@@ -682,4 +774,4 @@ const actualizarEstado = async (req, res) => {
   }
 };
 
-module.exports = { listar, crear, editar, eliminar, actualizarEstado };
+module.exports = { listar, crear, editar, eliminar, eliminarVarias, actualizarEstado };

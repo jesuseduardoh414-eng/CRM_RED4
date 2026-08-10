@@ -281,6 +281,15 @@ const translations = {
     taskDeleted: 'Tarea eliminada',
     taskCreated: 'Tarea creada',
     taskUpdated: 'Tarea actualizada',
+
+    taskSelect: 'Seleccionar',
+    taskSelectAll: 'Todas',
+    taskSelectNone: 'Ninguna',
+    taskSelectedCount: '{count} seleccionadas',
+    taskDeleteManyConfirm: '¿Eliminar {count} tareas? No se puede deshacer.',
+    taskDeletedMany: 'Se eliminaron {count} tareas',
+    taskDeletedManyPartial: 'Se eliminaron {count} tareas · {omitidas} sin permiso',
+
     taskImportSuccess: 'Se importaron {count} tarea(s)',
     taskSupportDocuments: 'Documentos de apoyo',
     taskAddFiles: 'Agregar archivos',
@@ -935,6 +944,15 @@ const translations = {
     taskDeleted: 'Task deleted',
     taskCreated: 'Task created',
     taskUpdated: 'Task updated',
+
+    taskSelect: 'Select',
+    taskSelectAll: 'All',
+    taskSelectNone: 'None',
+    taskSelectedCount: '{count} selected',
+    taskDeleteManyConfirm: 'Delete {count} tasks? This cannot be undone.',
+    taskDeletedMany: '{count} tasks deleted',
+    taskDeletedManyPartial: '{count} tasks deleted · {omitidas} not allowed',
+
     taskImportSuccess: 'Imported {count} task(s)',
     taskSupportDocuments: 'Supporting documents',
     taskAddFiles: 'Add files',

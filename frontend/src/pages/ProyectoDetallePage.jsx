@@ -42,7 +42,9 @@ import {
   User2,
   Archive,
   ArchiveRestore,
-  BadgeCheck
+  BadgeCheck,
+  CheckSquare,
+  X
 } from 'lucide-react';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
@@ -176,7 +178,16 @@ const EtiquetaCampo = ({ texto, opcional = false }) => {
 };
 
 // ── Tarjeta de Tarea (List View) ─────────────────────────────────────────────
-const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado }) => {
+const TareaCard = ({
+  tarea,
+  usuarioActual,
+  onClick,
+  onEliminar,
+  onCambiarEstado,
+  seleccionable = false,
+  seleccionada = false,
+  onAlternarSeleccion,
+}) => {
   const { t } = usePreferences();
   const prio = getPrioridad(tarea.prioridad);
   const estado = getEstadoConf(tarea.estado);
@@ -196,15 +207,32 @@ const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado 
     : `${t('projectResponsible')}: ${getTaskAssigneeNames(tarea, t('taskUnassigned'))}`;
 
   return (
-    <div 
-      onClick={() => onClick(tarea)}
-      className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 lg:p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 hover:translate-x-1 transition-all cursor-pointer shadow-sm hover:shadow-md"
+    <div
+      onClick={() => (seleccionable ? onAlternarSeleccion?.(tarea.id) : onClick(tarea))}
+      className={`bg-[var(--color-surface)] border p-4 lg:p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 transition-all cursor-pointer shadow-sm hover:shadow-md ${
+        seleccionada
+          ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/25'
+          : 'border-[var(--color-border)] hover:translate-x-1'
+      }`}
     >
       {/* Icono de Estado y Título */}
       <div className="flex items-start gap-4 flex-1 min-w-0">
-        <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded-full shrink-0 mt-1.5" 
-          style={{ background: estado.color, boxShadow: `0 0 10px ${estado.color}55` }} 
-        />
+        {/* En modo seleccion la casilla sustituye al punto de estado: manda el
+            estar marcada o no, y dos indicadores juntos se estorban. */}
+        {seleccionable ? (
+          <input
+            type="checkbox"
+            checked={seleccionada}
+            onChange={() => onAlternarSeleccion?.(tarea.id)}
+            onClick={(event) => event.stopPropagation()}
+            aria-label={tarea.titulo}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-primary)]"
+          />
+        ) : (
+          <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded-full shrink-0 mt-1.5"
+            style={{ background: estado.color, boxShadow: `0 0 10px ${estado.color}55` }}
+          />
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <h4 className={`text-sm lg:text-base font-semibold text-[var(--color-text)] truncate ${tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}`}>
@@ -245,7 +273,9 @@ const TareaCard = ({ tarea, usuarioActual, onClick, onEliminar, onCambiarEstado 
           ) : '-'}
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
+        {/* En modo seleccion se esconde: la accion la manda la barra de arriba,
+            y dejar aqui un "Eliminar" que borra solo esta despista. */}
+        <div className={`flex items-center gap-2 ml-4 ${seleccionable ? 'hidden' : ''}`}>
           <ActionMenu
             size={16}
             className="p-2 lg:p-2.5 bg-[var(--color-surface-3)] border border-[var(--color-border)] rounded-xl"
@@ -312,6 +342,11 @@ const ProyectoDetallePage = () => {
   const [filtroPrioridad, setFiltroPrioridad] = useState('todas');
   const [filtroResponsable, setFiltroResponsable] = useState('todos');
   const [filtroFecha, setFiltroFecha] = useState({ from: null, to: null });
+
+  // Borrado en bloque. El modo se activa a mano para que el uso normal —abrir
+  // una tarea al pulsarla— no cambie sin querer.
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState(() => new Set());
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -451,6 +486,43 @@ const ProyectoDetallePage = () => {
       await tareasService.eliminar(tarea.id);
       setTareas(prev => prev.filter(x => x.id !== tarea.id));
       showToast(t('taskDeleted'));
+    } catch (err) { showToast(err.message, 'error'); }
+  };
+
+  // ── Seleccion multiple ────────────────────────────────────────────────────
+  // "Todas" abarca lo filtrado y no solo la pagina a la vista: si acabas de
+  // filtrar para limpiar un grupo, esperas que entre todo el grupo.
+  const seleccionActiva = modoSeleccion && vista !== 'gantt';
+
+  const salirDeSeleccion = useCallback(() => {
+    setModoSeleccion(false);
+    setSeleccionadas(new Set());
+  }, []);
+
+  const alternarSeleccion = useCallback((tareaId) => {
+    setSeleccionadas((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(tareaId)) siguiente.delete(tareaId);
+      else siguiente.add(tareaId);
+      return siguiente;
+    });
+  }, []);
+
+  const handleEliminarSeleccionadas = async () => {
+    const ids = [...seleccionadas];
+    if (!ids.length) return;
+    if (!window.confirm(t('taskDeleteManyConfirm', { count: ids.length }))) return;
+
+    try {
+      const respuesta = await tareasService.eliminarVarias(ids);
+      // Se quitan solo las que el servidor confirma: si alguna se omitio por
+      // permisos, tiene que seguir en pantalla.
+      const borradas = new Set(respuesta.ids || ids);
+      setTareas((prev) => prev.filter((x) => !borradas.has(x.id)));
+      salirDeSeleccion();
+      showToast(respuesta.omitidas
+        ? t('taskDeletedManyPartial', { count: respuesta.eliminadas, omitidas: respuesta.omitidas })
+        : t('taskDeletedMany', { count: respuesta.eliminadas }));
     } catch (err) { showToast(err.message, 'error'); }
   };
 
@@ -720,6 +792,23 @@ const ProyectoDetallePage = () => {
             {t('projectShowing')} {tareasFiltradasAvanzadas.length} {tareasFiltradasAvanzadas.length === 1 ? t('projectTaskSingular') : t('projectTaskPlural')}
           </span>
 
+          {/* El gantt se queda fuera: ahi las tareas son barras de tiempo y
+              marcarlas una a una no aporta nada. */}
+          {vista !== 'gantt' && (
+            <button
+              type="button"
+              onClick={() => (modoSeleccion ? salirDeSeleccion() : setModoSeleccion(true))}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                modoSeleccion
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                  : 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              <CheckSquare size={16} />
+              {modoSeleccion ? t('cancel') : t('taskSelect')}
+            </button>
+          )}
+
           {/* Los tres filtros, antes en una franja fija, ahora tras este boton */}
           <FiltrosTareas
             fecha={filtroFecha}
@@ -733,6 +822,52 @@ const ProyectoDetallePage = () => {
           />
         </div>
       </div>
+
+      {/* Barra de la seleccion. Va pegada arriba al desplazar para que el boton
+          de eliminar siga a mano con una lista larga. */}
+      {seleccionActiva && (
+        <div className="sticky top-2 z-20 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-3 shadow-md">
+          <span className="text-sm font-medium text-[var(--color-text)]">
+            {t('taskSelectedCount', { count: seleccionadas.size })}
+          </span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSeleccionadas(new Set(tareasFiltradasAvanzadas.map((tarea) => tarea.id)))}
+              disabled={!tareasFiltradasAvanzadas.length}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)] disabled:opacity-40"
+            >
+              {t('taskSelectAll')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSeleccionadas(new Set())}
+              disabled={!seleccionadas.size}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)] disabled:opacity-40"
+            >
+              {t('taskSelectNone')}
+            </button>
+            <button
+              type="button"
+              onClick={handleEliminarSeleccionadas}
+              disabled={!seleccionadas.size}
+              className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-40"
+            >
+              <Trash2 size={15} />
+              {t('delete')}
+            </button>
+            <button
+              type="button"
+              onClick={salirDeSeleccion}
+              aria-label={t('cancel')}
+              className="rounded-lg p-1.5 text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Documentos del proyecto a la derecha, solo junto a la lista. El Kanban
           y el gantt necesitan todo el ancho: con la columna al lado, las tres
@@ -759,6 +894,9 @@ const ProyectoDetallePage = () => {
                     onClick={(x) => { setTareaEditando(x); setModal(true); }}
                     onEliminar={handleEliminar}
                     onCambiarEstado={handleCambiarEstado}
+                    seleccionable={seleccionActiva}
+                    seleccionada={seleccionadas.has(t.id)}
+                    onAlternarSeleccion={alternarSeleccion}
                   />
                 ))
               )}
@@ -805,7 +943,19 @@ const ProyectoDetallePage = () => {
             )}
           </div>
         )}
-        {vista === 'kanban' && <KanbanView tareas={tareasFiltradasAvanzadas} onClick={(x) => { setTareaEditando(x); setModal(true); }} onEliminar={handleEliminar} onCambiarEstado={handleCambiarEstado} onEditar={(x) => { setTareaEditando(x); setModal(true); }} onActualizarTarea={handleActualizarTarea} />}
+        {vista === 'kanban' && (
+          <KanbanView
+            tareas={tareasFiltradasAvanzadas}
+            onClick={(x) => { setTareaEditando(x); setModal(true); }}
+            onEliminar={handleEliminar}
+            onCambiarEstado={handleCambiarEstado}
+            onEditar={(x) => { setTareaEditando(x); setModal(true); }}
+            onActualizarTarea={handleActualizarTarea}
+            seleccionable={seleccionActiva}
+            seleccionadas={seleccionadas}
+            onAlternarSeleccion={alternarSeleccion}
+          />
+        )}
         {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradasAvanzadas} onSeleccionarTarea={(x) => { setTareaEditando(x); setModal(true); }} />}
       </div>
 
