@@ -35,20 +35,32 @@ const ESTILOS = `
   .cabecera .fecha { margin: 3px 0 0; font-size: 12px; color: #374151; }
   .cabecera .filtro { margin: 6px 0 0; font-size: 10px; color: #6b7280; }
 
-  .persona { margin-bottom: 16px; break-inside: avoid; page-break-inside: avoid; }
+  /* Nada de break-inside: avoid en el bloque de una persona: quien tiene
+     muchas tareas no cabe en una hoja y el navegador empujaba el bloque entero
+     a la pagina siguiente, dejando la primera en blanco. Ahora la lista fluye
+     y solo se protege que no se parta una fila ni un titulo de su tabla. */
+  .persona { margin-bottom: 18px; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+
+  table { width: 100%; border-collapse: collapse; }
+  /* display: table-header-group hace que el navegador repita la cabecera en
+     cada pagina, asi que en una lista larga el nombre sigue a la vista. */
+  thead { display: table-header-group; break-inside: avoid; break-after: avoid; }
+  th { padding: 0; font-weight: 400; text-align: left; }
+
+  .cab-persona th { padding: 0 0 4px; border-bottom: 1px solid #d1d5db; }
   .persona-cab {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    border-bottom: 1px solid #d1d5db; padding-bottom: 4px; margin-bottom: 6px;
   }
   .persona-cab .nombre { font-size: 13px; font-weight: 600; }
   .persona-cab .area { font-size: 10px; color: #6b7280; font-weight: 400; margin-left: 6px; }
   .persona-cab .conteo { font-size: 10px; color: #374151; white-space: nowrap; }
 
-  .bloque-titulo {
+  .cab-bloque th {
     font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em;
-    color: #6b7280; font-weight: 600; margin: 8px 0 4px;
+    color: #6b7280; font-weight: 600; padding: 8px 0 3px;
   }
-  table { width: 100%; border-collapse: collapse; }
+
   td { padding: 3px 0; vertical-align: top; border-bottom: 1px solid #f3f4f6; }
   td.tarea { width: auto; }
   td.proyecto { width: 26%; color: #6b7280; padding-left: 10px; }
@@ -97,30 +109,44 @@ export const construirHtmlReporte = ({ filas = [], textos = {}, locale = 'es-MX'
 
   const cuerpo = filas.length === 0
     ? `<p class="vacio">${escapar(textos.vacio)}</p>`
-    : filas.map(({ miembro, hechas, enProgreso }) => `
-      <section class="persona">
-        <div class="persona-cab">
-          <div>
-            <span class="nombre">${escapar(miembro.nombre)}</span>
-            ${miembro.area ? `<span class="area">${escapar(textos.areas?.[miembro.area] || miembro.area)}</span>` : ''}
-          </div>
-          <div class="conteo">
-            ${escapar(plantilla('conteoHechas').replace('{count}', hechas.length))}${
-              enProgreso.length
-                ? ` · ${escapar(plantilla('conteoEnCurso').replace('{count}', enProgreso.length))}`
-                : ''
-            }
-          </div>
-        </div>
+    : filas.map(({ miembro, hechas, enProgreso }) => {
+      // La ficha de la persona va dentro del <thead> de su tabla y no suelta
+      // encima: así el navegador la repinta en cada página cuando la lista es
+      // larga, y no se pierde de quién son las tareas.
+      const conteo = `${plantilla('conteoHechas').replace('{count}', hechas.length)}${
+        enProgreso.length
+          ? ` · ${plantilla('conteoEnCurso').replace('{count}', enProgreso.length)}`
+          : ''
+      }`;
 
-        <div class="bloque-titulo">${escapar(textos.tituloHechas)}</div>
-        <table>${hechas.map((tarea) => filaTarea(tarea, hora(tarea.completadoEn))).join('')}</table>
+      const cabPersona = `
+        <tr class="cab-persona"><th colspan="3">
+          <div class="persona-cab">
+            <div>
+              <span class="nombre">${escapar(miembro.nombre)}</span>
+              ${miembro.area ? `<span class="area">${escapar(textos.areas?.[miembro.area] || miembro.area)}</span>` : ''}
+            </div>
+            <div class="conteo">${escapar(conteo)}</div>
+          </div>
+        </th></tr>`;
+
+      const cabBloque = (titulo) => `<tr class="cab-bloque"><th colspan="3">${escapar(titulo)}</th></tr>`;
+
+      return `
+      <section class="persona">
+        <table>
+          <thead>${cabPersona}${cabBloque(plantilla('tituloHechas'))}</thead>
+          <tbody>${hechas.map((tarea) => filaTarea(tarea, hora(tarea.completadoEn))).join('')}</tbody>
+        </table>
 
         ${enProgreso.length ? `
-          <div class="bloque-titulo">${escapar(textos.tituloEnCurso)}</div>
-          <table>${enProgreso.map((tarea) => filaTarea(tarea, vence(tarea.venceEn), 'curso')).join('')}</table>
+          <table>
+            <thead>${cabBloque(plantilla('tituloEnCurso'))}</thead>
+            <tbody>${enProgreso.map((tarea) => filaTarea(tarea, vence(tarea.venceEn), 'curso')).join('')}</tbody>
+          </table>
         ` : ''}
-      </section>`).join('');
+      </section>`;
+    }).join('');
 
   return `<!doctype html>
 <html lang="${escapar(locale.slice(0, 2))}">
