@@ -1,5 +1,10 @@
 const express = require('express');
-const { getAdminStats, getMemberStats, getActividadEquipoPorDia } = require('../controllers/stats.controller');
+const {
+  getAdminStats,
+  getMemberStats,
+  getActividadEquipoPorDia,
+  exportarReporteDiaExcel,
+} = require('../controllers/stats.controller');
 const { verificarToken } = require('../middlewares/auth.middleware');
 const { soloAdmin, soloMiembro } = require('../middlewares/roles.middleware');
 
@@ -11,5 +16,8 @@ router.get('/member', verificarToken, soloMiembro, getMemberStats);
 
 // Actividad del equipo de un dia concreto (?fecha=YYYY-MM-DD)
 router.get('/actividad-equipo', verificarToken, soloAdmin, getActividadEquipoPorDia);
+
+// Reporte del dia en Excel (?fecha=YYYY-MM-DD&proyectoId=N)
+router.get('/reporte-dia/excel', verificarToken, soloAdmin, exportarReporteDiaExcel);
 
 module.exports = router;

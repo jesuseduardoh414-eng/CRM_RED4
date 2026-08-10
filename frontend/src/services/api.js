@@ -479,7 +479,21 @@ export const statsService = {
       cache: 'no-store',
     });
     return handleResponse(res);
-  }
+  },
+
+  // Reporte del día en Excel. Va como enlace de descarga con el token en la
+  // query (igual que exportar un proyecto): en una descarga directa el
+  // navegador no manda la cabecera Authorization.
+  descargarReporteDia: (fecha, proyectoId = null) => {
+    const token = localStorage.getItem('crm_token');
+    const url = `${API_URL}/stats/reporte-dia/excel${construirQuery({ fecha, proyectoId, token })}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `actividad_${fecha}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
 };
 
 // ── Agenda Personal ────────────────────────────────────────────────────────

@@ -10,10 +10,17 @@ import Tooltip from '../components/Tooltip';
 import CampoFiltro from '../components/CampoFiltro';
 import UserAvatar from '../components/UserAvatar';
 import { Button } from '../components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
  import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { ESTADOS_PROYECTO, getEstadoProyecto, normalizarEstadoProyecto } from '../utils/estadosProyecto';
+import { imprimirReporteDia } from '../utils/reporteDia';
 import {
   Layers,
   FolderKanban,
@@ -29,6 +36,9 @@ import {
   PlayCircle,
   User,
   Megaphone,
+  Download,
+  FileText,
+  FileSpreadsheet,
   ChevronLeft,
   ChevronRight,
   Search} from 'lucide-react';
@@ -804,6 +814,56 @@ const AdminMemberActivity = ({ miembros, onOpenTask, fecha, onFechaChange, carga
 
   const tareasDetalle = seleccionado ? tareasDe(seleccionado) : [];
 
+  // El reporte del día sale de la lista completa —el buscador solo sirve para
+  // ubicar a alguien en pantalla—, pero sí respeta el filtro de proyecto, que
+  // es un recorte real. Solo entra quien cerró al menos una tarea ese día, y de
+  // esa gente se lleva también lo que dejó en curso.
+  const filasReporte = lista
+    .map((miembro) => ({
+      miembro,
+      hechas: porProyecto(miembro.hechasHoy),
+      enProgreso: porProyecto(miembro.enProgreso),
+    }))
+    .filter((fila) => fila.hechas.length > 0)
+    .sort((a, b) => (
+      b.hechas.length - a.hechas.length
+      || String(a.miembro.nombre || '').localeCompare(String(b.miembro.nombre || ''), locale, { sensitivity: 'base' })
+    ));
+
+  const puedeExportar = filasReporte.length > 0;
+  const proyectoFiltrado = proyectos.find((proyecto) => proyecto.id === proyectoId) || null;
+
+  const exportarPDF = () => {
+    imprimirReporteDia({
+      locale,
+      filas: filasReporte,
+      textos: {
+        titulo: t('reportDayTitle'),
+        fechaLegible: capitalizar(new Date(`${fecha}T12:00:00`).toLocaleDateString(locale, {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+        })),
+        filtroProyecto: proyectoFiltrado
+          ? t('reportDayFilterProject', { proyecto: proyectoFiltrado.nombre })
+          : '',
+        tituloHechas: t('reportDayDone'),
+        tituloEnCurso: t('reportDayInProgress'),
+        // Sin variables a propósito: los {count}/{personas} los sustituye el
+        // reporte, que es quien conoce los totales de cada bloque.
+        conteoHechas: t('reportDayCountDone'),
+        conteoEnCurso: t('reportDayCountInProgress'),
+        vence: t('reportDayDue'),
+        pie: t('reportDaySummary'),
+        generado: t('reportDayGenerated'),
+        vacio: t('dashboardExportEmpty'),
+        areas: Object.fromEntries(
+          Object.entries(AREA_CONF).map(([clave, conf]) => [clave, t(conf.labelKey)]),
+        ),
+      },
+    });
+  };
+
+  const exportarExcel = () => statsService.descargarReporteDia(fecha, proyectoId);
+
   const moverDia = (dias) => {
     const d = new Date(`${fecha}T12:00:00`);
     d.setDate(d.getDate() + dias);
@@ -849,6 +909,33 @@ const AdminMemberActivity = ({ miembros, onOpenTask, fecha, onFechaChange, carga
                 {t('dashboardToday')}
               </Button>
             )}
+
+            {/* Reporte del día que se ve arriba. Se apaga cuando nadie terminó
+                nada: un PDF en blanco no le sirve a nadie. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  disabled={cargando || !puedeExportar}
+                  aria-label={puedeExportar ? t('dashboardExport') : t('dashboardExportEmpty')}
+                >
+                  <Download size={15} />
+                  {t('dashboardExport')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="z-[1500] min-w-[200px]">
+                <DropdownMenuItem className="gap-2 font-medium" onSelect={exportarPDF}>
+                  <FileText size={14} />
+                  <span>{t('dashboardExportPdf')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2 font-medium" onSelect={exportarExcel}>
+                  <FileSpreadsheet size={14} />
+                  <span>{t('dashboardExportExcel')}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>

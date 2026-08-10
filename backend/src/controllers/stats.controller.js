@@ -1,3 +1,4 @@
+const XLSX = require('xlsx');
 const prisma = require('../lib/prisma');
 const { sortTareas } = require('../utils/sort.utils');
 const { buildScopeProyectoParaAdmin, esAdminDeArea } = require('../utils/permissions.utils');
@@ -595,4 +596,110 @@ const getActividadEquipoPorDia = async (req, res) => {
   }
 };
 
-module.exports = { getAdminStats, getMemberStats, getActividadEquipoPorDia };
+// GET /api/stats/reporte-dia/excel?fecha=YYYY-MM-DD&proyectoId=N
+// Reporte diario en Excel. Se recalcula aqui en vez de recibir el JSON del
+// navegador para que el archivo no dependa de lo que el tablero tenga en cache.
+
+const ETIQUETA_AREA = {
+  DESARROLLO: 'Desarrollo',
+  ADMINISTRACION: 'Administración',
+  COMUNICACION: 'Comunicación',
+  MARKETING: 'Marketing',
+};
+
+const horaMexico = (valor) => (valor
+  ? new Date(valor).toLocaleTimeString('es-MX', {
+    timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit',
+  })
+  : '');
+
+const fechaMexico = (valor) => (valor
+  ? new Date(valor).toLocaleDateString('es-MX', {
+    timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric',
+  })
+  : '');
+
+/**
+ * Solo entra quien cerro al menos una tarea ese dia; de esa gente se lleva
+ * tambien lo que dejo en curso. `proyectoId` replica el filtro de proyecto del
+ * tablero, para que el archivo salga con el mismo recorte que se ve en pantalla.
+ */
+const construirReporteDia = (miembros, proyectoId = null) => {
+  const delProyecto = (tareas) => (
+    proyectoId ? (tareas || []).filter((tarea) => tarea.proyecto?.id === proyectoId) : (tareas || [])
+  );
+
+  return miembros
+    .map((miembro) => ({
+      miembro,
+      hechas: delProyecto(miembro.hechasHoy),
+      enProgreso: delProyecto(miembro.enProgreso),
+    }))
+    .filter((fila) => fila.hechas.length > 0)
+    .sort((a, b) => (
+      b.hechas.length - a.hechas.length
+      || String(a.miembro.nombre || '').localeCompare(String(b.miembro.nombre || ''), 'es')
+    ));
+};
+
+const exportarReporteDiaExcel = async (req, res) => {
+  try {
+    const fecha = req.query.fecha || null;
+    if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return res.status(400).json({ error: 'Formato de fecha inválido. Se espera YYYY-MM-DD' });
+    }
+
+    const proyectoId = req.query.proyectoId ? Number(req.query.proyectoId) : null;
+    if (proyectoId !== null && !Number.isInteger(proyectoId)) {
+      return res.status(400).json({ error: 'ID de proyecto inválido' });
+    }
+
+    const dia = fecha || claveDiaMexico();
+    const miembros = await getActividadMiembros(req.usuario, fecha);
+    const reporte = construirReporteDia(miembros, proyectoId);
+
+    const resumen = [['Persona', 'Área', 'Terminadas', 'En curso']];
+    const detalle = [['Persona', 'Área', 'Situación', 'Tarea', 'Proyecto', 'Hora de cierre', 'Vence']];
+
+    reporte.forEach(({ miembro, hechas, enProgreso }) => {
+      const area = ETIQUETA_AREA[miembro.area] || miembro.area || '';
+      resumen.push([miembro.nombre, area, hechas.length, enProgreso.length]);
+
+      hechas.forEach((tarea) => detalle.push([
+        miembro.nombre, area, 'Terminada',
+        tarea.titulo, tarea.proyecto?.nombre || '', horaMexico(tarea.completadoEn), '',
+      ]));
+      enProgreso.forEach((tarea) => detalle.push([
+        miembro.nombre, area, 'En curso',
+        tarea.titulo, tarea.proyecto?.nombre || '', '', fechaMexico(tarea.venceEn),
+      ]));
+    });
+
+    const wb = XLSX.utils.book_new();
+
+    const hojaResumen = XLSX.utils.aoa_to_sheet(resumen);
+    hojaResumen['!cols'] = [{ wch: 32 }, { wch: 16 }, { wch: 12 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, hojaResumen, 'Resumen');
+
+    const hojaDetalle = XLSX.utils.aoa_to_sheet(detalle);
+    hojaDetalle['!cols'] = [
+      { wch: 32 }, { wch: 16 }, { wch: 12 }, { wch: 60 }, { wch: 28 }, { wch: 14 }, { wch: 12 },
+    ];
+    XLSX.utils.book_append_sheet(wb, hojaDetalle, 'Detalle');
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', `attachment; filename="actividad_${dia}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return res.send(buffer);
+  } catch (error) {
+    console.error('[stats.exportarReporteDiaExcel]', error);
+    return res.status(500).json({ error: 'Error al generar el reporte del día' });
+  }
+};
+
+module.exports = {
+  getAdminStats,
+  getMemberStats,
+  getActividadEquipoPorDia,
+  exportarReporteDiaExcel,
+};

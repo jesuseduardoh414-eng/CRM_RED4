@@ -105,6 +105,23 @@ const translations = {
 
     dashboardNoActivityDay: 'Sin actividad registrada el {fecha}',
 
+    dashboardExport: 'Exportar',
+    dashboardExportPdf: 'Descargar PDF',
+    dashboardExportExcel: 'Descargar Excel',
+    dashboardExportEmpty: 'Nadie terminó tareas este día',
+
+    reportDayTitle: 'Reporte de actividad diaria',
+    reportDayDone: 'Tareas terminadas',
+    reportDayInProgress: 'Quedó en curso',
+    // Etiqueta: valor en vez de "{count} terminadas": así no hay que resolver
+    // el singular ("1 terminadas") en un documento que se imprime.
+    reportDayCountDone: 'Terminadas: {count}',
+    reportDayCountInProgress: 'En curso: {count}',
+    reportDayDue: 'Vence {fecha}',
+    reportDayFilterProject: 'Filtrado por proyecto: {proyecto}',
+    reportDaySummary: 'Personas: {personas} · Tareas terminadas: {tareas}',
+    reportDayGenerated: 'Generado desde el CRM',
+
     timelineShowAll: 'Ver todos los proyectos',
     timelineVisibleCount: '{count} proyectos visibles',
     timelineTodayLine: 'Línea roja = hoy',
@@ -743,6 +760,21 @@ const translations = {
     dashboardNoMembers: 'No one matches the search',
 
     dashboardNoActivityDay: 'No activity recorded on {fecha}',
+
+    dashboardExport: 'Export',
+    dashboardExportPdf: 'Download PDF',
+    dashboardExportExcel: 'Download Excel',
+    dashboardExportEmpty: 'Nobody completed tasks on this day',
+
+    reportDayTitle: 'Daily activity report',
+    reportDayDone: 'Completed tasks',
+    reportDayInProgress: 'Left in progress',
+    reportDayCountDone: 'Completed: {count}',
+    reportDayCountInProgress: 'In progress: {count}',
+    reportDayDue: 'Due {fecha}',
+    reportDayFilterProject: 'Filtered by project: {proyecto}',
+    reportDaySummary: 'People: {personas} · Tasks completed: {tareas}',
+    reportDayGenerated: 'Generated from the CRM',
 
     timelineShowAll: 'Show all projects',
     timelineVisibleCount: '{count} projects shown',
