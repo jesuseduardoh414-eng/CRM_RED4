@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { notificacionesService } from '../services/api';
 import { Bell, CheckCheck, Trash2, ArrowUpRight, CalendarDays, ClipboardList } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { usePreferences } from '../context/PreferencesContext';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 const getNotificationDestination = (notificacion) => {
   const proyectoId = notificacion.tarea?.proyectoId
@@ -79,7 +80,6 @@ const NotificationCenter = ({ enSidebar = false, colapsado = false }) => {
   const navigate = useNavigate();
   const [notificaciones, setNotificaciones] = useState([]);
   const [open, setOpen] = useState(false);
-  const dropdownRef = useRef(null);
 
   const unreadCount = notificaciones.filter(n => !n.leida).length;
 
@@ -136,16 +136,6 @@ const NotificationCenter = ({ enSidebar = false, colapsado = false }) => {
     };
   }, [usuario]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const handleMarcarLeida = async (id) => {
     try {
       await notificacionesService.marcarLeida(id);
@@ -189,14 +179,15 @@ const NotificationCenter = ({ enSidebar = false, colapsado = false }) => {
   };
 
   return (
-    <div style={{ position: 'relative', width: enSidebar ? '100%' : undefined }} ref={dropdownRef}>
+    <Popover open={open} onOpenChange={setOpen}>
+    <div style={{ width: enSidebar ? '100%' : undefined }}>
+      <PopoverTrigger asChild>
       {/* En el sidebar la campana es una fila mas del menu: mismo alto, mismo
           icono a la izquierda y el texto al lado. El numero de pendientes va a
           la derecha como contador, no encimado sobre el icono. */}
       {enSidebar ? (
         <button
-                            type="button"
-        onClick={() => setOpen(!open)}
+          type="button"
           title={colapsado ? t('notificationsTitle') : undefined}
           aria-label={t('notificationsTitle')}
           className={`
@@ -234,7 +225,7 @@ const NotificationCenter = ({ enSidebar = false, colapsado = false }) => {
         </button>
               ) : (
         <button
-        onClick={() => setOpen(!open)}
+          type="button"
           title={t('notificationsTitle')}
           aria-label={t('notificationsTitle')}
           style={{
@@ -276,26 +267,19 @@ const NotificationCenter = ({ enSidebar = false, colapsado = false }) => {
           )}
         </button>
       )}
+      </PopoverTrigger>
 
-      {/* En el sidebar el boton queda abajo a la izquierda: el panel tiene que
-          salir hacia arriba y hacia la derecha para no quedar fuera de pantalla. */}
-      {open && (
-        <div style={{
-          position: 'absolute',
-          ...(enSidebar ? { bottom: '120%', left: 0 } : { top: '120%', right: 0 }),
-          width: '380px', background: 'var(--color-surface)',
-          border: '1px solid rgba(148, 163, 184, 0.18)', borderRadius: '1.5rem',
-          boxShadow: '0 24px 80px rgba(15, 23, 42, 0.18)',
-          zIndex: 1000, overflow: 'hidden',
-          display: 'flex', flexDirection: 'column',
-          animation: 'slideDown 0.2s ease-out'
-        }}>
-          <style>{`
-            @keyframes slideDown {
-              from { opacity: 0; transform: translateY(-10px); }
-              to { opacity: 1; transform: translateY(0); }
-            }
-          `}</style>
+      {/* Sale por un portal, asi que ya no lo recorta el desplazamiento del
+          menu lateral: ahi un panel de 380px dentro de una barra de 280px se
+          cortaba y dejaba una barra horizontal. En el menu aparece a su derecha
+          apoyado abajo; en la barra movil, debajo del boton. */}
+      <PopoverContent
+        side={enSidebar ? 'right' : 'bottom'}
+        align="end"
+        sideOffset={12}
+        className="z-[1500] w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[1.5rem] p-0 shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '70vh' }}>
           <div style={{
             padding: '1rem 1rem 0.9rem', borderBottom: '1px solid rgba(148, 163, 184, 0.16)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center'
@@ -494,8 +478,9 @@ const NotificationCenter = ({ enSidebar = false, colapsado = false }) => {
               )}
           </div>
         </div>
-      )}
+      </PopoverContent>
     </div>
+    </Popover>
   );
 };
 

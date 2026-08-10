@@ -1,12 +1,15 @@
-// Página Mi Equipo — vista por proyecto
-// ADMIN: ve el equipo de cada proyecto (todos los proyectos)
-// MIEMBRO: ve el equipo de sus proyectos asignados
+// Equipo de cada proyecto, agrupado y desplegable.
+//
+// Era la pagina "Comunidad", con su propia entrada en el menu. El usuario pidio
+// moverla dentro de Proyectos como una pestaña mas y dejarla **solo para el
+// admin**, que es quien reparte trabajo entre proyectos. Quien decide que se ve
+// es ProyectosPage; aqui solo se dibuja.
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { proyectosService } from '../services/api';
-import { PageSkeleton } from '../components/Skeleton';
-import UserAvatar from '../components/UserAvatar';
+import { PageSkeleton } from './Skeleton';
+import UserAvatar from './UserAvatar';
 import { usePreferences } from '../context/PreferencesContext';
 import { getEstadoProyecto } from '../utils/estadosProyecto';
 import { 
@@ -14,7 +17,9 @@ import {
   BarChart3, 
   Megaphone, 
   User, 
-  ChevronDown, 
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList, 
   Zap, 
   CheckCircle2,
@@ -27,6 +32,9 @@ const AREA_CONF = {
   COMUNICACION:   { labelKey: 'areaComunicacion',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: <Mail size={16} /> },
   MARKETING:      { labelKey: 'areaMarketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)',  icon: <Megaphone size={16} /> },
 };
+
+// 10 por pagina: con 29 proyectos, abrirlos todos era una pared de tarjetas.
+const PROYECTOS_POR_PAGINA = 10;
 
 const ROL_CONF = {
   ADMIN:   { labelKey: 'roleAdmin',   color: '#818cf8', bg: 'rgba(129,140,248,0.08)' },
@@ -141,11 +149,39 @@ const MiembroCard = ({ miembro }) => {
 };
 
 // —— Sección de proyecto —————————————————————————————————————————————————————
-const ProyectoEquipo = ({ proyecto, equipoData }) => {
+const ProyectoEquipo = ({ proyecto }) => {
   const { t } = usePreferences();
-  const [open, setOpen] = useState(true);
+  // Plegado de entrada: con veintitantos proyectos, abiertos era una pared.
+  const [open, setOpen] = useState(false);
+  const [equipoData, setEquipoData] = useState(null);
+  const [cargandoEquipo, setCargandoEquipo] = useState(false);
   const estadoColor = getColorEstado(proyecto.estado);
   const areaConf    = AREA_CONF[proyecto.creador?.area] || AREA_CONF.DESARROLLO;
+  // El conteo del encabezado sale de lo que ya trae el proyecto, para no tener
+  // que pedir el equipo solo para poder mostrar un numero.
+  const totalDelProyecto = equipoData?.length ?? proyecto.miembros?.length ?? 0;
+
+  // El equipo se pide al abrir por primera vez, no al cargar el panel. Antes se
+  // pedian los 29 de golpe y habia que esperarlos todos para ver algo.
+  //
+  // Se lanza desde el propio clic y no desde un efecto que observe `open`: asi
+  // la peticion sale una sola vez, sin la cascada de renders que provoca poner
+  // el estado de carga dentro de un efecto.
+  const alternar = async () => {
+    const abriendo = !open;
+    setOpen(abriendo);
+    if (!abriendo || equipoData !== null || cargandoEquipo) return;
+
+    setCargandoEquipo(true);
+    try {
+      const data = await proyectosService.equipoDeProyecto(proyecto.id);
+      setEquipoData(data.equipo || []);
+    } catch {
+      setEquipoData([]);
+    } finally {
+      setCargandoEquipo(false);
+    }
+  };
 
   return (
     <div style={{
@@ -155,7 +191,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
     }}>
       {/* Cabecera del proyecto — clickeable para colapsar */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={alternar}
         style={{
           width: '100%', padding: '1rem 1.25rem',
           display: 'flex', alignItems: 'center', gap: '0.75rem',
@@ -170,7 +206,7 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
             {proyecto.nombre}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginTop: '0.15rem', fontWeight: 600 }}>
-            {equipoData.length} {equipoData.length !== 1 ? t('teamMemberPlural') : t('teamMemberSingular')}
+            {totalDelProyecto} {totalDelProyecto !== 1 ? t('teamMemberPlural') : t('teamMemberSingular')}
           </div>
         </div>
         <span style={{
@@ -191,7 +227,11 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
       {/* Equipo del proyecto */}
       {open && (
         <div style={{ padding: '1rem 1.25rem' }}>
-          {equipoData.length === 0 ? (
+          {cargandoEquipo || equipoData === null ? (
+            <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+              {t('loading')}
+            </div>
+          ) : equipoData.length === 0 ? (
             <div style={{
               padding: '1.5rem', textAlign: 'center',
               border: '1px dashed var(--color-border)', borderRadius: '0.6rem',
@@ -214,57 +254,53 @@ const ProyectoEquipo = ({ proyecto, equipoData }) => {
   );
 };
 
-// —— Página principal ————————————————————————————————————————————————————————
-const EquipoPage = () => {
+// —— Panel ——————————————————————————————————————————————————————————————————
+const PanelMiembros = () => {
   const { t } = usePreferences();
-  const { usuario }               = useAuth();
-  const [datos, setDatos]         = useState([]); // [{ proyecto, equipo }]
-  const [cargando, setCargando]   = useState(true);
-  const [error, setError]         = useState('');
-  const esAdmin = usuario?.rol === 'ADMIN';
+  const [pagina, setPagina] = useState(1);
 
-  useEffect(() => {
-    const cargar = async () => {
-      try {
-        const { proyectos } = await proyectosService.listar();
-        // Para cada proyecto cargar su equipo
-        const resultados = await Promise.all(
-          proyectos.map(async (p) => {
-            const data = await proyectosService.equipoDeProyecto(p.id);
-            return { proyecto: p, equipo: data.equipo };
-          })
-        );
-        setDatos(resultados);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setCargando(false);
-      }
-    };
-    cargar();
-  }, []);
+  // Una sola peticion: la lista de proyectos. El equipo de cada uno lo pide su
+  // propia seccion al desplegarse. Antes se pedian los 29 equipos de golpe y
+  // no se pintaba nada hasta que llegaba el ultimo.
+  const { data, isLoading, error } = useSWR(
+    'panel-miembros-proyectos',
+    async () => {
+      const { proyectos } = await proyectosService.listar();
+      return proyectos || [];
+    },
+  );
 
-  const totalMiembros = new Set(datos.flatMap(d => d.equipo.map(m => m.id))).size;
+  const proyectos = data || [];
+  const totalPaginas = Math.max(1, Math.ceil(proyectos.length / PROYECTOS_POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const proyectosDeLaPagina = proyectos.slice(
+    (paginaActual - 1) * PROYECTOS_POR_PAGINA,
+    paginaActual * PROYECTOS_POR_PAGINA,
+  );
 
-  if (cargando) {
+  // Suma de los contadores que ya trae cada proyecto, sin pedir nada mas
+  const totalMiembros = proyectos.reduce((suma, p) => suma + (p.miembros?.length || 0), 0);
+
+  if (isLoading && !data) {
     return <PageSkeleton cards={3} showSidebar={false} />;
   }
 
   return (
-    <div style={{ padding: '1.5rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 600, marginBottom: '0.25rem' }}>{t('teamTitle')}</h1>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '1.15rem' }}>
-          {esAdmin
-            ? t('teamSummary', { members: totalMiembros, memberLabel: totalMiembros !== 1 ? t('teamMemberPlural') : t('teamMemberSingular'), projects: datos.length, projectLabel: datos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular') })
-            : `${t('projectList')} ${datos.length} ${datos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular')}`
-          }
-        </p>
-      </div>
+    <div>
+      {/* El resumen se queda: dice de un vistazo cuanta gente hay repartida y
+          en cuantos proyectos. El titulo lo pone la pestaña. */}
+      <p className="mb-5 text-sm font-normal text-[var(--color-text-muted)]">
+        {t('teamSummary', {
+          members: totalMiembros,
+          memberLabel: totalMiembros !== 1 ? t('teamMemberPlural') : t('teamMemberSingular'),
+          projects: proyectos.length,
+          projectLabel: proyectos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular'),
+        })}
+      </p>
 
       {error ? (
-        <div className="alert-error">{error}</div>
-      ) : datos.length === 0 ? (
+        <div className="alert-error">{error.message}</div>
+      ) : proyectos.length === 0 ? (
         <div style={{
           padding: '3rem', textAlign: 'center',
           background: 'var(--color-surface-2)', border: '1px dashed var(--color-border)',
@@ -273,15 +309,51 @@ const EquipoPage = () => {
           {t('teamNoProjects')}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {datos.map(({ proyecto, equipo }) => (
-            <ProyectoEquipo key={proyecto.id} proyecto={proyecto} equipoData={equipo} />
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {proyectosDeLaPagina.map((proyecto) => (
+              <ProyectoEquipo key={proyecto.id} proyecto={proyecto} />
+            ))}
+          </div>
+
+          {totalPaginas > 1 && (
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+              <span className="text-sm font-normal text-[var(--color-text-muted)]">
+                {t('timelineRange', {
+                  desde: (paginaActual - 1) * PROYECTOS_POR_PAGINA + 1,
+                  hasta: Math.min(paginaActual * PROYECTOS_POR_PAGINA, proyectos.length),
+                  total: proyectos.length,
+                })}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPagina((n) => Math.max(1, n - 1))}
+                  disabled={paginaActual === 1}
+                  aria-label={t('previous')}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="min-w-[70px] text-center text-sm font-medium text-[var(--color-text)]">
+                  {paginaActual} / {totalPaginas}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPagina((n) => Math.min(totalPaginas, n + 1))}
+                  disabled={paginaActual === totalPaginas}
+                  aria-label={t('next')}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 };
 
-export default EquipoPage;
-
+export default PanelMiembros;

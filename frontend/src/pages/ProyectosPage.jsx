@@ -11,6 +11,7 @@ import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
 import ActionMenu from '../components/ActionMenu';
 import CampoFiltro from '../components/CampoFiltro';
+import PanelMiembros from '../components/PanelMiembros';
 import SelectorMultiple from '../components/SelectorMultiple';
 import SelectorRangoFechas from '../components/SelectorRangoFechas';
 import TaskAttachments from '../components/TaskAttachments';
@@ -19,6 +20,7 @@ import { useDebounce } from '../utils/useDebounce';
 import { Switch } from '../components/ui/switch';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   ESTADOS_PROYECTO,
   getEstadoProyecto,
@@ -670,6 +672,8 @@ const ProyectosPage = () => {
   const { showToast } = useToast();
   const esAdmin = usuario?.rol?.toUpperCase() === 'ADMIN';
 
+  // Pestaña activa. "miembros" es la antigua pagina Comunidad, solo para admin.
+  const [vista, setVista] = useState('proyectos');
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
   const [filtro, setFiltro] = useState('TODOS');
@@ -782,6 +786,26 @@ const ProyectosPage = () => {
           </button>
         )}
       </div>
+
+      {/* La antigua pagina "Comunidad" vive ahora aqui como una pestaña, y solo
+          la ve el admin: es quien reparte trabajo entre proyectos y necesita ver
+          quien esta en cada uno. Sin ser admin no hay pestañas, se entra directo
+          a la lista de proyectos. */}
+      {esAdmin && (
+        <Tabs value={vista} onValueChange={setVista} className="mb-6">
+          <TabsList>
+            <TabsTrigger value="proyectos" className="text-sm font-normal data-[state=active]:font-medium">
+              {t('projects')}
+            </TabsTrigger>
+            <TabsTrigger value="miembros" className="text-sm font-normal data-[state=active]:font-medium">
+              {t('teamTitle')}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {vista === 'miembros' ? <PanelMiembros /> : (
+      <>
 
       {/* Buscador y filtros en una sola fila. Los tres van al servidor, para que
           la paginacion cuente sobre el resultado real y no sobre lo descargado. */}
@@ -923,6 +947,9 @@ const ProyectosPage = () => {
             </div>
           )}
           </>
+      )}
+
+      </>
       )}
 
       {modal && <ModalProyecto proyecto={editando} onClose={() => setModal(false)} onGuardar={() => { setModal(false); mutate(); }} />}

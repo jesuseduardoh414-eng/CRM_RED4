@@ -44,7 +44,6 @@ const InvitationPage = lazyRetry(() => import('./pages/InvitationPage'), 'invita
 const DashboardPage = lazyRetry(() => import('./pages/DashboardPage'), 'dashboard');
 const ProyectosPage = lazyRetry(() => import('./pages/ProyectosPage'), 'proyectos');
 const ProyectoDetallePage = lazyRetry(() => import('./pages/ProyectoDetallePage'), 'proyecto_detalle');
-const EquipoPage = lazyRetry(() => import('./pages/EquipoPage'), 'equipo');
 const UsuariosPage = lazyRetry(() => import('./pages/UsuariosPage'), 'usuarios');
 const AgendaPage = lazyRetry(() => import('./pages/AgendaPage'), 'agenda');
 const PerfilPage = lazyRetry(() => import('./pages/PerfilPage'), 'perfil');
@@ -92,7 +91,6 @@ const AppRoutes = () => (
     <Route path="/dashboard" element={<RutaConLayout><DashboardPage /></RutaConLayout>} />
     <Route path="/proyectos" element={<RutaConLayout><ProyectosPage /></RutaConLayout>} />
     <Route path="/proyectos/:id" element={<RutaConLayout><ProyectoDetallePage /></RutaConLayout>} />
-    <Route path="/equipo" element={<RutaConLayout><EquipoPage /></RutaConLayout>} />
     <Route path="/usuarios" element={<RutaConLayout><UsuariosPage /></RutaConLayout>} />
     <Route path="/agenda" element={<RutaConLayout><AgendaPage /></RutaConLayout>} />
     <Route path="/perfil" element={<RutaConLayout><PerfilPage /></RutaConLayout>} />

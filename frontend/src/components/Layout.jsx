@@ -23,7 +23,6 @@ import {
 
 const IconDashboard = () => <LayoutDashboard size={20} strokeWidth={2.5} />;
 const IconProyectos = () => <FolderKanban size={20} strokeWidth={2.5} />;
-const IconEquipo = () => <Users size={20} strokeWidth={2.5} />;
 const IconGestion = () => <ShieldCheck size={20} strokeWidth={2.5} />;
 const IconLogout = () => <LogOut size={18} strokeWidth={2.5} />;
 const IconMenu = () => <Menu size={24} strokeWidth={2.5} />;
@@ -33,7 +32,6 @@ const navLinks = [
   { to: '/dashboard', labelKey: 'home', Icon: IconDashboard },
   { to: '/proyectos', labelKey: 'projects', Icon: IconProyectos },
   { to: '/agenda', labelKey: 'agenda', Icon: IconAgenda },
-  { to: '/equipo', labelKey: 'community', Icon: IconEquipo },
 ];
 
 const Layout = ({ children }) => {
