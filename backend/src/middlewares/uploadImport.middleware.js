@@ -1,7 +1,7 @@
 /**
  * Middleware de subida exclusivo para importación de tareas
  * Tipos permitidos: .json, .xlsx, .xls
- * Tamaño máximo: 5MB
+ * Tamaño máximo: 4MB (Vercel corta en 4.5MB)
  */
 
 const multer = require('multer');
@@ -24,13 +24,18 @@ const fileFilter = (_req, file, cb) => {
   if (extOk || mimeOk) {
     cb(null, true);
   } else {
-    cb(new Error('Solo se permiten archivos .json, .xlsx o .xls'), false);
+    // `esErrorCliente` hace que el manejador global responda 400 con este
+    // mensaje en vez de un 500 generico.
+    const error = new Error('Solo se permiten archivos .json, .xlsx o .xls');
+    error.esErrorCliente = true;
+    error.statusCode = 400;
+    cb(error, false);
   }
 };
 
 const uploadImport = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 4 * 1024 * 1024 }, // 4MB
   fileFilter,
 });
 

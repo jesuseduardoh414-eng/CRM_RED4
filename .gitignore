@@ -8,3 +8,20 @@ frontend/node_modules
 frontend/dist
 backend/.env
 frontend/.env
+
+# Archivos locales que no deben versionarse
+backend/uploads/
+# Disco del servidor: adjuntos, PDF de contratos y comprobantes de finanzas
+backend/storage/
+scratch/
+backend/scratch/
+frontend/scratch/
+tareas_generadas.json
+*.local
+dist/
+respaldos/
+# Zips para subir al cPanel (backend/scripts/empaquetar_cpanel.js)
+paquete_cpanel/
+# Material del cliente (el repo es público): logos originales y la carta
+/LOGOD/
+/*.pdf

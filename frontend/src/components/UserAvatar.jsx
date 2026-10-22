@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getPublicAssetUrl } from '../services/api';
+import { usePreferences } from '../context/PreferencesContext';
 
 const getInitials = (nombre = '') => (
   nombre
@@ -10,31 +11,46 @@ const getInitials = (nombre = '') => (
     .join('') || '?'
 );
 
+/**
+ * Foto de una persona, con iniciales de respaldo.
+ *
+ * `fotoPerfilUrl` admite las tres formas que devuelve el backend: una URL
+ * absoluta de Vercel Blob (https://...), un `data:` en base64 (perfiles
+ * antiguos) o una ruta relativa al servidor; `getPublicAssetUrl` las resuelve.
+ * Si la imagen no carga, se cae a las iniciales.
+ */
 const UserAvatar = ({
   usuario,
   nombre,
   fotoPerfilUrl,
   size = 48,
   radius = 14,
-  color = '#2563eb',
-  background = 'rgba(37,99,235,0.08)',
-  borderColor = 'rgba(37,99,235,0.18)',
+  color = 'var(--color-primary)',
+  background = 'var(--color-primary-10)',
+  borderColor = 'var(--color-primary-20)',
   fontSize = '1rem',
   shadow = 'none',
   className = '',
   title,
 }) => {
-  const [imagenFallida, setImagenFallida] = useState(false);
+  const { t } = usePreferences();
+  // Se guarda QUE url fallo, no un si/no: el mismo avatar se reutiliza con otra
+  // persona (p. ej. al cambiar el responsable de una tarjeta) y antes, tras un
+  // fallo, ya no volvia a intentar ninguna foto.
+  const [urlFallida, setUrlFallida] = useState(null);
 
   const displayName = nombre || usuario?.nombre || '';
   const displayPhoto = fotoPerfilUrl ?? usuario?.fotoPerfilUrl ?? '';
-  const resolvedPhoto = getPublicAssetUrl(displayPhoto);
-  const mostrarFoto = Boolean(resolvedPhoto) && !imagenFallida;
+  const resolvedPhoto = getPublicAssetUrl(typeof displayPhoto === 'string' ? displayPhoto : '');
+  const mostrarFoto = Boolean(resolvedPhoto) && urlFallida !== resolvedPhoto;
 
   return (
     <div
       className={className}
       title={title || displayName || undefined}
+      // Con iniciales, el nombre va en aria-label para que el lector no lea "JD"
+      role={mostrarFoto ? undefined : 'img'}
+      aria-label={mostrarFoto ? undefined : (displayName || t('userGeneric'))}
       style={{
         width: `${size}px`,
         height: `${size}px`,
@@ -57,13 +73,13 @@ const UserAvatar = ({
       {mostrarFoto ? (
         <img
           src={resolvedPhoto}
-          alt={displayName || 'Usuario'}
+          alt={displayName || t('userGeneric')}
           // Si la URL esta rota se cae a las iniciales en vez de dejar el hueco vacio
-          onError={() => setImagenFallida(true)}
+          onError={() => setUrlFallida(resolvedPhoto)}
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
       ) : (
-        getInitials(displayName)
+        <span aria-hidden="true">{getInitials(displayName)}</span>
       )}
     </div>
   );

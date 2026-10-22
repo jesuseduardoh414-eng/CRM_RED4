@@ -1,19 +1,31 @@
 // Página de Gestión de Usuarios (Solo Admin)
-import { Fragment, useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
-import { proyectosService, tareasService, usuariosService, statsService } from '../services/api';
+import { useSearchParams } from 'react-router-dom';
+import { usuariosService } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
+import { useConfiguracion } from '../context/ConfiguracionContext';
+import { AREA_GENERAL } from '../utils/areas';
 import { PageSkeleton } from '../components/Skeleton';
 import UserAvatar from '../components/UserAvatar';
 import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
 import ActionMenu from '../components/ActionMenu';
+import CampoFiltro from '../components/CampoFiltro';
+import SelectorSimple from '../components/SelectorSimple';
+import { useConfirmacion } from '../components/ConfirmDialog';
+import { Button } from '../components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { useDebounce } from '../utils/useDebounce';
-import { 
-  Pencil, 
-  Trash2, 
+import ModalPermisosPersona from '../components/usuarios/ModalPermisosPersona';
+import { alcanceDe, esAdminGeneral, puede } from '../utils/permisos';
+import { useTextoPermisos } from '../hooks/useTextoPermisos';
+import {
+  KeyRound,
+  Pencil,
   UserPlus,
   Mail,
   Send,
@@ -21,6 +33,7 @@ import {
   Clock,
   AlertTriangle,
   RefreshCcw,
+  RefreshCw,
   UserX,
   UserCheck,
   Ban,
@@ -28,177 +41,315 @@ import {
   X
 } from 'lucide-react';
 
-const AREAS = ['DESARROLLO', 'ADMINISTRACION', 'COMUNICACION', 'MARKETING'];
 const ROLES = ['MIEMBRO', 'ADMIN'];
+// Mismos valores que guarda el backend (usuarios.controller normaliza a minusculas)
+// 'pendiente' = se registro solo y verifico su correo: espera aprobacion.
+const ESTADOS_USUARIO = ['activo', 'pendiente', 'inactivo'];
+const esRegistroPendiente = (estado) => estado === 'pendiente' || estado === 'pendiente_verificacion';
 
-const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
+const ROL_LABEL_KEY = { ADMIN: 'roleAdmin', MIEMBRO: 'roleMember' };
+
+// Etiquetas legibles: antes se mostraba el valor crudo ("DESARROLLO", "ADMIN").
+// El nombre del area sale de la configuracion (nombreArea de useConfiguracion).
+const etiquetaArea = (t, nombreArea, area) => (area ? nombreArea(String(area).toUpperCase()) : t('areaGeneral'));
+const etiquetaRol = (t, rol) => t(ROL_LABEL_KEY[String(rol || '').toUpperCase()] || 'roleMember');
+const ETIQUETA_ESTADO = {
+  activo: 'usersStatusActive',
+  pendiente: 'usersStatusPendingApproval',
+  pendiente_verificacion: 'usersStatusPendingVerification',
+};
+const etiquetaEstadoUsuario = (t, estado) => t(ETIQUETA_ESTADO[estado] || 'usersStatusInactive');
+
+const ESTILO_ROL = {
+  ADMIN:   { background: 'var(--badge-warning-bg)', color: 'var(--badge-warning-fg)' },
+  MIEMBRO: { background: 'var(--badge-success-bg)', color: 'var(--badge-success-fg)' },
+};
+const ESTILO_INVITACION = {
+  pendiente: { background: 'var(--badge-info-bg)',    color: 'var(--badge-info-fg)',    Icon: Clock,         labelKey: 'usersStatusPending' },
+  aceptada:  { background: 'var(--badge-success-bg)', color: 'var(--badge-success-fg)', Icon: CheckCircle2,  labelKey: 'usersStatusAccepted' },
+  expirada:  { background: 'var(--badge-danger-bg)',  color: 'var(--badge-danger-fg)',  Icon: AlertTriangle, labelKey: 'usersStatusExpired' },
+};
+
+const formatearFecha = (valor, locale) => {
+  if (!valor) return '—';
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? '—' : fecha.toLocaleDateString(locale);
+};
 
 const UsuariosPage = () => {
   const { t } = usePreferences();
+  const { areas, nombreArea } = useConfiguracion();
   const { usuario: usuarioActual } = useAuth();
+  const { showToast } = useToast();
+  const { confirmar, dialogo } = useConfirmacion();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('activos');
-  const [usuarios, setUsuarios] = useState([]);
-  const [invitaciones, setInvitaciones] = useState([]);
   const [modalInvitar, setModalInvitar] = useState(false);
   const [modalEditar, setModalEditar] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
-  const [busqueda, setBusqueda] = useState('');
+  // Persona cuyos permisos se ajustan (solo el administrador general).
+  const [permisosDe, setPermisosDe] = useState(null);
+  // Lo que puede hacer quien mira la sección (utils/permisos.js); el
+  // servidor revisa además el área y que no se toque a otros administradores.
+  const puedeInvitar = puede(usuarioActual, 'usuarios.invitar');
+  const acciones = {
+    editar: puede(usuarioActual, 'usuarios.editar'),
+    desactivar: puede(usuarioActual, 'usuarios.desactivar'),
+    general: esAdminGeneral(usuarioActual),
+  };
+  // El buscador global (Ctrl+K) llega aqui con ?q=nombre. Si ya estabamos en
+  // esta pantalla el componente no se vuelve a montar, asi que el parametro se
+  // sigue como estado derivado ("ultimo aplicado"), igual que ?fecha= en Agenda.
+  const qParam = searchParams.get('q') || '';
+  const [busqueda, setBusqueda] = useState(qParam);
+  const [qAplicado, setQAplicado] = useState(qParam);
+  if (qParam !== qAplicado) {
+    setQAplicado(qParam);
+    if (qParam) setBusqueda(qParam);
+  }
+  const [filtroArea, setFiltroArea] = useState('TODAS');
+  const [filtroRol, setFiltroRol] = useState('TODOS');
+  const [filtroEstado, setFiltroEstado] = useState('TODOS');
   const busquedaDiferida = useDebounce(busqueda, 350);
-  const { showToast } = useToast();
 
-  const { 
-    data: listado,
-    error,
-    isLoading,
-    mutate 
+  // Una peticion por pestaña, cada una con su propia clave. Antes las dos
+  // compartian un hook y, con keepPreviousData, al pasar a invitaciones se
+  // pintaba un instante la lista de usuarios como si fueran invitaciones
+  // ("Expira: Invalid Date"). Los filtros van en la clave para que cada
+  // combinacion se cachee aparte y el servidor haga el filtrado.
+  const {
+    data: usuarios,
+    error: errorUsuarios,
+    isLoading: cargandoUsuarios,
+    mutate: recargarUsuarios,
   } = useSWR(
-    // La busqueda forma parte de la clave: SWR cachea cada termino por separado
-    // y no revuelve resultados de busquedas distintas.
-    tab === 'activos' ? ['usuarios', busquedaDiferida] : ['invitaciones', busquedaDiferida],
-    async ([key, q]) => {
-      if (key === 'usuarios') {
-        const res = await usuariosService.listar({ q });
-        return res.usuarios || [];
-      }
-        return await usuariosService.listarInvitaciones();
+    tab === 'activos' ? ['usuarios', busquedaDiferida, filtroArea, filtroRol, filtroEstado] : null,
+    async ([, q, area, rol, estado]) => {
+      const res = await usuariosService.listar({
+        q,
+        ...(area !== 'TODAS' && { area }),
+        ...(rol !== 'TODOS' && { rol }),
+        ...(estado !== 'TODOS' && { estado }),
+      });
+      return res.usuarios || [];
     },
-    { 
-      revalidateOnFocus: false,
-      dedupingInterval: 5000 
-    }
+    { dedupingInterval: 5000, onError: (error) => showToast(error.message, 'error') },
   );
 
-  useEffect(() => {
-    if (tab === 'activos') {
-      setUsuarios(listado || []);
-    } else {
-      setInvitaciones(listado || []);
-    }
-  }, [listado, tab]);
-
-  useEffect(() => {
-    if (error) showToast(error.message, 'error');
-  }, [error, showToast]);
-
-  const handleEliminar = async (id) => {
-    if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;
-    try {
-      await usuariosService.eliminar(id);
-      mutate();
-      showToast('Usuario eliminado', 'success');
-    } catch (error) { showToast(error.message, 'error'); }
-  };
+  const {
+    data: invitaciones,
+    error: errorInvitaciones,
+    isLoading: cargandoInvitaciones,
+    mutate: recargarInvitaciones,
+  } = useSWR(
+    tab === 'invitaciones' ? 'invitaciones' : null,
+    async () => {
+      const res = await usuariosService.listarInvitaciones();
+      return Array.isArray(res) ? res : (res.invitaciones || []);
+    },
+    { keepPreviousData: false, dedupingInterval: 5000, onError: (error) => showToast(error.message, 'error') },
+  );
 
   const handleToggleEstado = async (u) => {
-    const nuevoEstado = u.estado === 'activo' ? 'inactivo' : 'activo';
-    const msg = nuevoEstado === 'activo' ? 'activado' : 'desactivado';
+    // Nadie se desactiva a si mismo desde aqui: se quedaria fuera del sistema
+    if (u.id === usuarioActual?.id) return;
+
+    if (u.estado === 'activo') {
+      const ok = await confirmar({
+        titulo: t('usersDeactivateConfirm', { name: u.nombre }),
+        textoConfirmar: t('usersDeactivate'),
+        peligro: true,
+      });
+      if (!ok) return;
+      try {
+        // DELETE /usuarios/:id ya no borra: desactiva y conserva el historial
+        await usuariosService.desactivar(u.id);
+        recargarUsuarios();
+        showToast(t('usersDeactivated'));
+      } catch (error) { showToast(error.message, 'error'); }
+      return;
+    }
+
     try {
-      await usuariosService.toggleEstado(u.id, nuevoEstado);
-      mutate();
-      showToast(`Usuario ${msg}`, 'success');
+      await usuariosService.toggleEstado(u.id, 'activo');
+      recargarUsuarios();
+      showToast(esRegistroPendiente(u.estado) ? t('usersApproved') : t('usersActivated'));
     } catch (error) { showToast(error.message, 'error'); }
   };
 
   const handleReenviarInvitacion = async (email) => {
     try {
-      await usuariosService.reenviarInvitacion(email);
-      showToast('Invitación reenviada', 'success');
-      mutate();
+      const res = await usuariosService.reenviarInvitacion(email);
+      if (res?.advertencia) showToast(res.advertencia, 'info', { duration: 8000 });
+      else showToast(t('usersInvitationResent'));
+      recargarInvitaciones();
     } catch (error) { showToast(error.message, 'error'); }
   };
 
   const handleEliminarInvitacion = async (invitacion) => {
     if (invitacion.estado === 'aceptada') {
-      showToast('Las invitaciones aceptadas se conservan como historial', 'error');
+      showToast(t('usersInvitationAcceptedKept'), 'info');
       return;
     }
 
-    if (!confirm(`¿Eliminar la invitación de ${invitacion.nombre}?`)) return;
+    const ok = await confirmar({
+      titulo: t('usersInvitationDeleteConfirm', { name: invitacion.nombre }),
+      descripcion: invitacion.email,
+      textoConfirmar: t('delete'),
+      peligro: true,
+    });
+    if (!ok) return;
 
     try {
       await usuariosService.eliminarInvitacion(invitacion.id);
-      showToast('Invitación eliminada', 'success');
-      mutate();
+      showToast(t('usersInvitationDeleted'));
+      recargarInvitaciones();
     } catch (error) { showToast(error.message, 'error'); }
   };
 
+  const hayFiltros = Boolean(busqueda) || filtroArea !== 'TODAS' || filtroRol !== 'TODOS' || filtroEstado !== 'TODOS';
+  const limpiarFiltros = () => {
+    setBusqueda('');
+    setFiltroArea('TODAS');
+    setFiltroRol('TODOS');
+    setFiltroEstado('TODOS');
+  };
 
-  if (isLoading && (usuarios.length === 0 && invitaciones.length === 0)) return <PageSkeleton cards={4} />;
+  const cargandoPestana = tab === 'activos' ? (cargandoUsuarios && !usuarios) : (cargandoInvitaciones && !invitaciones);
+  const errorPestana = tab === 'activos' ? (errorUsuarios && !usuarios) : (errorInvitaciones && !invitaciones);
+  const reintentar = () => (tab === 'activos' ? recargarUsuarios() : recargarInvitaciones());
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    // Sin padding propio: el Layout ya pone el suyo y aqui se sumaba otro
+    <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
         <div>
           <h1 className="text-2xl md:text-4xl font-semibold text-[var(--color-text)] tracking-tight">{t('usersManageTitle')}</h1>
           <p className="text-sm text-[var(--color-text-muted)] mt-1">{t('usersManageSubtitle')}</p>
         </div>
-        <button 
-          onClick={() => setModalInvitar(true)}
-          className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl md:rounded-2xl font-medium shadow-lg shadow-blue-200 transition-all active:scale-95"
-        >
-          <UserPlus size={18} />
-          <span className="text-sm">{t('usersInvite')}</span>
-        </button>
+        {puedeInvitar && (
+          <Button size="lg" className="w-full md:w-auto" onClick={() => setModalInvitar(true)}>
+            <UserPlus size={18} />
+            {t('usersInvite')}
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 bg-slate-100 p-1.5 rounded-2xl w-fit">
-        <button 
-          onClick={() => setTab('activos')}
-          className={`px-6 py-2.5 rounded-xl font-medium text-sm transition-all ${tab === 'activos' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          {t('usersActiveMembers')}
-        </button>
-        <button 
-          onClick={() => setTab('invitaciones')}
-          className={`px-6 py-2.5 rounded-xl font-medium text-sm transition-all ${tab === 'invitaciones' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          {t('usersInvitationsTab')}
-        </button>
-      </div>
+      <Tabs value={tab} onValueChange={setTab} className="mb-6">
+        <TabsList>
+          <TabsTrigger value="activos" className="text-sm font-normal data-[state=active]:font-medium">
+            {t('usersActiveMembers')}
+          </TabsTrigger>
+          {puedeInvitar && (
+            <TabsTrigger value="invitaciones" className="text-sm font-normal data-[state=active]:font-medium">
+              {t('usersInvitationsTab')}
+            </TabsTrigger>
+          )}
+        </TabsList>
+      </Tabs>
 
-      {/* Buscador — solo aplica a miembros activos */}
+      {/* Buscador y filtros en una sola fila — solo aplican a miembros. Los
+          cuatro van al servidor (la API ya aceptaba area, rol y estado). */}
       {tab === 'activos' && (
-        <div className="relative mb-6 max-w-xl">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none">
-            <Search size={18} />
-          </span>
-            <input
-            type="search"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder={t('usersSearchPlaceholder')}
-            aria-label={t('usersSearchPlaceholder')}
-            className="w-full pl-11 pr-11 py-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] text-sm font-medium text-[var(--color-text)] outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-          />
-          {busqueda && (
-            <Tooltip label={t('clearSearch')}>
-              <button
-              type="button"
-                onClick={() => setBusqueda('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
-              >
-                <X size={16} />
-              </button>
-            </Tooltip>
+        <div className="mb-6 flex flex-wrap items-end gap-3">
+          <CampoFiltro label={t('search')} htmlFor="usuarios-buscar" className="w-full sm:w-auto sm:min-w-[240px] flex-1 max-w-xl">
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none">
+                <Search size={18} />
+              </span>
+              <input
+                id="usuarios-buscar"
+                type="search"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder={t('usersSearchPlaceholder')}
+                className="w-full h-11 pl-11 pr-11 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-sm font-normal text-[var(--color-text)] outline-none transition-all focus:border-[var(--color-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-40)]"
+              />
+              {busqueda && (
+                <Tooltip label={t('clearSearch')}>
+                  <button
+                    type="button"
+                    onClick={() => setBusqueda('')}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
+                  >
+                    <X size={16} />
+                  </button>
+                </Tooltip>
+              )}
+            </div>
+          </CampoFiltro>
+
+          {/* En móvil: Área a lo ancho y Rol/Estado a medias. Con anchos fijos
+              cada selector caía en su propia fila con hueco a la derecha. */}
+          <CampoFiltro label={t('fieldArea')} className="w-full sm:w-auto">
+            <Select value={filtroArea} onValueChange={setFiltroArea}>
+              <SelectTrigger className="h-11 w-full text-sm font-normal sm:w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent className="z-[1500]">
+                <SelectItem value="TODAS" className="text-sm font-normal">{t('usersAllAreas')}</SelectItem>
+                {areas.map(({ clave: area }) => (
+                  <SelectItem key={area} value={area} className="text-sm font-normal">{etiquetaArea(t, nombreArea, area)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CampoFiltro>
+
+          <CampoFiltro label={t('fieldRole')} className="min-w-0 flex-1 sm:flex-none">
+            <Select value={filtroRol} onValueChange={setFiltroRol}>
+              <SelectTrigger className="h-11 w-full text-sm font-normal sm:w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectContent className="z-[1500]">
+                <SelectItem value="TODOS" className="text-sm font-normal">{t('usersAllRoles')}</SelectItem>
+                {ROLES.map((rol) => (
+                  <SelectItem key={rol} value={rol} className="text-sm font-normal">{etiquetaRol(t, rol)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CampoFiltro>
+
+          <CampoFiltro label={t('usersFilterStatus')} className="min-w-0 flex-1 sm:flex-none">
+            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+              <SelectTrigger className="h-11 w-full text-sm font-normal sm:w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectContent className="z-[1500]">
+                <SelectItem value="TODOS" className="text-sm font-normal">{t('usersAllStatuses')}</SelectItem>
+                {ESTADOS_USUARIO.map((estado) => (
+                  <SelectItem key={estado} value={estado} className="text-sm font-normal">{etiquetaEstadoUsuario(t, estado)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CampoFiltro>
+
+          {hayFiltros && (
+            <Button variant="ghost" className="h-11 w-full sm:w-auto" onClick={limpiarFiltros}>
+              <X size={16} /> {t('clearFilters')}
+            </Button>
           )}
         </div>
       )}
 
       {/* Content */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        {tab === 'activos' ? (
+      <div className="bg-[var(--color-surface)] rounded-3xl border border-[var(--color-border)] shadow-sm overflow-hidden">
+        {cargandoPestana ? (
+          <div className="p-6"><PageSkeleton cards={3} showSidebar={false} /></div>
+        ) : errorPestana ? (
+          <div className="p-12 flex flex-col items-center gap-4 text-center">
+            <p className="text-sm text-[var(--color-error)]">{errorPestana.message}</p>
+            <Button variant="outline" onClick={reintentar}><RefreshCw size={15} /> {t('retry')}</Button>
+          </div>
+        ) : tab === 'activos' ? (
           <TablaActivos
-            usuarios={usuarios}
-            busqueda={busquedaDiferida}
+            usuarios={usuarios || []}
+            usuarioActualId={usuarioActual?.id}
+            hayFiltros={hayFiltros}
+            onLimpiarFiltros={limpiarFiltros}
+            acciones={acciones}
             onEdit={(u) => { setUsuarioEditando(u); setModalEditar(true); }}
-            onDelete={handleEliminar}
+            onPermisos={(u) => setPermisosDe(u)}
             onToggleStatus={handleToggleEstado}
           />
         ) : (
-          <TablaInvitaciones 
-            invitaciones={invitaciones} 
+          <TablaInvitaciones
+            invitaciones={invitaciones || []}
             onResend={handleReenviarInvitacion}
             onDelete={handleEliminarInvitacion}
           />
@@ -207,54 +358,107 @@ const UsuariosPage = () => {
 
       {/* Modales */}
       {modalInvitar && (
-        <ModalInvitar 
+        <ModalInvitar
           usuarioActual={usuarioActual}
-          onClose={() => setModalInvitar(false)} 
-          onSuccess={() => { setModalInvitar(false); setTab('invitaciones'); mutate(); }}
+          onClose={() => setModalInvitar(false)}
+          onSuccess={() => { setModalInvitar(false); setTab('invitaciones'); recargarInvitaciones(); }}
         />
       )}
 
       {modalEditar && (
-        <ModalEditar 
+        <ModalEditar
           usuarioActual={usuarioActual}
           usuario={usuarioEditando}
-          onClose={() => { setModalEditar(false); setUsuarioEditando(null); }} 
-          onSuccess={() => { setModalEditar(false); setUsuarioEditando(null); mutate(); }}
+          onClose={() => { setModalEditar(false); setUsuarioEditando(null); }}
+          onSuccess={() => { setModalEditar(false); setUsuarioEditando(null); recargarUsuarios(); }}
         />
       )}
+
+      {permisosDe && (
+        <ModalPermisosPersona usuarioId={permisosDe.id} onClose={() => setPermisosDe(null)} />
+      )}
+
+      {dialogo}
     </div>
   );
 };
 
-const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, busqueda = '' }) => {
-  const { t } = usePreferences();
+const CeldaCabecera = ({ children, alineacion = 'left' }) => (
+  <th className={`px-6 py-4 text-${alineacion} text-xs font-medium text-[var(--color-text-muted)] tracking-wider`}>{children}</th>
+);
+
+const EtiquetaRol = ({ rol, t }) => (
+  <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg" style={ESTILO_ROL[String(rol || '').toUpperCase()] || ESTILO_ROL.MIEMBRO}>
+    {etiquetaRol(t, rol)}
+  </span>
+);
+
+const colorEstado = (estado) => {
+  if (estado === 'activo') return 'var(--color-success)';
+  if (esRegistroPendiente(estado)) return 'var(--color-warning)';
+  return 'var(--color-text-muted)';
+};
+
+const EstadoUsuario = ({ estado, t }) => (
+  <span className="inline-flex items-center gap-1.5 text-xs font-medium" style={{ color: colorEstado(estado) }}>
+    <span
+      className={`w-1.5 h-1.5 rounded-full ${estado === 'activo' || esRegistroPendiente(estado) ? 'animate-pulse' : ''}`}
+      style={{ background: colorEstado(estado) }}
+    />
+    {etiquetaEstadoUsuario(t, estado)}
+  </span>
+);
+
+const TablaActivos = ({ usuarios, usuarioActualId, hayFiltros, onLimpiarFiltros, acciones = {}, onEdit, onPermisos, onToggleStatus }) => {
+  const { t, locale } = usePreferences();
+  const tp = useTextoPermisos();
+  const { nombreArea } = useConfiguracion();
 
   if (usuarios.length === 0) {
-  return (
-      <div className="p-12 text-center text-[var(--color-text-muted)]">
-        {busqueda ? `${t('searchNoResults')}: "${busqueda}"` : t('usersNoActiveMembers')}
+    return (
+      <div className="p-12 flex flex-col items-center gap-4 text-center text-[var(--color-text-muted)]">
+        <span>{hayFiltros ? t('searchNoResults') : t('usersNoActiveMembers')}</span>
+        {hayFiltros && (
+          <Button variant="outline" onClick={onLimpiarFiltros}><X size={15} /> {t('clearFilters')}</Button>
+        )}
       </div>
-  );
+    );
   }
+
+  // Sin "Eliminar" por decision del usuario: las cuentas se desactivan y
+  // conservan su historial. Nadie puede desactivarse a si mismo desde aqui.
+  // A otros administradores solo los toca el administrador general; los
+  // permisos por persona tambien son solo suyos (y no aplican a otro general).
+  const accionesDe = (u) => {
+    const tocable = acciones.general || u.rol !== 'ADMIN';
+    return [
+      acciones.desactivar && tocable && u.id !== usuarioActualId && {
+        label: u.estado === 'activo' ? t('usersDeactivate') : esRegistroPendiente(u.estado) ? t('usersApprove') : t('usersActivate'),
+        icon: u.estado === 'activo' ? <UserX size={15} /> : <UserCheck size={15} />,
+        onSelect: () => onToggleStatus(u),
+      },
+      acciones.editar && tocable && { label: t('edit'), icon: <Pencil size={15} />, onSelect: () => onEdit(u) },
+      acciones.general && !esAdminGeneral(u) && { label: tp('permPersonaBoton'), icon: <KeyRound size={15} />, onSelect: () => onPermisos(u) },
+    ].filter(Boolean);
+  };
 
   return (
     <div className="overflow-x-auto">
       {/* Desktop Table View */}
-      <table className="hidden md:table w-full">
-        <thead className="bg-slate-50 border-b border-slate-200">
+      <table className="usr-tabla hidden md:table w-full">
+        <thead className="bg-[var(--color-surface-3)] border-b border-[var(--color-border)]">
           <tr>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableMember')}</th>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableArea')}</th>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableRole')}</th>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableRegister')}</th>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableStatus')}</th>
-            <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 tracking-wider">{t('usersTableActions')}</th>
+            <CeldaCabecera>{t('usersTableMember')}</CeldaCabecera>
+            <CeldaCabecera>{t('usersTableArea')}</CeldaCabecera>
+            <CeldaCabecera>{t('usersTableRole')}</CeldaCabecera>
+            <CeldaCabecera>{t('usersTableRegister')}</CeldaCabecera>
+            <CeldaCabecera>{t('usersTableStatus')}</CeldaCabecera>
+            <CeldaCabecera alineacion="right">{t('usersTableActions')}</CeldaCabecera>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-[var(--color-border-light)]">
           {usuarios.map(u => (
-            <Fragment key={u.id}>
-            <tr className="hover:bg-slate-50/50 transition-colors">
+            <tr key={u.id} className="hover:bg-[var(--color-surface-3)] transition-colors">
               <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
                   <UserAvatar
@@ -263,55 +467,31 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, busqueda = '
                     radius={12}
                     fontSize="0.9rem"
                     color="var(--color-primary)"
-                    background="rgba(37,99,235,0.08)"
-                    borderColor="rgba(37,99,235,0.18)"
+                    background="var(--color-primary-10)"
+                    borderColor="var(--color-primary-20)"
                   />
                   <div>
-                    <div className="font-medium text-slate-900">{u.nombre}</div>
-                    <div className="text-xs text-slate-400">{u.email}</div>
+                    <div className="font-medium text-[var(--color-text)]">{u.nombre}</div>
+                    <div className="text-xs text-[var(--color-text-muted)]">{u.email}</div>
                   </div>
                 </div>
               </td>
               <td className="px-6 py-4">
-                <span className="text-[10px] font-medium px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg border border-slate-200">
-                  {u.area}
+                <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg" style={{ background: 'var(--badge-neutral-bg)', color: 'var(--badge-neutral-fg)' }}>
+                  {etiquetaArea(t, nombreArea, u.area)}
                 </span>
               </td>
-              <td className="px-6 py-4">
-                <span className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border ${
-                  u.rol === 'ADMIN' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                }`}>
-                  {u.rol}
-                </span>
+              <td className="px-6 py-4"><EtiquetaRol rol={u.rol} t={t} /></td>
+              <td className="px-6 py-4 text-sm text-[var(--color-text-dim)] font-medium">
+                {formatearFecha(u.creadoEn, locale)}
               </td>
-              <td className="px-6 py-4 text-sm text-slate-500 font-medium">
-                {new Date(u.creadoEn).toLocaleDateString()}
-              </td>
-              <td className="px-6 py-4">
-                <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${u.estado === 'activo' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${u.estado === 'activo' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                  {u.estado === 'activo' ? t('usersStatusActive') : t('usersStatusInactive')}
-                </span>
-              </td>
+              <td className="px-6 py-4"><EstadoUsuario estado={u.estado} t={t} /></td>
               <td className="px-6 py-4 text-right">
                 <div className="flex justify-end items-center gap-2">
-                  <ActionMenu
-                    size={18}
-                    items={[
-                      {
-                        label: u.estado === 'activo' ? t('usersDeactivate') : t('usersActivate'),
-                        icon: u.estado === 'activo' ? <UserX size={15} /> : <UserCheck size={15} />,
-                        onSelect: () => onToggleStatus(u),
-                      },
-                      { label: t('edit'), icon: <Pencil size={15} />, onSelect: () => onEdit(u) },
-                      { separator: true },
-                      { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onDelete(u.id), danger: true },
-                    ]}
-                  />
+                  {accionesDe(u).length > 0 && <ActionMenu size={18} className="h-10 w-10" items={accionesDe(u)} />}
                 </div>
               </td>
             </tr>
-            </Fragment>
           ))}
         </tbody>
       </table>
@@ -319,61 +499,51 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, busqueda = '
       {/* Mobile Card View */}
       <div className="md:hidden flex flex-col gap-4 p-4">
         {usuarios.map(u => (
-          <div key={u.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+          <div key={u.id} className="bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-2xl p-5 flex flex-col gap-4">
+            {/* min-w-0 + truncate: un correo largo empujaba la tarjeta fuera
+                de la pantalla en 360px. */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <UserAvatar
                   usuario={u}
                   size={40}
                   radius={12}
                   fontSize="0.9rem"
-                  color="#ffffff"
+                  color="var(--color-on-primary)"
                   background="var(--color-primary)"
                   borderColor="transparent"
                 />
-                <div>
-                  <div className="font-medium text-slate-900">{u.nombre}</div>
-                  <div className="text-[10px] text-slate-400 font-medium">{u.email}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-[var(--color-text)]">{u.nombre}</div>
+                  <div className="truncate text-xs text-[var(--color-text-muted)]" title={u.email}>{u.email}</div>
                 </div>
               </div>
-              <div className={`px-2.5 py-1 rounded-lg border text-[9px] font-medium ${
-                u.rol === 'ADMIN' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-              }`}>
-                {u.rol}
-              </div>
+              <span className="shrink-0"><EtiquetaRol rol={u.rol} t={t} /></span>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-200/50">
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-medium text-slate-400">{t('usersTableArea')}</span>
-                <span className="text-xs font-medium text-slate-700">{u.area}</span>
+
+            <div className="grid grid-cols-2 gap-4 py-3 border-y border-[var(--color-border-light)]">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">{t('usersTableArea')}</span>
+                <span className="text-xs font-medium text-[var(--color-text-dim)]">{etiquetaArea(t, nombreArea, u.area)}</span>
               </div>
-              <div className="flex flex-col gap-1 text-right">
-                <span className="text-[9px] font-medium text-slate-400">{t('usersTableStatus')}</span>
-                <span className={`text-xs font-medium ${u.estado === 'activo' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  {u.estado}
-                </span>
+              <div className="flex flex-col gap-1 items-end text-right">
+                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">{t('usersTableStatus')}</span>
+                <EstadoUsuario estado={u.estado} t={t} />
               </div>
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <div className="text-[10px] text-slate-400 font-medium italic">
-                {t('usersRegShort')} {new Date(u.creadoEn).toLocaleDateString(getLocale())}
+              <div className="text-xs text-[var(--color-text-muted)]">
+                {t('usersRegShort')} {formatearFecha(u.creadoEn, locale)}
               </div>
-              <ActionMenu
-                size={16}
-                className="p-2.5 border border-[var(--color-border)]"
-                items={[
-                  { label: t('edit'), icon: <Pencil size={15} />, onSelect: () => onEdit(u) },
-                  {
-                    label: u.estado === 'activo' ? t('usersDeactivate') : t('usersActivate'),
-                    icon: u.estado === 'activo' ? <UserX size={15} /> : <UserCheck size={15} />,
-                    onSelect: () => onToggleStatus(u),
-                  },
-                  { separator: true },
-                  { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onDelete(u.id), danger: true },
-                ]}
-              />
+              {/* 44px: es la única forma de llegar a editar/desactivar en móvil */}
+              {accionesDe(u).length > 0 && (
+                <ActionMenu
+                  size={18}
+                  className="h-11 w-11 border border-[var(--color-border)]"
+                  items={accionesDe(u)}
+                />
+              )}
             </div>
           </div>
         ))}
@@ -382,78 +552,80 @@ const TablaActivos = ({ usuarios, onEdit, onDelete, onToggleStatus, busqueda = '
   );
 };
 
+const EstadoInvitacion = ({ estado, t, compacto = false }) => {
+  const conf = ESTILO_INVITACION[estado] || ESTILO_INVITACION.pendiente;
+  const { Icon } = conf;
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-lg font-medium ${compacto ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'}`}
+      style={{ background: conf.background, color: conf.color }}
+    >
+      <Icon size={compacto ? 10 : 12} /> {t(conf.labelKey)}
+    </span>
+  );
+};
+
 const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
-  const { t } = usePreferences();
-  if (invitaciones.length === 0) return <div className="p-12 text-center text-[var(--color-text-muted)]">{t('usersNoResults')}</div>;
+  const { t, locale } = usePreferences();
+  const { nombreArea } = useConfiguracion();
+  if (invitaciones.length === 0) return <div className="p-12 text-center text-[var(--color-text-muted)]">{t('usersNoInvitations')}</div>;
 
   return (
     <div className="overflow-x-auto">
       {/* Desktop Table View */}
-      <table className="hidden md:table w-full">
-        <thead className="bg-slate-50 border-b border-slate-200">
+      <table className="usr-tabla hidden md:table w-full">
+        <thead className="bg-[var(--color-surface-3)] border-b border-[var(--color-border)]">
           <tr>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableMember')}</th>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableArea')} / {t('usersTableRole')}</th>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableStatus')}</th>
-            <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 tracking-wider">{t('usersTableRegister')}</th>
-            <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 tracking-wider">{t('usersTableActions')}</th>
+            <CeldaCabecera>{t('usersTableMember')}</CeldaCabecera>
+            <CeldaCabecera>{t('usersAreaRole')}</CeldaCabecera>
+            <CeldaCabecera>{t('usersTableStatus')}</CeldaCabecera>
+            <CeldaCabecera>{t('usersTableRegister')}</CeldaCabecera>
+            <CeldaCabecera alineacion="right">{t('usersTableActions')}</CeldaCabecera>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-[var(--color-border-light)]">
           {invitaciones.map(inv => (
-            <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+            <tr key={inv.id} className="hover:bg-[var(--color-surface-3)] transition-colors">
               <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--color-surface-3)] text-[var(--color-text-muted)] flex items-center justify-center">
                     <Mail size={18} />
                   </div>
                   <div>
-                    <div className="font-medium text-slate-900">{inv.nombre}</div>
-                    <div className="text-xs text-slate-400">{inv.email}</div>
+                    <div className="font-medium text-[var(--color-text)]">{inv.nombre}</div>
+                    <div className="text-xs text-[var(--color-text-muted)]">{inv.email}</div>
                   </div>
                 </div>
               </td>
               <td className="px-6 py-4">
                 <div className="flex flex-col gap-1">
-                   <span className="text-[9px] font-medium text-slate-500">{inv.area}</span>
-                   <span className="text-[9px] font-medium text-slate-400">{inv.rol}</span>
+                  <span className="text-xs font-medium text-[var(--color-text-dim)]">{etiquetaArea(t, nombreArea, inv.area)}</span>
+                  <span className="text-xs font-medium text-[var(--color-text-muted)]">{etiquetaRol(t, inv.rol)}</span>
                 </div>
               </td>
+              <td className="px-6 py-4"><EstadoInvitacion estado={inv.estado} t={t} /></td>
               <td className="px-6 py-4">
-                {inv.estado === 'pendiente' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium border border-blue-100">
-                    <Clock size={12} /> {t('usersStatusPending')}
-                  </span>
-                )}
-                {inv.estado === 'aceptada' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-medium border border-emerald-100">
-                    <CheckCircle2 size={12} /> {t('usersStatusAccepted')}
-                  </span>
-                )}
-                {inv.estado === 'expirada' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-medium border border-red-100">
-                    <AlertTriangle size={12} /> Expirada
-                  </span>
-                )}
-              </td>
-              <td className="px-6 py-4">
-                <div className="text-xs font-medium text-slate-500">Enviada: {new Date(inv.creadoEn).toLocaleDateString()}</div>
-                <div className="text-[10px] text-slate-400">Expira: {new Date(inv.expiraEn).toLocaleDateString()}</div>
+                <div className="text-xs font-medium text-[var(--color-text-dim)]">{t('usersSent')}: {formatearFecha(inv.creadoEn, locale)}</div>
+                <div className="text-[11px] text-[var(--color-text-muted)]">{t('usersExpires')}: {formatearFecha(inv.expiraEn, locale)}</div>
               </td>
               <td className="px-6 py-4 text-right">
                 {inv.estado !== 'aceptada' && (
                   <div className="flex items-center justify-end gap-2">
-                    <button 
+                    <button
+                      type="button"
                       onClick={() => onResend(inv.email)}
-                      className="flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
+                      style={{ background: 'var(--badge-info-bg)', color: 'var(--badge-info-fg)' }}
                     >
-                      <RefreshCcw size={12} /> Reenviar
+                      <RefreshCcw size={12} /> {t('usersResend')}
                     </button>
                     <button
+                      type="button"
                       onClick={() => onDelete(inv)}
-                      className="flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
+                      style={{ background: 'var(--badge-danger-bg)', color: 'var(--badge-danger-fg)' }}
                     >
-                      <Ban size={12} /> Cancelar
+                      <Ban size={12} /> {t('cancel')}
                     </button>
                   </div>
                 )}
@@ -466,44 +638,44 @@ const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
       {/* Mobile Card View */}
       <div className="md:hidden flex flex-col gap-4 p-4">
         {invitaciones.map(inv => (
-          <div key={inv.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col gap-4">
+          <div key={inv.id} className="bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-2xl p-5 flex flex-col gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-[var(--color-surface-3)] text-[var(--color-text-muted)] flex items-center justify-center">
                 <Mail size={18} />
               </div>
-              <div className="flex-1">
-                <div className="font-medium text-slate-900 leading-tight">{inv.nombre}</div>
-                <div className="text-[10px] text-slate-400 font-medium">{inv.email}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[var(--color-text)] leading-tight truncate">{inv.nombre}</div>
+                <div className="text-xs text-[var(--color-text-muted)] truncate" title={inv.email}>{inv.email}</div>
               </div>
-              <div className="text-right">
-                {inv.estado === 'pendiente' && <div className="text-[9px] font-medium text-blue-500 px-2 py-0.5 bg-blue-50 border border-blue-100 rounded-md">Pendiente</div>}
-                {inv.estado === 'aceptada' && <div className="text-[9px] font-medium text-emerald-500 px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-md">Aceptada</div>}
-                {inv.estado === 'expirada' && <div className="text-[9px] font-medium text-red-500 px-2 py-0.5 bg-red-50 border border-red-100 rounded-md">Expirada</div>}
-              </div>
+              <EstadoInvitacion estado={inv.estado} t={t} compacto />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-200/50">
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-medium text-slate-400">Área / Rol</span>
-                <span className="text-[10px] font-medium text-slate-700">{inv.area} / {inv.rol}</span>
+            <div className="grid grid-cols-2 gap-4 py-3 border-y border-[var(--color-border-light)]">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">{t('usersAreaRole')}</span>
+                <span className="text-xs font-medium text-[var(--color-text-dim)]">{etiquetaArea(t, nombreArea, inv.area)} / {etiquetaRol(t, inv.rol)}</span>
               </div>
               <div className="flex flex-col gap-1 text-right">
-                <span className="text-[9px] font-medium text-slate-400">Expira</span>
-                <span className="text-xs font-medium text-slate-500">{new Date(inv.expiraEn).toLocaleDateString()}</span>
+                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">{t('usersExpires')}</span>
+                <span className="text-xs font-medium text-[var(--color-text-dim)]">{formatearFecha(inv.expiraEn, locale)}</span>
               </div>
             </div>
 
             {inv.estado !== 'aceptada' && (
               <div className="flex flex-col gap-2">
-                <button 
+                <button
+                  type="button"
                   onClick={() => onResend(inv.email)}
-                  className="w-full flex items-center justify-center gap-2 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 py-3 rounded-xl transition-all border border-blue-100"
+                  className="w-full flex items-center justify-center gap-2 text-xs font-medium py-3 rounded-xl transition-all"
+                  style={{ background: 'var(--badge-info-bg)', color: 'var(--badge-info-fg)' }}
                 >
-                  <RefreshCcw size={14} /> Reenviar invitación
+                  <RefreshCcw size={14} /> {t('usersResendInvitation')}
                 </button>
                 <button
+                  type="button"
                   onClick={() => onDelete(inv)}
-                  className="w-full flex items-center justify-center gap-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 py-3 rounded-xl transition-all border border-red-100"
+                  className="w-full flex items-center justify-center gap-2 text-xs font-medium py-3 rounded-xl transition-all"
+                  style={{ background: 'var(--badge-danger-bg)', color: 'var(--badge-danger-fg)' }}
                 >
                   <Ban size={14} /> {t('usersCancelInvitation')}
                 </button>
@@ -516,11 +688,17 @@ const TablaInvitaciones = ({ invitaciones, onResend, onDelete }) => {
   );
 };
 
+/** Sin "usuarios.ver" = todos, solo se gestiona la propia área. */
+const soloSuArea = (usuario) => !esAdminGeneral(usuario) && alcanceDe(usuario, 'usuarios.ver') !== 'todos';
+/** Solo el administrador general da el rol de administrador. */
+const rolesQueAsigna = (usuario) => (esAdminGeneral(usuario) ? ROLES : ['MIEMBRO']);
+
 const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
   const { t } = usePreferences();
-  const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
-  const areasDisponibles = esAdminArea ? [usuarioActual.area] : AREAS;
-  const [form, setForm] = useState({ nombre: '', email: '', area: areasDisponibles[0] || 'DESARROLLO', rol: 'MIEMBRO' });
+  const { areas, nombreArea } = useConfiguracion();
+  const esAdminArea = soloSuArea(usuarioActual);
+  const areasDisponibles = esAdminArea ? [usuarioActual.area] : areas.map((a) => a.clave);
+  const [form, setForm] = useState({ nombre: '', email: '', area: areasDisponibles[0] || AREA_GENERAL, rol: 'MIEMBRO' });
   const [cargando, setCargando] = useState(false);
   const { showToast } = useToast();
 
@@ -528,8 +706,11 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
     e.preventDefault();
     setCargando(true);
     try {
-      await usuariosService.invitar(form);
-      showToast('Invitación enviada');
+      const res = await usuariosService.invitar(form);
+      // El backend puede crear la invitacion pero no lograr enviar el correo:
+      // lo dice en `advertencia` y hay que mostrarlo, no darlo por enviado.
+      if (res?.advertencia) showToast(res.advertencia, 'info', { duration: 8000 });
+      else showToast(t('usersInvitationSent'));
       onSuccess();
     } catch (error) {
       showToast(error.message, 'error');
@@ -545,7 +726,7 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
       maxWidth="448px"
       title={(
         <span className="flex items-center gap-3">
-          <span className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--badge-info-bg)', color: 'var(--badge-info-fg)' }}>
             <Mail size={20} />
           </span>
           {t('usersInviteTitle')}
@@ -555,8 +736,11 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
     >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('usersInviteNameLabel')}</label>
+            <label htmlFor="invitar-nombre" className="text-xs font-medium text-[var(--color-text-muted)]">{t('usersInviteNameLabel')}</label>
             <input
+              id="invitar-nombre"
+              // Son datos de otra persona: sin autocompletar con los del propio admin
+              autoComplete="off"
               required
               className="form-input"
               value={form.nombre}
@@ -565,8 +749,12 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('usersInviteEmailLabel')}</label>
+            <label htmlFor="invitar-email" className="text-xs font-medium text-[var(--color-text-muted)]">{t('usersInviteEmailLabel')}</label>
             <input
+              id="invitar-email"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
               required
               type="email"
               className="form-input"
@@ -577,25 +765,24 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldArea')}</label>
-              <select 
+              <label htmlFor="invitar-area" className="text-xs font-medium text-[var(--color-text-muted)]">{t('fieldArea')}</label>
+              <SelectorSimple
+                id="invitar-area"
                 disabled={areasDisponibles.length === 1}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                value={form.area}
-                onChange={e => setForm({...form, area: e.target.value})}
-              >
-                {areasDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+                valor={form.area}
+                onCambio={v => setForm({...form, area: v})}
+                opciones={areasDisponibles.map(a => ({ valor: a, etiqueta: etiquetaArea(t, nombreArea, a) }))}
+              />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldRole')}</label>
-              <select
-                className="form-input form-select"
-                value={form.rol}
-                onChange={e => setForm({...form, rol: e.target.value})}
-              >
-                {ROLES.map(r => <option key={r} value={r}>{t(r === 'ADMIN' ? 'roleAdmin' : 'roleMember')}</option>)}
-              </select>
+              <label htmlFor="invitar-rol" className="text-xs font-medium text-[var(--color-text-muted)]">{t('fieldRole')}</label>
+              <SelectorSimple
+                id="invitar-rol"
+                disabled={rolesQueAsigna(usuarioActual).length === 1}
+                valor={form.rol}
+                onCambio={v => setForm({...form, rol: v})}
+                opciones={rolesQueAsigna(usuarioActual).map(r => ({ valor: r, etiqueta: etiquetaRol(t, r) }))}
+              />
             </div>
           </div>
 
@@ -608,8 +795,9 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
               {t('cancel')}
             </button>
             <button
+              type="submit"
               disabled={cargando}
-              className="flex-1.5 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg shadow-blue-100 transition-all active:scale-95 disabled:bg-slate-200"
+              className="flex-[1.5] btn-primary"
             >
               {cargando ? t('usersInviteSending') : <><Send size={18} /> {t('usersInviteSend')}</>}
             </button>
@@ -621,13 +809,19 @@ const ModalInvitar = ({ usuarioActual, onClose, onSuccess }) => {
 
 const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
   const { t } = usePreferences();
-  const esAdminArea = usuarioActual?.rol === 'ADMIN' && usuarioActual?.area !== 'ADMINISTRACION';
-  const areasDisponibles = esAdminArea ? [usuarioActual.area] : AREAS;
+  const { areas, nombreArea } = useConfiguracion();
+  const esAdminArea = soloSuArea(usuarioActual);
+  const areasConfiguradas = areas.map((a) => a.clave);
+  // Si el area del usuario ya no existe (la quito el configurador) se sigue
+  // ofreciendo, para no cambiarsela sin querer al guardar.
+  const areasDisponibles = esAdminArea
+    ? [usuarioActual.area]
+    : (usuario?.area && !areasConfiguradas.includes(usuario.area) ? [...areasConfiguradas, usuario.area] : areasConfiguradas);
   const [form, setForm] = useState({
     nombre: usuario?.nombre || '',
     email: usuario?.email || '',
-    area: usuario?.area || areasDisponibles[0] || 'DESARROLLO',
-    rol: usuario?.rol || 'MIEMBRO'
+    area: usuario?.area || areasDisponibles[0] || AREA_GENERAL,
+    rol: usuario?.rol || 'MIEMBRO',
   });
   const [cargando, setCargando] = useState(false);
   const { showToast } = useToast();
@@ -637,7 +831,7 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
     setCargando(true);
     try {
       await usuariosService.editar(usuario.id, form);
-      showToast('Usuario actualizado');
+      showToast(t('usersUpdated'));
       onSuccess();
     } catch (error) {
       showToast(error.message, 'error');
@@ -656,8 +850,10 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
     >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldName')}</label>
+            <label htmlFor="editar-nombre" className="text-xs font-medium text-[var(--color-text-muted)]">{t('fieldName')}</label>
             <input
+              id="editar-nombre"
+              autoComplete="off"
               required
               className="form-input"
               value={form.nombre}
@@ -665,8 +861,12 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldEmail')}</label>
+            <label htmlFor="editar-email" className="text-xs font-medium text-[var(--color-text-muted)]">{t('fieldEmail')}</label>
             <input
+              id="editar-email"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
               required
               type="email"
               className="form-input"
@@ -676,31 +876,30 @@ const ModalEditar = ({ usuarioActual, usuario, onClose, onSuccess }) => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldArea')}</label>
-              <select
+              <label htmlFor="editar-area" className="text-xs font-medium text-[var(--color-text-muted)]">{t('fieldArea')}</label>
+              <SelectorSimple
+                id="editar-area"
                 disabled={areasDisponibles.length === 1}
-                className="form-input form-select"
-                value={form.area}
-                onChange={e => setForm({...form, area: e.target.value})}
-              >
-                {areasDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+                valor={form.area}
+                onCambio={v => setForm({...form, area: v})}
+                opciones={areasDisponibles.map(a => ({ valor: a, etiqueta: etiquetaArea(t, nombreArea, a) }))}
+              />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldRole')}</label>
-              <select
-                className="form-input form-select"
-                value={form.rol}
-                onChange={e => setForm({...form, rol: e.target.value})}
-              >
-                {ROLES.map(r => <option key={r} value={r}>{t(r === 'ADMIN' ? 'roleAdmin' : 'roleMember')}</option>)}
-              </select>
+              <label htmlFor="editar-rol" className="text-xs font-medium text-[var(--color-text-muted)]">{t('fieldRole')}</label>
+              <SelectorSimple
+                id="editar-rol"
+                disabled={rolesQueAsigna(usuarioActual).length === 1}
+                valor={form.rol}
+                onCambio={v => setForm({...form, rol: v})}
+                opciones={rolesQueAsigna(usuarioActual).map(r => ({ valor: r, etiqueta: etiquetaRol(t, r) }))}
+              />
             </div>
           </div>
 
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="flex-1 px-6 py-3 rounded-xl font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-3)] transition-all">{t('cancel')}</button>
-            <button disabled={cargando} className="flex-1.5 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-medium transition-all active:scale-95 disabled:bg-slate-200">
+            <button type="submit" disabled={cargando} className="flex-[1.5] btn-primary">
               {cargando ? t('saving') : t('save')}
             </button>
           </div>

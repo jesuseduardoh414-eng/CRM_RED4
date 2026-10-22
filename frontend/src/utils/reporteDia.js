@@ -10,6 +10,8 @@
  * menos una tarea ese día, en el orden en que deben salir impresas.
  */
 
+import { fechaLocalDesdeISO } from './fechasLocales';
+
 const escapar = (valor) => String(valor ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -30,8 +32,14 @@ const ESTILOS = `
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .cabecera { border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 18px; }
-  .cabecera h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  /* Cabecera con la marca RED 4: negro #141414 y el logo a la derecha. El logo
+     va como imagen del propio sitio (misma origen que el iframe de impresion). */
+  .cabecera {
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 16px;
+    border-bottom: 2px solid #141414; padding-bottom: 10px; margin-bottom: 18px;
+  }
+  .cabecera .marca { flex-shrink: 0; height: 40px; width: auto; } /* el logo de RED 4 es alto: con 30px las letras quedaban diminutas */
+  .cabecera h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: #141414; }
   .cabecera .fecha { margin: 3px 0 0; font-size: 12px; color: #374151; }
   .cabecera .filtro { margin: 6px 0 0; font-size: 10px; color: #6b7280; }
 
@@ -89,8 +97,9 @@ const filaTarea = (tarea, dato, clase = '') => `
  * @param {Array}  opciones.filas    [{ miembro, hechas, enProgreso }]
  * @param {object} opciones.textos   etiquetas ya traducidas
  * @param {string} opciones.locale   para formatear horas y fechas
+ * @param {string} opciones.logoUrl  logo de la cabecera (ruta del propio sitio)
  */
-export const construirHtmlReporte = ({ filas = [], textos = {}, locale = 'es-MX' }) => {
+export const construirHtmlReporte = ({ filas = [], textos = {}, locale = 'es-MX', logoUrl = '/brand/red4-horizontal-negro.png' }) => {
   // Las etiquetas llegan como plantillas ('Terminadas: {count}') y aquí se
   // rellenan con los totales. Con respaldo vacío para que una etiqueta que
   // falte deje un hueco y no rompa la impresión a medias.
@@ -101,9 +110,14 @@ export const construirHtmlReporte = ({ filas = [], textos = {}, locale = 'es-MX'
     : '');
   // En el bloque de "en curso" la fecha sola no dice nada, así que va con su
   // etiqueta ("Vence 14 ago"); en el de terminadas basta la hora de cierre.
-  const vence = (valor) => (valor
-    ? plantilla('vence').replace('{fecha}', new Date(valor).toLocaleDateString(locale, { day: '2-digit', month: 'short' }))
-    : '');
+  // El vencimiento es un día de calendario: con `new Date(iso)` podía salir
+  // corrido un día según el huso horario (utils/fechasLocales).
+  const vence = (valor) => {
+    const fecha = fechaLocalDesdeISO(valor);
+    return fecha
+      ? plantilla('vence').replace('{fecha}', fecha.toLocaleDateString(locale, { day: '2-digit', month: 'short' }))
+      : '';
+  };
 
   const totalTareas = filas.reduce((suma, fila) => suma + fila.hechas.length, 0);
 
@@ -157,9 +171,12 @@ export const construirHtmlReporte = ({ filas = [], textos = {}, locale = 'es-MX'
 </head>
 <body>
   <header class="cabecera">
-    <h1>${escapar(textos.titulo)}</h1>
-    <p class="fecha">${escapar(textos.fechaLegible)}</p>
-    ${textos.filtroProyecto ? `<p class="filtro">${escapar(textos.filtroProyecto)}</p>` : ''}
+    <div>
+      <h1>${escapar(textos.titulo)}</h1>
+      <p class="fecha">${escapar(textos.fechaLegible)}</p>
+      ${textos.filtroProyecto ? `<p class="filtro">${escapar(textos.filtroProyecto)}</p>` : ''}
+    </div>
+    <img class="marca" src="${escapar(logoUrl)}" alt="RED 4" />
   </header>
 
   ${cuerpo}
@@ -174,23 +191,65 @@ export const construirHtmlReporte = ({ filas = [], textos = {}, locale = 'es-MX'
 </html>`;
 };
 
+// iPhone/iPad (también el iPad que se anuncia como Mac): Safari en iOS ignora
+// el `print()` de un iframe oculto o imprime la página de atrás en su lugar.
+const esIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/**
+ * En iOS el reporte se abre en una pestaña propia y se imprime desde ahí; el
+ * usuario guarda el PDF con "Compartir → Imprimir". Se llama dentro del clic,
+ * así que el navegador no lo trata como ventana emergente. Devuelve false si
+ * aun así se bloqueó, para caer al iframe.
+ */
+const imprimirEnPestana = (html) => {
+  const ventana = window.open('', '_blank');
+  if (!ventana) return false;
+  ventana.document.open();
+  ventana.document.write(html);
+  ventana.document.close();
+  // Se espera a que cargue el logo; si no, la hoja sale sin él. El listener va
+  // después de close(): document.open() borra los que hubiera en la ventana.
+  const imprimir = () => { ventana.focus(); ventana.print(); };
+  if (ventana.document.readyState === 'complete') imprimir();
+  else ventana.addEventListener('load', imprimir, { once: true });
+  return true;
+};
+
 /** Manda el reporte al diálogo de impresión del navegador ("Guardar como PDF"). */
 export const imprimirReporteDia = (opciones) => {
   const html = construirHtmlReporte(opciones);
+  if (esIOS() && imprimirEnPestana(html)) return;
 
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');
+  // El documento es HTML nuestro sin scripts: se aisla igual. `allow-modals`
+  // es lo que permite abrir el diálogo de impresión; `allow-same-origin` deja
+  // escuchar `afterprint` desde aquí.
+  iframe.setAttribute('sandbox', 'allow-modals allow-same-origin');
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+
+  let retirado = false;
+  const retirar = () => {
+    if (retirado) return;
+    retirado = true;
+    iframe.remove();
+  };
 
   iframe.onload = () => {
     const ventana = iframe.contentWindow;
-    if (!ventana) return;
+    if (!ventana) {
+      retirar();
+      return;
+    }
+    // El iframe se quita cuando el navegador avisa que terminó de imprimir.
+    // Firefox y Safari devuelven el control de `print()` antes de renderizar
+    // el documento: con un temporizador corto imprimían una hoja en blanco.
+    // El tope de 60 s es por si el aviso nunca llega.
+    ventana.addEventListener('afterprint', retirar);
+    window.setTimeout(retirar, 60000);
     ventana.focus();
     ventana.print();
-    // El diálogo de impresión es modal, pero algunos navegadores devuelven el
-    // control antes de terminar de renderizar: se espera un poco para no
-    // arrancar el iframe a media impresión.
-    window.setTimeout(() => iframe.remove(), 1500);
   };
 
   iframe.srcdoc = html;

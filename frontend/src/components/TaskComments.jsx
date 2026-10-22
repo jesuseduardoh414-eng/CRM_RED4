@@ -1,44 +1,47 @@
 import { useState, useEffect, useRef } from 'react';
+import useSWR from 'swr';
 import { comentariosService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { puede } from '../utils/permisos';
 import { usePreferences } from '../context/PreferencesContext';
+import { useToast } from '../context/ToastContext';
 import { MessageSquare, Trash2, Send } from 'lucide-react';
 import { PanelSkeleton } from './Skeleton';
 import UserAvatar from './UserAvatar';
 import Tooltip from './Tooltip';
+import { useConfirmacion } from './ConfirmDialog';
 
 const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
   const { usuario } = useAuth();
-  const { t } = usePreferences();
-  const [comentarios, setComentarios] = useState([]);
+  const { t, locale } = usePreferences();
+  const { showToast } = useToast();
+  const { confirmar, dialogo } = useConfirmacion();
   const [nuevo, setNuevo] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const [cargando, setCargando] = useState(true);
   const scrollRef = useRef(null);
 
-  const fetchComentarios = async () => {
-    try {
-      const data = await comentariosService.listar(tareaId, type);
-      const nextComentarios = data.comentarios || [];
-      setComentarios(nextComentarios);
-      onCommentsChange?.(nextComentarios);
-    } catch (error) {
-      console.error('Error al cargar comentarios:', error);
-    } finally {
-      setCargando(false);
-    }
-  };
+  // Por SWR: se cachea por tarea y no hace falta pedirlos a mano en un efecto
+  const { data: comentarios, isLoading, mutate } = useSWR(
+    tareaId ? ['comentarios', type, tareaId] : null,
+    async ([, tipo, id]) => {
+      const respuesta = await comentariosService.listar(id, tipo);
+      return respuesta.comentarios || [];
+    },
+    { onSuccess: (lista) => onCommentsChange?.(lista) },
+  );
+  const lista = comentarios || [];
 
-  useEffect(() => {
-    if (tareaId) fetchComentarios();
-  }, [tareaId]);
+  const actualizarComentarios = (siguiente) => {
+    mutate(siguiente, { revalidate: false });
+    onCommentsChange?.(siguiente);
+  };
 
   // Scroll al final cuando hay nuevos comentarios
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [comentarios]);
+  }, [lista.length]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,127 +50,94 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
     setEnviando(true);
     try {
       const data = await comentariosService.crear(tareaId, nuevo, type);
-      setComentarios(prev => {
-        const nextComentarios = [...prev, data.comentario];
-        onCommentsChange?.(nextComentarios);
-        return nextComentarios;
-      });
+      actualizarComentarios([...lista, data.comentario]);
       setNuevo('');
     } catch (error) {
-      alert(error.message);
+      showToast(error.message, 'error');
     } finally {
       setEnviando(false);
     }
   };
 
   const handleEliminar = async (id) => {
-    if (!confirm('¿Eliminar este comentario?')) return;
+    const ok = await confirmar({
+      titulo: t('commentDeleteConfirm'),
+      textoConfirmar: t('delete'),
+      peligro: true,
+    });
+    if (!ok) return;
     try {
       await comentariosService.eliminar(id);
-      setComentarios(prev => {
-        const nextComentarios = prev.filter(c => c.id !== id);
-        onCommentsChange?.(nextComentarios);
-        return nextComentarios;
-      });
+      actualizarComentarios(lista.filter((c) => c.id !== id));
     } catch (error) {
-      alert(error.message);
+      showToast(error.message, 'error');
     }
   };
 
-  if (cargando) return <PanelSkeleton rows={4} titleWidth="190px" />;
+  if (isLoading && !comentarios) return <PanelSkeleton rows={4} titleWidth="190px" />;
 
+  // Conversacion compacta: texto de 13.5px, burbujas con poco radio y el
+  // campo de escritura con el mismo estilo que el resto del formulario.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      
-      {/* Título de sección con estilo premium */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-        <MessageSquare size={20} color="var(--color-primary)" />
-        <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--color-text)' }}>
-          {type === 'proyectos' ? 'Muro del Proyecto' : 'Hilo de la Tarea'} <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, fontSize: '0.9rem' }}>({comentarios.length})</span>
-        </h3>
-      </div>
+    <div className="flex flex-col gap-3">
+      <h4 className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text)]">
+        <MessageSquare size={14} className="text-[var(--color-text-muted)]" aria-hidden="true" />
+        {type === 'proyectos' ? t('commentsProjectWall') : t('commentsTaskThread')}
+        <span className="font-normal text-[var(--color-text-muted)]">· {lista.length}</span>
+      </h4>
 
-      {/* Contenedor de mensajes con scroll interno */}
-      <div 
-        ref={scrollRef}
-        style={{ 
-          display: 'flex', flexDirection: 'column', gap: '1rem',
-          maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem'
-        }}
-      >
-        {comentarios.length === 0 ? (
-          <div style={{ 
-            padding: '2.5rem 1rem', textAlign: 'center', 
-            background: 'rgba(255,255,255,0.02)', borderRadius: '1rem', border: '1px dashed var(--color-border)'
-          }}>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>No hay mensajes todavía.</p>
-          </div>
+      {/* Mensajes con scroll interno */}
+      <div ref={scrollRef} className="flex max-h-[340px] flex-col gap-3 overflow-y-auto pr-1">
+        {lista.length === 0 ? (
+          <p className="det-adjuntos-vacio">{t('commentsEmpty')}</p>
         ) : (
-          comentarios.map(c => {
-            const esMio = c.autorId === usuario.id;
+          lista.map(c => {
+            const esMio = c.autorId === usuario?.id;
+            // Autor o quien edita proyectos (el servidor revisa el alcance).
+            const puedeBorrar = esMio || puede(usuario, 'proyectos.editar');
             return (
-              <div key={c.id} style={{ 
-                display: 'flex', gap: '0.85rem', 
-                flexDirection: esMio ? 'row-reverse' : 'row',
-                animation: 'fadeIn 0.2s ease-out'
-              }}>
-                {/* Avatar */}
-                <div style={{
-                  marginTop: '4px', flexShrink: 0
-                }}>
-                  <UserAvatar
-                    usuario={c.autor}
-                    size={32}
-                    radius={10}
-                    fontSize="0.85rem"
-                    color={esMio ? '#fff' : 'var(--color-primary)'}
-                    background={esMio ? 'var(--color-primary)' : 'var(--color-surface-3)'}
-                    borderColor="var(--color-border)"
-                  />
-                </div>
+              <div key={c.id} className={`group flex gap-2.5 ${esMio ? 'flex-row-reverse' : ''}`}>
+                <UserAvatar
+                  usuario={c.autor}
+                  size={26}
+                  radius={999}
+                  fontSize="0.62rem"
+                  color={esMio ? 'var(--color-on-primary)' : 'var(--color-text-dim)'}
+                  background={esMio ? 'var(--color-primary)' : 'var(--color-surface-3)'}
+                  borderColor="transparent"
+                  className="mt-0.5 shrink-0"
+                />
 
-                {/* Burbuja */}
-                <div style={{ maxWidth: '85%', display: 'flex', flexDirection: 'column', alignItems: esMio ? 'flex-end' : 'flex-start' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', padding: '0 0.2rem' }}>
-                    <span style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--color-text)' }}>
-                      {esMio ? 'Tú' : c.autor.nombre}
+                <div className={`flex max-w-[85%] flex-col ${esMio ? 'items-end' : 'items-start'}`}>
+                  <div className={`mb-1 flex items-center gap-2 px-0.5 ${esMio ? 'flex-row-reverse' : ''}`}>
+                    <span className="text-[12.5px] font-medium text-[var(--color-text)]">
+                      {esMio ? t('commentsYou') : (c.autor?.nombre || t('commentsUnknownAuthor'))}
                     </span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
-                      {new Date(c.creadoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {/* Fecha y hora: solo la hora no decia de que dia era el mensaje */}
+                    <span className="text-[11.5px] tabular-nums text-[var(--color-text-muted)]">
+                      {new Date(c.creadoEn).toLocaleString(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </span>
-                  </div>
-                  
-                  <div style={{ 
-                    position: 'relative',
-                    fontSize: '1.05rem', lineHeight: 1.5, color: 'var(--color-text)', 
-                    background: esMio ? 'rgba(99,102,241,0.15)' : 'var(--color-surface-3)', 
-                    padding: '0.85rem 1.1rem', 
-                    borderRadius: esMio ? '1rem 0.2rem 1rem 1rem' : '0.2rem 1rem 1rem 1rem',
-                    border: esMio ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--color-border)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                  }}>
-                    {c.contenido}
-                    
-                    {/* Botón eliminar flotante */}
-                    {(esMio || usuario.rol === 'ADMIN') && (
+                    {puedeBorrar && (
                       <Tooltip label={t('delete')}>
-                      <button
-                        onClick={() => handleEliminar(c.id)}
-                        style={{
-                          position: 'absolute', top: '-8px', [esMio ? 'left' : 'right']: '-8px',
-                          background: 'var(--color-surface-2)', border: '1px solid var(--color-border)',
-                          borderRadius: '50%', width: '22px', height: '22px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          cursor: 'pointer', fontSize: '0.7rem', transition: 'all 0.2s',
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-                        }}
-                        onMouseOver={e => e.currentTarget.style.transform = 'scale(1.2)'}
-                        onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
-                      >
-                        <Trash2 size={12} color="var(--color-accent-error)" />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEliminar(c.id)}
+                          className="dash-icono det-icono-peligro com-borrar !h-6 !w-6 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </Tooltip>
                     )}
+                  </div>
+
+                  <div
+                    className="whitespace-pre-wrap break-words rounded-[10px] border px-3 py-2 text-[13.5px] leading-relaxed text-[var(--color-text)]"
+                    style={{
+                      background: esMio ? 'var(--color-primary-10)' : 'var(--color-bg-base)',
+                      borderColor: esMio ? 'var(--color-primary-20)' : 'var(--color-border)',
+                    }}
+                  >
+                    {c.contenido}
                   </div>
                 </div>
               </div>
@@ -176,61 +146,32 @@ const TaskComments = ({ tareaId, type = 'tareas', onCommentsChange }) => {
         )}
       </div>
 
-      {/* Input de mensaje premium */}
-      <form onSubmit={handleSubmit} style={{ marginTop: '0.5rem' }}>
-        <div style={{ 
-          display: 'flex', flexDirection: 'column', gap: '0.75rem',
-          background: 'var(--color-surface-3)', border: '1px solid var(--color-border)',
-          borderRadius: '1.25rem', padding: '0.5rem',
-          transition: 'border-color 0.2s, box-shadow 0.2s'
-        }}
-          onFocusCapture={e => {
-            e.currentTarget.style.borderColor = 'var(--color-primary)';
-            e.currentTarget.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.1)';
+      {/* Escribir un mensaje */}
+      <form onSubmit={handleSubmit} className="flex items-end gap-2">
+        <textarea
+          value={nuevo}
+          onChange={e => setNuevo(e.target.value)}
+          onKeyDown={(e) => {
+            // Ctrl/Cmd + Enter envia sin tener que ir al boton
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSubmit(e);
           }}
-          onBlurCapture={e => {
-            e.currentTarget.style.borderColor = 'var(--color-border)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          placeholder={t('commentsPlaceholder')}
+          aria-label={t('commentsPlaceholder')}
+          rows={2}
+          className="form-input min-w-0 flex-1 resize-none"
+        />
+        <button
+          type="submit"
+          disabled={!nuevo.trim() || enviando}
+          className="btn-primary h-10 shrink-0 !py-0 text-[13.5px] disabled:opacity-40"
         >
-          <textarea
-            value={nuevo}
-            onChange={e => setNuevo(e.target.value)}
-            placeholder="Escribe una nota o actualización..."
-            style={{
-              width: '100%', minHeight: '60px', padding: '0.75rem',
-              background: 'transparent', border: 'none',
-              color: 'var(--color-text)', fontSize: '1.05rem',
-              resize: 'none', outline: 'none', fontFamily: 'inherit'
-            }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.25rem' }}>
-            <button
-              type="submit"
-              disabled={!nuevo.trim() || enviando}
-              style={{
-                background: 'var(--color-primary)', color: '#fff',
-                border: 'none', borderRadius: '0.85rem', padding: '0.6rem 1.5rem',
-                fontSize: '0.9rem', fontWeight: 500, cursor: 'pointer',
-                opacity: !nuevo.trim() || enviando ? 0.4 : 1, 
-                transition: 'all 0.2s',
-                display: 'flex', alignItems: 'center', gap: '0.5rem'
-              }}
-            >
-              {enviando ? 'Enviando...' : (
-                <><span>Enviar</span> <Send size={14} /></>
-              )}
-            </button>
-          </div>
-        </div>
+          {enviando ? t('commentsSending') : (
+            <><Send size={14} /> <span>{t('commentsSend')}</span></>
+          )}
+        </button>
       </form>
-      
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(5px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+
+      {dialogo}
     </div>
   );
 };

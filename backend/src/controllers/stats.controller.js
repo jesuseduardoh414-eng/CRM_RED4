@@ -1,31 +1,14 @@
 const XLSX = require('xlsx');
+const { Prisma } = require('@prisma/client');
 const prisma = require('../lib/prisma');
+const { esPostgres } = require('../lib/baseDatos');
 const { sortTareas } = require('../utils/sort.utils');
-const { buildScopeProyectoParaAdmin, esAdminDeArea } = require('../utils/permissions.utils');
+const { buildScopeProyectoParaAdmin, esAdminGlobal } = require('../utils/permissions.utils');
 const { ESTADOS_PROYECTO_OCULTOS } = require('../utils/estados.utils');
-const { rangoDiaMexico, claveDiaMexico } = require('../utils/fechas.utils');
+const { rangoDiaMexico, rangoSemanaMexico, claveDiaMexico, zonaHoraria } = require('../utils/fechas.utils');
+const { configEnCache } = require('../services/configuracion.service');
 
-const finDelDia = (fecha) => {
-  const d = new Date(fecha);
-  d.setHours(23, 59, 59, 999);
-  return d;
-};
-
-const finDeSemana = (fecha) => {
-  const d = finDelDia(fecha);
-  const diasHastaDomingo = 6 - d.getDay();
-  d.setDate(d.getDate() + diasHastaDomingo);
-  return d;
-};
-
-const inicioDeSemana = (fecha) => {
-  const d = new Date(fecha);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const tareaResumenSelect = {
   id: true,
@@ -39,10 +22,32 @@ const tareaResumenSelect = {
   fechaInicio: true,
   asignadoId: true,
   creadorId: true,
+  asignados: { select: { id: true } },
   proyecto: {
     select: { id: true, nombre: true }
   }
 };
+
+// Regla unica de conteo: una tarea cuenta para quien figura como responsable
+// (`asignadoId` o relacion `asignados`), una sola vez. Nunca por ser el
+// creador: antes se sumaba al asignado Y al creador, y el reporte diario la
+// listaba dos veces.
+const esResponsable = (tarea, usuarioId) => (
+  tarea.asignadoId === usuarioId
+  || (tarea.asignados || []).some((asignado) => asignado.id === usuarioId)
+);
+
+const responsablesDe = (tarea) => new Set(
+  [tarea.asignadoId, ...(tarea.asignados || []).map((asignado) => asignado.id)].filter(Boolean)
+);
+
+// Filtro Prisma equivalente a `esResponsable` para un conjunto de usuarios
+const whereResponsableEn = (ids) => ({
+  OR: [
+    { asignadoId: { in: ids } },
+    { asignados: { some: { id: { in: ids } } } },
+  ],
+});
 
 const resumenTarea = (tarea) => ({
   id: tarea.id,
@@ -102,12 +107,11 @@ const buildProjectScopeWhere = (scopeProyecto) => (
 );
 
 const getTopUsuariosProductividad = async (usuario) => {
-  const hoy = new Date();
-  const inicioSemanaActual = inicioDeSemana(hoy);
+  // Semana actual en hora de Mexico (lunes 00:00) y ventana de 4 semanas
+  const { inicio: inicioSemanaActual } = rangoSemanaMexico();
   const semanasAnalizadas = 4;
-  const inicioVentana = new Date(inicioSemanaActual);
-  inicioVentana.setDate(inicioVentana.getDate() - ((semanasAnalizadas - 1) * 7));
-  const filtroAreaUsuarios = esAdminDeArea(usuario) ? { area: usuario.area } : {};
+  const inicioVentana = new Date(inicioSemanaActual.getTime() - ((semanasAnalizadas - 1) * 7 * ONE_DAY_MS));
+  const filtroAreaUsuarios = esAdminGlobal(usuario) ? {} : { area: usuario.area };
   const scopeProyecto = buildScopeProyectoParaAdmin(usuario);
 
   const [miembros, tareasHechas] = await Promise.all([
@@ -125,7 +129,7 @@ const getTopUsuariosProductividad = async (usuario) => {
       select: {
         id: true,
         asignadoId: true,
-        creadorId: true,
+        asignados: { select: { id: true } },
         completadoEn: true
       }
     })
@@ -133,7 +137,7 @@ const getTopUsuariosProductividad = async (usuario) => {
 
   return miembros
     .map((miembro) => {
-      const hechas = tareasHechas.filter((tarea) => tarea.asignadoId === miembro.id || tarea.creadorId === miembro.id);
+      const hechas = tareasHechas.filter((tarea) => esResponsable(tarea, miembro.id));
       const hechasSemanaActual = hechas.filter((tarea) => tarea.completadoEn >= inicioSemanaActual).length;
       const promedioSemanal = Number((hechas.length / semanasAnalizadas).toFixed(1));
 
@@ -160,6 +164,7 @@ const getTopUsuariosProductividad = async (usuario) => {
  * Los limites del dia salen de `rangoDiaMexico`: antes se usaba
  * `setHours(0,0,0,0)`, que en el servidor (UTC) cortaba el dia a las 18:00 hora
  * de Mexico y mandaba al dia siguiente todo lo cerrado por la tarde-noche.
+ * El fin de semana sale de `rangoSemanaMexico` por la misma razon.
  */
 const getActividadMiembros = async (usuario, fecha = null) => {
   const { inicio: hoyInicio, fin: hoyFin } = rangoDiaMexico(fecha);
@@ -168,21 +173,21 @@ const getActividadMiembros = async (usuario, fecha = null) => {
     claveDiaMexico(new Date(hoyFin.getTime() + 1)),
   );
   const ahora = hoyFin;
-  const semanaFin = finDeSemana(hoyFin);
+  const { fin: semanaFin } = rangoSemanaMexico(fecha || hoyFin);
   const calendarioInicio = new Date(ahora);
   calendarioInicio.setMonth(calendarioInicio.getMonth() - 6);
   calendarioInicio.setHours(0, 0, 0, 0);
   const calendarioFin = new Date(ahora);
   calendarioFin.setMonth(calendarioFin.getMonth() + 12);
   calendarioFin.setHours(23, 59, 59, 999);
-  const filtroAreaUsuarios = esAdminDeArea(usuario) ? { area: usuario.area } : {};
+  const filtroAreaUsuarios = esAdminGlobal(usuario) ? {} : { area: usuario.area };
   const scopeProyecto = buildScopeProyectoParaAdmin(usuario);
   const projectScopeWhere = buildProjectScopeWhere(scopeProyecto);
 
   const miembros = await prisma.usuario.findMany({
     where: { rol: 'MIEMBRO', ...filtroAreaUsuarios },
     orderBy: { nombre: 'asc' },
-    select: { id: true, nombre: true, area: true }
+    select: { id: true, nombre: true, area: true, fotoPerfilUrl: true }
   });
 
   if (!miembros.length) return [];
@@ -192,10 +197,7 @@ const getActividadMiembros = async (usuario, fecha = null) => {
   const [todasLasTareas, proyectosActivos, eventosAgenda] = await Promise.all([
     prisma.tarea.findMany({
       where: {
-        OR: [
-          { asignadoId: { in: memberIds } },
-          { creadorId: { in: memberIds } },
-        ],
+        ...whereResponsableEn(memberIds),
         ...projectScopeWhere,
       },
       select: tareaResumenSelect,
@@ -237,6 +239,16 @@ const getActividadMiembros = async (usuario, fecha = null) => {
               { fechaFin: null, fechaInicio: { gte: calendarioInicio } },
             ],
           },
+          // Las filas "Proyecto: X" (dia completo, sin invitados) que antes
+          // generaba el alta de proyectos ya no cuentan: la ocupacion del
+          // proyecto la aporta `proyectosDelMiembro` y se duplicaba.
+          {
+            NOT: {
+              tipo: 'dia_completo',
+              titulo: { startsWith: 'Proyecto:' },
+              invitados: { none: {} },
+            },
+          },
         ],
       },
       select: {
@@ -256,18 +268,14 @@ const getActividadMiembros = async (usuario, fecha = null) => {
     }),
   ]);
 
+  // Cada tarea va a cada uno de sus responsables, una sola vez por persona
   const tareasPorMiembro = new Map(memberIds.map((id) => [id, []]));
   todasLasTareas.forEach((tarea) => {
-    if (tarea.asignadoId && tareasPorMiembro.has(tarea.asignadoId)) {
-      tareasPorMiembro.get(tarea.asignadoId).push(tarea);
-    }
-    if (
-      tarea.creadorId
-      && tarea.creadorId !== tarea.asignadoId
-      && tareasPorMiembro.has(tarea.creadorId)
-    ) {
-      tareasPorMiembro.get(tarea.creadorId).push(tarea);
-    }
+    responsablesDe(tarea).forEach((responsableId) => {
+      if (tareasPorMiembro.has(responsableId)) {
+        tareasPorMiembro.get(responsableId).push(tarea);
+      }
+    });
   });
 
   const proyectosPorMiembro = new Map(memberIds.map((id) => [id, []]));
@@ -332,6 +340,7 @@ const getActividadMiembros = async (usuario, fecha = null) => {
       id: miembro.id,
       nombre: miembro.nombre,
       area: miembro.area,
+      fotoPerfilUrl: miembro.fotoPerfilUrl,
       hechasHoy: sortTareas(hechasHoy).map(resumenTarea),
       enProgreso: sortTareas(enProgreso).map(resumenTarea),
       faltanHoy: sortTareas(faltanHoy).map(resumenTarea),
@@ -358,12 +367,15 @@ const getActividadMiembros = async (usuario, fecha = null) => {
 
 const getMemberStats = async (req, res) => {
   try {
+    // Proyectos que el miembro puede ver (misma regla que `puedeVerProyecto`):
+    // miembro, creador del proyecto, o participa en alguna tarea.
     const proyectos = await prisma.proyecto.findMany({
       where: {
         OR: [
           { miembros: { some: { id: req.usuario.id } } },
           { creadorId: req.usuario.id },
           { tareas: { some: { asignadoId: req.usuario.id } } },
+          { tareas: { some: { asignados: { some: { id: req.usuario.id } } } } },
           { tareas: { some: { creadorId: req.usuario.id } } },
         ],
       },
@@ -373,7 +385,7 @@ const getMemberStats = async (req, res) => {
         miembros: { select: { id: true, nombre: true, email: true, area: true, rol: true } },
         _count: { select: { tareas: true } },
         tareas: {
-          select: { estado: true, asignadoId: true },
+          select: { estado: true, asignadoId: true, asignados: { select: { id: true } } },
         },
       },
     });
@@ -381,7 +393,7 @@ const getMemberStats = async (req, res) => {
     const proyectosConProgreso = proyectos.map((proyecto) => {
       const total = proyecto.tareas.length;
       const hechas = proyecto.tareas.filter((tarea) => tarea.estado === 'HECHO').length;
-      const tareasMiembro = proyecto.tareas.filter((tarea) => tarea.asignadoId === req.usuario.id);
+      const tareasMiembro = proyecto.tareas.filter((tarea) => esResponsable(tarea, req.usuario.id));
       const hechasMiembro = tareasMiembro.filter((tarea) => tarea.estado === 'HECHO').length;
       const { tareas, ...resto } = proyecto;
 
@@ -411,17 +423,21 @@ const getMemberStats = async (req, res) => {
       enProgreso: 0,
     });
 
+    // Lista de "mis tareas": las que tiene a su cargo (principal o co-asignado)
+    // y las que creo, igual que la visibilidad del listado del proyecto.
     const tareas = await prisma.tarea.findMany({
       where: {
         proyectoId: { in: proyectos.map((proyecto) => proyecto.id) },
         OR: [
           { asignadoId: req.usuario.id },
+          { asignados: { some: { id: req.usuario.id } } },
           { creadorId: req.usuario.id },
         ],
       },
       orderBy: { creadoEn: 'asc' },
       include: {
         asignado: { select: { id: true, nombre: true, email: true, area: true } },
+        asignados: { select: { id: true, nombre: true, email: true, area: true } },
         creador: { select: { id: true, nombre: true, email: true, area: true } },
         proyecto: { select: { id: true, nombre: true } },
       },
@@ -442,9 +458,14 @@ const getMemberStats = async (req, res) => {
  * Cuenta las tareas terminadas agrupadas por mes de cierre.
  *
  * Se agrupa en la base (no trayendo las ~1150 filas) y se resta el offset de
- * Mexico antes de truncar: la columna es `timestamp without time zone` en UTC,
- * asi que una tarea cerrada a las 8 pm del ultimo dia del mes caeria en el mes
- * siguiente si se truncara en UTC.
+ * Mexico antes de truncar: la columna es DATETIME(3) en UTC, asi que una
+ * tarea cerrada a las 8 pm del ultimo dia del mes caeria en el mes siguiente
+ * si se truncara en UTC.
+ *
+ * Hay una version por base (lib/baseDatos.js): en MySQL DATE_SUB / DATE_FORMAT
+ * y columnas entre acentos graves; en Postgres interval / to_char y columnas
+ * entre comillas (son camelCase). `COUNT(*)` llega como BigInt desde los dos
+ * drivers, por eso se pasa por `Number` abajo.
  *
  * Las tareas HECHO sin `completadoEn` no se pueden ubicar en ningun mes; se
  * devuelven aparte en vez de repartirlas o inventarles fecha.
@@ -457,17 +478,30 @@ const getActividadPorMes = async (scopeProyecto) => {
   const ids = proyectos.map((p) => p.id);
   if (ids.length === 0) return { meses: [], sinFecha: 0 };
 
-  const [filas, sinFecha] = await Promise.all([
-    prisma.$queryRaw`
-      SELECT to_char(date_trunc('month', "completadoEn" - interval '6 hours'), 'YYYY-MM') AS mes,
-             COUNT(*)::int AS total
+  const porMes = esPostgres()
+    ? prisma.$queryRaw`
+      SELECT to_char("completadoEn" - INTERVAL '6 hours', 'YYYY-MM') AS mes,
+             COUNT(*) AS total
         FROM tareas
        WHERE estado = 'HECHO'
          AND "completadoEn" IS NOT NULL
-         AND "proyectoId" = ANY(${ids})
-       GROUP BY 1
-       ORDER BY 1
-    `,
+         AND "proyectoId" IN (${Prisma.join(ids)})
+       GROUP BY mes
+       ORDER BY mes
+    `
+    : prisma.$queryRaw`
+      SELECT DATE_FORMAT(DATE_SUB(\`completadoEn\`, INTERVAL 6 HOUR), '%Y-%m') AS mes,
+             COUNT(*) AS total
+        FROM tareas
+       WHERE estado = 'HECHO'
+         AND \`completadoEn\` IS NOT NULL
+         AND \`proyectoId\` IN (${Prisma.join(ids)})
+       GROUP BY mes
+       ORDER BY mes
+    `;
+
+  const [filas, sinFecha] = await Promise.all([
+    porMes,
     prisma.tarea.count({
       where: { estado: 'HECHO', completadoEn: null, proyectoId: { in: ids } },
     }),
@@ -479,53 +513,65 @@ const getActividadPorMes = async (scopeProyecto) => {
 const getAdminStats = async (req, res) => {
   try {
     const scopeProyecto = buildScopeProyectoParaAdmin(req.usuario);
+    const whereProyecto = scopeProyecto || undefined;
+    const whereTarea = scopeProyecto ? { proyecto: scopeProyecto } : undefined;
 
-    // 1. Estadísticas de Proyectos
-    const totalProyectos = await prisma.proyecto.count({ where: scopeProyecto || undefined });
-    const proyectosPorEstado = await prisma.proyecto.groupBy({
-      by: ['estado'],
-      where: scopeProyecto || undefined,
-      _count: true
-    });
-
-    // 2. Estadísticas de Tareas
-    const totalTareas = await prisma.tarea.count({ where: scopeProyecto ? { proyecto: scopeProyecto } : undefined });
-    const tareasPorEstado = await prisma.tarea.groupBy({
-      by: ['estado'],
-      where: scopeProyecto ? { proyecto: scopeProyecto } : undefined,
-      _count: true
-    });
-
-    // 3. Top Usuarios (Productividad)
-    // Usuarios con más tareas completadas
-    const topUsuarios = await getTopUsuariosProductividad(req.usuario);
-
-    // 3-bis. Actividades completadas por mes (para la vista mensual del inicio)
-    const actividadPorMes = await getActividadPorMes(scopeProyecto);
-
-    // 4. Actividad Reciente
-    const actividadReciente = await prisma.logActividad.findMany({
-      take: 8,
-      where: scopeProyecto ? { proyecto: scopeProyecto } : undefined,
-      orderBy: { creadoEn: 'desc' },
-      include: {
-        usuario: { select: { nombre: true, area: true } }
-      }
-    });
-
-    // 5. Proyectos con más progreso (Top 5 activos)
-    const proyectosActivos = await prisma.proyecto.findMany({
-      where: scopeProyecto || undefined,
-      include: {
-        _count: { select: { tareas: true } },
-        tareas: {
-          select: { id: true, estado: true }
-        },
-        miembros: {
-          select: { id: true }
-        },
-      }
-    });
+    // Todas las consultas son independientes entre si: se lanzan a la vez en
+    // vez de una tras otra (antes eran nueve viajes seguidos a la base).
+    const [
+      totalProyectos,
+      proyectosPorEstado,
+      totalTareas,
+      tareasPorEstado,
+      topUsuarios,
+      actividadPorMes,
+      actividadReciente,
+      proyectosActivos,
+      actividadMiembros,
+    ] = await Promise.all([
+      // 1. Estadísticas de Proyectos
+      prisma.proyecto.count({ where: whereProyecto }),
+      prisma.proyecto.groupBy({
+        by: ['estado'],
+        where: whereProyecto,
+        _count: true
+      }),
+      // 2. Estadísticas de Tareas
+      prisma.tarea.count({ where: whereTarea }),
+      prisma.tarea.groupBy({
+        by: ['estado'],
+        where: whereTarea,
+        _count: true
+      }),
+      // 3. Top Usuarios (Productividad): usuarios con más tareas completadas
+      getTopUsuariosProductividad(req.usuario),
+      // 3-bis. Actividades completadas por mes (para la vista mensual del inicio)
+      getActividadPorMes(scopeProyecto),
+      // 4. Actividad Reciente
+      prisma.logActividad.findMany({
+        take: 8,
+        where: whereTarea,
+        orderBy: { creadoEn: 'desc' },
+        include: {
+          usuario: { select: { nombre: true, area: true } }
+        }
+      }),
+      // 5. Proyectos con más progreso (Top 5 activos)
+      prisma.proyecto.findMany({
+        where: whereProyecto,
+        include: {
+          _count: { select: { tareas: true } },
+          tareas: {
+            select: { id: true, estado: true }
+          },
+          miembros: {
+            select: { id: true }
+          },
+        }
+      }),
+      // 6. Actividad del equipo (hoy)
+      getActividadMiembros(req.usuario),
+    ]);
 
     const proyectosProgreso = proyectosActivos.map(p => {
       const total = p._count.tareas;
@@ -552,8 +598,6 @@ const getAdminStats = async (req, res) => {
       || b.completas - a.completas
       || a.nombre.localeCompare(b.nombre)
     );
-
-    const actividadMiembros = await getActividadMiembros(req.usuario);
 
     res.json({
       proyectos: {
@@ -606,16 +650,18 @@ const ETIQUETA_AREA = {
   COMUNICACION: 'Comunicación',
   MARKETING: 'Marketing',
 };
+// Nombre que el configurador le dio al area; si no, el de fabrica.
+const nombreArea = (clave) => configEnCache().reglas.areas.find((a) => a.clave === clave)?.nombre || ETIQUETA_AREA[clave] || clave || '';
 
 const horaMexico = (valor) => (valor
   ? new Date(valor).toLocaleTimeString('es-MX', {
-    timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit',
+    timeZone: zonaHoraria(), hour: '2-digit', minute: '2-digit',
   })
   : '');
 
 const fechaMexico = (valor) => (valor
   ? new Date(valor).toLocaleDateString('es-MX', {
-    timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric',
+    timeZone: zonaHoraria(), day: '2-digit', month: '2-digit', year: 'numeric',
   })
   : '');
 
@@ -662,7 +708,7 @@ const exportarReporteDiaExcel = async (req, res) => {
     const detalle = [['Persona', 'Área', 'Situación', 'Tarea', 'Proyecto', 'Hora de cierre', 'Vence']];
 
     reporte.forEach(({ miembro, hechas, enProgreso }) => {
-      const area = ETIQUETA_AREA[miembro.area] || miembro.area || '';
+      const area = nombreArea(miembro.area);
       resumen.push([miembro.nombre, area, hechas.length, enProgreso.length]);
 
       hechas.forEach((tarea) => detalle.push([

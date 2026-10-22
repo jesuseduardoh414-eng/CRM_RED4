@@ -41,8 +41,9 @@ const ActionMenu = ({
           title={t('moreOptions')}
           // Las tarjetas que contienen este menu suelen tener su propio onClick
           // (abrir la tarea); sin esto, pulsar los 3 puntitos tambien la abriria.
+          // Con el dedo el boton mide 40px como minimo (con p-1.5 eran 28px).
           onClick={(event) => event.stopPropagation()}
-          className={`flex items-center justify-center rounded-lg p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)] data-[state=open]:bg-[var(--color-surface-3)] ${className}`}
+          className={`flex items-center justify-center rounded-lg p-1.5 [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:min-w-10 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)] data-[state=open]:bg-[var(--color-surface-3)] ${className}`}
         >
           <MoreVertical size={size} />
         </button>

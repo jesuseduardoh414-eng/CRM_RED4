@@ -1,53 +1,151 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { useToast } from '../context/ToastContext';
 import NotificationCenter from './NotificationCenter';
-import UserAvatar from './UserAvatar';
+import GlobalSearch from './GlobalSearch';
+import MenuCuenta from './MenuCuenta';
+import MenuFinanzas from './MenuFinanzas';
+import LogoMarca from './LogoMarca';
+import { useConfiguracion } from '../context/ConfiguracionContext';
 import { agendaService } from '../services/api';
+import { useMisTareas } from '../hooks/useMisTareas';
+import { useTextoFinanzas } from '../hooks/useTextoFinanzas';
+import { getEstadoProyecto } from '../utils/estadosProyecto';
+import { RUTA_INFORME, categoriasVisibles, puedeVerFinanzas, rutaCategoria, tieneAccesoFinanzas } from '../utils/finanzas';
+import { puede } from '../utils/permisos';
 import {
+  BarChart3,
+  BookOpen,
+  Building2,
   Calendar,
-  ChevronLeft,
-  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  FileSignature,
+  FileStack,
   FolderKanban,
   LayoutDashboard,
-  LogOut,
   Menu,
-  Moon,
+  PiggyBank,
+  Receipt,
+  ReceiptText,
   Search,
   ShieldCheck,
-  SunMedium,
+  UserRound,
   Users,
 } from 'lucide-react';
 
-const IconDashboard = () => <LayoutDashboard size={20} strokeWidth={2.5} />;
-const IconProyectos = () => <FolderKanban size={20} strokeWidth={2.5} />;
-const IconGestion = () => <ShieldCheck size={20} strokeWidth={2.5} />;
-const IconLogout = () => <LogOut size={18} strokeWidth={2.5} />;
 const IconMenu = () => <Menu size={24} strokeWidth={2.5} />;
-const IconAgenda = () => <Calendar size={20} strokeWidth={2.5} />;
 
-const navLinks = [
-  { to: '/dashboard', labelKey: 'home', Icon: IconDashboard },
-  { to: '/proyectos', labelKey: 'projects', Icon: IconProyectos },
-  { to: '/agenda', labelKey: 'agenda', Icon: IconAgenda },
+// Menú lateral con el mismo estilo que el panel de configuración (clases
+// .crm-* en index.css): agrupado por secciones y con la activa resaltada.
+const GRUPOS_MENU = [
+  {
+    tituloKey: 'mainMenu',
+    enlaces: [
+      { to: '/dashboard', labelKey: 'home', Icono: LayoutDashboard },
+      { to: '/proyectos', labelKey: 'projects', Icono: FolderKanban },
+      { to: '/agenda', labelKey: 'agenda', Icono: Calendar, modulo: 'agenda' },
+      { to: '/conocimiento', labelKey: 'menuKnowledge', Icono: BookOpen, modulo: 'conocimiento', permiso: 'conocimiento.ver' },
+    ],
+  },
+  {
+    tituloKey: 'menuGroupBusiness',
+    enlaces: [
+      { to: '/clientes', labelKey: 'menuClients', Icono: Building2, modulo: 'clientes', permiso: 'clientes.ver' },
+      { to: '/contratos', labelKey: 'contracts', Icono: FileSignature, modulo: 'contratos', permiso: 'contratos.ver' },
+    ],
+  },
+  {
+    tituloKey: 'administration',
+    enlaces: [
+      { to: '/reportes', labelKey: 'menuReports', Icono: BarChart3, permiso: 'reportes.ver' },
+      // Usuarios: quien gestiona personas o puede invitar.
+      { to: '/usuarios', labelKey: 'users', Icono: Users, permiso: ['usuarios.ver', 'usuarios.invitar'] },
+    ],
+  },
 ];
+
+// Proyectos que caben en la sección "Mis proyectos" del menú del miembro.
+const MAX_PROYECTOS_MENU = 5;
+
+const esMac =typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
 
 const Layout = ({ children }) => {
   const { usuario, logout } = useAuth();
-  const { theme, setTheme, t } = usePreferences();
+  const { moduloActivo, marca, nombreArea } = useConfiguracion();
+  const tf = useTextoFinanzas();
+  const agendaActiva = moduloActivo('agenda');
+  const esMiembro = Boolean(usuario) && usuario.rol !== 'ADMIN';
+  // Finanzas: el grupo sale solo con lo que la persona puede ver (usuario.permisos).
+  const finanzasActivas = moduloActivo('finanzas') && tieneAccesoFinanzas(usuario);
+  const categoriasGasto = finanzasActivas ? categoriasVisibles(usuario) : [];
+  const veInforme = finanzasActivas && puedeVerFinanzas(usuario, 'informe');
+  const subGastos = [
+    ...categoriasGasto.map((c) => ({ to: rutaCategoria(c), etiqueta: tf(`finCat${c}`), corta: tf(`finCat${c}Corta`) })),
+    ...(veInforme ? [{ to: RUTA_INFORME, etiqueta: tf('finInformeTitulo'), corta: tf('finInformeTitulo') }] : []),
+  ];
+  const enlacesFinanzas = [
+    finanzasActivas && puedeVerFinanzas(usuario, 'ventas') && { to: '/ventas', etiqueta: tf('finVentasTitulo'), Icono: Receipt },
+    finanzasActivas && puedeVerFinanzas(usuario, 'tesoreria') && { to: '/tesoreria', etiqueta: tf('finTesoreriaTitulo'), Icono: PiggyBank },
+    // /gastos lleva a la primera categoría visible (colapsado, el icono es un enlace directo).
+    subGastos.length > 0 && { to: '/gastos', etiqueta: tf('finGastosTitulo'), Icono: ReceiptText, sub: subGastos, raiz: '/gastos' },
+    finanzasActivas && puedeVerFinanzas(usuario, 'cotizaciones') && { to: '/cotizaciones', etiqueta: tf('finCotizacionesTitulo'), Icono: FileStack },
+  ].filter(Boolean);
+  // Accesos a sus proyectos. El Layout siempre está montado, así que es quien
+  // recarga cuando otra pantalla cambia una tarea.
+  const { proyectosAbiertos, abiertasPorProyecto } = useMisTareas({ escucharCambios: true });
+  const { t } = usePreferences();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('crm_sidebar_collapsed') === 'true');
+  // Antes se guardaba 'true'/'false' en cada montaje, asi que un 'false' viejo
+  // no era una eleccion de la persona. Ahora solo se guarda al pulsar el boton,
+  // como '1'/'0'; de lo viejo solo se respeta 'true' (eso si fue a proposito).
+  const [collapsed, setCollapsed] = useState(() => {
+    const guardado = localStorage.getItem('crm_sidebar_collapsed');
+    if (guardado === '1' || guardado === 'true') return true;
+    if (guardado === '0') return false;
+    return null;
+  });
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
+  // Tablet en horizontal (1024×768, 1112, split-screen hasta 1179): con el
+  // menu de 256px el contenido se quedaba en ~700px, el ancho de una tablet en
+  // vertical. Ahi el menu sale colapsado por defecto, salvo que la persona ya
+  // lo haya expandido o colapsado a mano (eso se guarda y manda).
+  const [anchoIntermedio, setAnchoIntermedio] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1180);
+  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [, setRecordatoriosCount] = useState(0);
+  const cerrarMenuMovil = () => setOpen(false);
   const contenidoRef = useRef(null);
+  const lateralRef = useRef(null);
+  const botonMenuRef = useRef(null);
+  // El colapsado es cosa del escritorio. En movil el menu sale siempre
+  // completo: si se habia colapsado en un monitor, en el telefono salia solo
+  // con iconos y sin forma de expandirlo (ese boton es lg:flex).
+  // `collapsed` es null mientras no haya preferencia guardada.
+  const colapsado = isDesktop && (collapsed ?? anchoIntermedio);
+
+  // Al navegar se cierra el menu movil. Se compara con la ruta del render
+  // anterior en vez de usar un efecto: un setState dentro de un efecto provoca
+  // un segundo render en cascada.
+  const [rutaAnterior, setRutaAnterior] = useState(location.pathname);
+  if (rutaAnterior !== location.pathname) {
+    setRutaAnterior(location.pathname);
+    if (open) setOpen(false);
+  }
 
   useEffect(() => {
-    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    // Al pasar a escritorio se cierra el menu movil: si no, al volver a
+    // telefono reaparecia abierto y con el contenido inerte.
+    const onResize = () => {
+      const escritorio = window.innerWidth >= 1024;
+      setIsDesktop(escritorio);
+      setAnchoIntermedio(escritorio && window.innerWidth < 1180);
+      if (escritorio) setOpen(false);
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -60,9 +158,13 @@ const Layout = ({ children }) => {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!usuario) return;
+    // Con el módulo de agenda apagado no hay recordatorios que sondear.
+    if (!usuario || !agendaActiva) return undefined;
 
     const checarAgenda = async () => {
+      // Con la pestaña oculta no se sondea: nadie va a ver el aviso y solo
+      // gasta peticiones. Al volver a la pestaña se consulta en el acto.
+      if (document.hidden) return;
       try {
         const [{ recordatorios }, { pendientes }] = await Promise.all([
           agendaService.recordatorios(),
@@ -77,11 +179,13 @@ const Layout = ({ children }) => {
         recordatorios.forEach((recordatorio) => {
           if (!yaNotificados.includes(recordatorio.id)) {
             const min = Math.round((new Date(recordatorio.fechaInicio) - ahora) / 60000);
-            const msg = `Recordatorio: ${recordatorio.titulo} en ${min} minutos`;
+            const msg = t('reminderToast', { title: recordatorio.titulo, minutes: min });
             showToast(msg, 'info');
 
+            // Solo si la persona ya concedio el permiso (se pide al abrir la
+            // campana de notificaciones, nunca al cargar la pagina).
             if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('CRM - Recordatorio', { body: msg, icon: '/logo.png' });
+              new Notification(`${marca.nombreSistema} - ${t('agenda')}`, { body: msg });
             }
 
             yaNotificados.push(recordatorio.id);
@@ -94,269 +198,310 @@ const Layout = ({ children }) => {
       }
     };
 
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-
     checarAgenda();
     const interval = setInterval(checarAgenda, 60000);
-    return () => clearInterval(interval);
-  }, [usuario, showToast]);
+    const alCambiarVisibilidad = () => { if (!document.hidden) checarAgenda(); };
+    document.addEventListener('visibilitychange', alCambiarVisibilidad);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', alCambiarVisibilidad);
+    };
+  }, [usuario, agendaActiva, marca.nombreSistema, showToast, t]);
 
   useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    localStorage.setItem('crm_sidebar_collapsed', String(collapsed));
+    if (collapsed !== null) localStorage.setItem('crm_sidebar_collapsed', collapsed ? '1' : '0');
   }, [collapsed]);
 
+  // Ctrl+K / Cmd+K abre el buscador desde cualquier pantalla
+  useEffect(() => {
+    const alPulsarTecla = (event) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setBuscadorAbierto(true);
+      }
+    };
+    window.addEventListener('keydown', alPulsarTecla);
+    return () => window.removeEventListener('keydown', alPulsarTecla);
+  }, []);
+
+  // Escape cierra el menu movil
+  useEffect(() => {
+    if (!open) return undefined;
+    const alPulsarEscape = (event) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', alPulsarEscape);
+    return () => document.removeEventListener('keydown', alPulsarEscape);
+  }, [open]);
+
+  // Menu movil abierto: el foco entra en el menu (el resto queda `inert`, asi
+  // que Tab no se escapa) y al cerrarlo vuelve al boton que lo abrio.
+  const menuMovilAbierto = open && !isDesktop;
+  useEffect(() => {
+    if (!menuMovilAbierto) return undefined;
+    // Ambos nodos viven mientras exista el Layout: se guardan para la limpieza
+    const lateral = lateralRef.current;
+    const botonMenu = botonMenuRef.current;
+    // El primero VISIBLE: el boton de colapsar existe pero es lg:flex (oculto aqui)
+    const candidatos = lateral?.querySelectorAll('a[href], button:not([disabled])') || [];
+    [...candidatos].find((el) => el.getClientRects().length > 0)?.focus({ preventScroll: true });
+    return () => {
+      const activo = document.activeElement;
+      if (!activo || activo === document.body || lateral?.contains(activo)) {
+        botonMenu?.focus({ preventScroll: true });
+      }
+    };
+  }, [menuMovilAbierto]);
+
   const toggleSidebar = () => {
+    // Se parte de lo que se ve (que puede venir del ancho, sin preferencia)
+    const siguiente = !colapsado;
     if (document.startViewTransition) {
       document.startViewTransition(() => {
-        setCollapsed((prev) => !prev);
+        setCollapsed(siguiente);
       });
       return;
     }
 
-    setCollapsed((prev) => !prev);
+    setCollapsed(siguiente);
   };
 
   const handleLogout = () => {
     logout();
-    showToast('Sesion cerrada', 'info');
+    showToast(t('sessionClosed'), 'info');
     navigate('/login');
   };
 
+  const subtituloCuenta = [
+    t(usuario?.rol === 'ADMIN' ? 'roleAdmin' : 'roleMember'),
+    usuario?.area ? nombreArea(usuario.area) : null,
+  ].filter(Boolean).join(' · ');
+
+  const opcionesCuenta = useMemo(() => [
+    { id: 'perfil', icono: UserRound, etiqueta: t('menuMyProfile'), atajo: 'Ctrl+,', onSelect: () => { setOpen(false); navigate('/perfil'); } },
+    { id: 'seguridad', icono: ShieldCheck, etiqueta: t('menuSecurity'), onSelect: () => { setOpen(false); navigate('/perfil#seguridad'); } },
+  ], [t, navigate]);
+
+  const abrirBuscador = () => {
+    setOpen(false);
+    setBuscadorAbierto(true);
+  };
+
+  // En movil el menu cerrado queda fuera de pantalla: `inert` lo saca del orden
+  // de tabulacion y del lector de pantalla hasta que se abre.
+  const menuOculto = !isDesktop && !open;
+
   return (
-    <div className="flex min-h-screen bg-[var(--color-surface)] relative overflow-hidden">
+    <div className="flex min-h-dvh bg-[var(--color-bg-base)] relative overflow-hidden">
       <aside
-        className="
-          fixed lg:sticky top-0 h-screen z-[100] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
-          bg-[var(--color-sidebar)] flex flex-col
-        "
+        ref={lateralRef}
+        inert={menuOculto}
+        aria-hidden={menuOculto || undefined}
+        className="crm-lateral fixed lg:sticky top-0 h-dvh z-[100] flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] transition-[width,min-width,left] duration-300 ease-in-out"
         style={{
-          left: isDesktop ? 0 : (open ? 0 : 'calc(-1 * min(84vw, 320px))'),
-          width: isDesktop
-            ? (collapsed ? '92px' : 'clamp(240px, 18vw, 280px)')
-            : 'min(84vw, 320px)',
-          minWidth: isDesktop
-            ? (collapsed ? '92px' : 'clamp(240px, 18vw, 280px)')
-            : 'min(84vw, 320px)',
-          maxWidth: isDesktop
-            ? (collapsed ? '92px' : '280px')
-            : '320px',
+          left: isDesktop ? 0 : (open ? 0 : 'calc(-1 * min(84vw, 300px))'),
+          width: isDesktop ? (colapsado ? '72px' : '256px') : 'min(84vw, 300px)',
+          minWidth: isDesktop ? (colapsado ? '72px' : '256px') : 'min(84vw, 300px)',
         }}
       >
-        {/* Poco aire arriba a proposito: el usuario prefiere que el logo y el
-            menu suban para ganar alto util en la lista de secciones. */}
-        <div className={`relative flex w-full flex-col items-center ${collapsed ? 'gap-4 px-3 pt-4 pb-4' : 'gap-3 px-4 pt-4 pb-4'}`}>
-          <img
-            src={collapsed ? '/logo - sideber.png' : '/logo.png'}
-            alt="Red 4 Design"
-            className={`h-auto object-contain transition-all duration-300 ${collapsed ? 'w-12 max-w-[48px]' : 'w-full max-w-[180px] lg:max-w-[200px]'}`}
-            style={{ viewTransitionName: 'sidebar-logo' }}
-          />
-
-          {!collapsed && (
-            <div className="text-[10px] lg:text-xs text-white/40 font-medium text-center whitespace-nowrap">
-              {t('internalPanel')}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className={`
-              hidden lg:flex items-center ${collapsed ? 'justify-center w-full px-5' : 'gap-4 w-full px-5'}
-              py-3.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap
-              text-white/50 hover:text-white hover:bg-white/5
-            `}
-            title={collapsed ? 'Expandir menu' : undefined}
-            aria-label={collapsed ? 'Expandir menu lateral' : 'Colapsar menu lateral'}
-          >
-            <span className="shrink-0 flex items-center justify-center">
-              {collapsed ? <ChevronRight size={20} strokeWidth={2.5} /> : <ChevronLeft size={20} strokeWidth={2.5} />}
+        {/* Cabecera: logo, nombre del panel y botón para colapsar */}
+        <div className={colapsado ? 'flex flex-col items-center gap-3 px-3 pb-3 pt-5' : 'px-6 pb-4 pt-5'}>
+          <div className={`flex items-center ${colapsado ? 'justify-center' : 'justify-between gap-2'}`}>
+            <span style={{ viewTransitionName: 'sidebar-logo' }} className="flex min-w-0">
+              {colapsado
+                ? <LogoMarca fondo="auto" variante="isotipo" className="h-9 w-9" textoClassName="text-base" />
+                // h-11: el logo de RED 4 lleva las esquinas del "4" arriba y abajo
+                // del texto; con h-8 las letras quedaban de unos 9px.
+                : <LogoMarca fondo="auto" className="h-11 w-auto max-w-[150px]" textoClassName="text-lg" />}
             </span>
-            {!collapsed && <span className="flex-1 min-w-0 truncate text-left">{t('collapse')}</span>}
-          </button>
-
-          {/* Buscador. Vivia en la barra superior; aqui cabe completo y libera
-              esos 70px de alto en todas las pantallas. Colapsado se reduce a la
-              lupa, que expande el menu para poder escribir. */}
-          {collapsed ? (
+            {!colapsado && (
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="hidden lg:flex h-7 w-7 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10 [@media(pointer:coarse)]:-mr-1.5 shrink-0 items-center justify-center rounded-[6px] text-[var(--color-text-muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] hover:text-[var(--color-text)]"
+                aria-label={t('collapseMenu')}
+                title={t('collapseMenu')}
+              >
+                <ChevronsLeft size={16} />
+              </button>
+            )}
+          </div>
+          {!colapsado && (
+            <p className="mt-2.5 truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+              {t('internalPanel')}
+            </p>
+          )}
+          {colapsado && (
             <button
               type="button"
-            onClick={toggleSidebar}
-              title={t('searchPlaceholder')}
-              aria-label={t('searchPlaceholder')}
-              className="hidden lg:flex w-full items-center justify-center py-3 rounded-xl text-white/50 transition-all hover:text-white hover:bg-white/5"
+              onClick={toggleSidebar}
+              className="hidden lg:flex h-7 w-7 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10 items-center justify-center rounded-[6px] text-[var(--color-text-muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] hover:text-[var(--color-text)]"
+              aria-label={t('expandMenu')}
+              title={t('expandMenu')}
             >
-              <Search size={20} strokeWidth={2.5} />
+              <ChevronsRight size={16} />
             </button>
-          ) : (
-            <div className="relative w-full group">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/35 transition-colors group-focus-within:text-white/60">
-                <Search size={17} />
-            </span>
-            <input
-              type="text"
-              placeholder={t('searchPlaceholder')}
-                aria-label={t('searchPlaceholder')}
-                className="w-full rounded-xl bg-white/5 py-2.5 pl-10 pr-14 text-sm text-white outline-none transition-all placeholder:text-white/35 focus:bg-white/10"
-              />
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/40">
-              Ctrl+K
-            </span>
-            </div>
           )}
         </div>
 
-        <nav className={`flex-1 flex flex-col gap-1 overflow-y-auto ${collapsed ? 'px-3' : 'px-4'}`}>
-          {!collapsed && (
-            <div className="text-[10px] font-medium text-white/30 px-3 py-4 whitespace-nowrap">
-              {t('mainMenu')}
-            </div>
+        {/* Buscador global (Ctrl+K). Colapsado queda solo la lupa. */}
+        <div className={colapsado ? 'px-3 pb-1' : 'px-3 pb-1'}>
+          {colapsado ? (
+            <button type="button" onClick={abrirBuscador} title={t('searchPlaceholder')} aria-label={t('searchPlaceholder')} className="crm-nav-item crm-nav-colapsado">
+              <Search size={17} />
+            </button>
+          ) : (
+            <button type="button" onClick={abrirBuscador} aria-label={t('searchPlaceholder')} aria-keyshortcuts={esMac ? 'Meta+K' : 'Control+K'} className="crm-buscar">
+              <Search size={15} className="shrink-0" />
+              <span className="truncate">{t('searchPlaceholder')}</span>
+              <kbd>{esMac ? '⌘K' : 'Ctrl K'}</kbd>
+            </button>
           )}
+        </div>
 
-          {navLinks.map(({ to, labelKey, Icon }) => {
-            const label = t(labelKey);
+        <nav className="flex flex-1 flex-col overflow-y-auto px-3 pb-3" aria-label={t('mainMenu')}>
+          {GRUPOS_MENU.map((grupo) => {
+            // Cada enlace sale con su módulo activo y el permiso de la persona.
+            const enlaces = grupo.enlaces.filter(({ modulo, permiso }) => (!modulo || moduloActivo(modulo))
+              && (!permiso || [].concat(permiso).some((clave) => puede(usuario, clave))));
+            if (!enlaces.length) return null;
             return (
-              <NavLink
-                key={to}
-                to={to}
-                onClick={() => setOpen(false)}
-                title={collapsed ? label : undefined}
-                className={({ isActive }) => `
-                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap
-                  ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
-                `}
-              >
-                <span className="shrink-0 flex items-center justify-center"><Icon /></span>
-                {!collapsed && <span className="flex-1 min-w-0 truncate">{label}</span>}
-              </NavLink>
+              <div key={grupo.tituloKey}>
+                {colapsado
+                  ? <div className="mx-auto my-3 h-px w-6 bg-[var(--color-border)]" aria-hidden="true" />
+                  : <p className="crm-lateral-grupo">{t(grupo.tituloKey)}</p>}
+                <div className="flex flex-col gap-0.5">
+                  {enlaces.map(({ to, labelKey, Icono }) => {
+                    const label = t(labelKey);
+                    return (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        onClick={() => setOpen(false)}
+                        title={colapsado ? label : undefined}
+                        aria-label={colapsado ? label : undefined}
+                        className={`crm-nav-item ${colapsado ? 'crm-nav-colapsado crm-nav-riel' : ''}`}
+                      >
+                        <Icono size={17} strokeWidth={2} />
+                        {/* Colapsado, el `title` hace de tooltip con raton; en
+                            una tablet no hay hover y el icono quedaba mudo:
+                            ahi se pinta el nombre corto bajo el icono (CSS). */}
+                        {colapsado
+                          ? <span className="crm-nav-rotulo" aria-hidden="true">{label}</span>
+                          : <span className="crm-nav-texto">{label}</span>}
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
 
-          {usuario?.rol === 'ADMIN' && (
-            <>
-              {!collapsed && (
-                <div className="text-[10px] font-medium text-white/30 px-3 py-4 mt-4 whitespace-nowrap">
-                  {t('administration')}
-                </div>
-              )}
+          {/* Finanzas: Ventas, Tesorería y Gastos (con submenú de categorías e
+              informe). Cada enlace sale solo si la persona tiene permiso. */}
+          <MenuFinanzas titulo={tf('finMenuGrupo')} enlaces={enlacesFinanzas} colapsado={colapsado} onNavegar={cerrarMenuMovil} />
 
-              <NavLink
-                to="/usuarios"
-                onClick={() => setOpen(false)}
-                title={collapsed ? t('users') : undefined}
-                className={({ isActive }) => `
-                  flex items-center ${collapsed ? 'justify-center' : 'gap-4'} px-5 py-3.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap
-                  ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}
-                `}
-              >
-                <span className="shrink-0 flex items-center justify-center"><IconGestion /></span>
-                {!collapsed && <span className="min-w-0 truncate">{t('users')}</span>}
-              </NavLink>
-            </>
+          {/* Accesos directos a los proyectos del miembro, con lo que le queda
+              pendiente en cada uno. Colapsado no cabe: para eso está Proyectos. */}
+          {esMiembro && !colapsado && proyectosAbiertos.length > 0 && (
+            <div>
+              <p className="crm-lateral-grupo">{t('menuMyProjects')}</p>
+              <div className="flex flex-col gap-0.5">
+                {proyectosAbiertos.slice(0, MAX_PROYECTOS_MENU).map((proyecto) => {
+                  const pendientes = abiertasPorProyecto[proyecto.id] || 0;
+                  return (
+                    <NavLink
+                      key={proyecto.id}
+                      to={`/proyectos/${proyecto.id}`}
+                      onClick={() => setOpen(false)}
+                      className="crm-nav-item crm-nav-proyecto"
+                    >
+                      <span className="crm-nav-punto" style={{ background: getEstadoProyecto(proyecto.estado).dot }} aria-hidden="true" />
+                      <span className="crm-nav-texto">{proyecto.nombre}</span>
+                      {pendientes > 0 && <span className="crm-nav-cifra">{pendientes}</span>}
+                    </NavLink>
+                  );
+                })}
+                {proyectosAbiertos.length > MAX_PROYECTOS_MENU && (
+                  <NavLink to="/proyectos" end onClick={() => setOpen(false)} className="crm-nav-mas">
+                    {t('menuSeeAllProjects', { n: proyectosAbiertos.length })}
+                  </NavLink>
+                )}
+              </div>
+            </div>
           )}
 
-          {/* Notificaciones y tema van al final del menu, no en el pie fijo: en
-              el pie robaban alto y obligaban a desplazar para llegar a Inicio o
-              Proyectos, que es lo que de verdad se usa. */}
-          <div className="mt-4 pt-3 border-t border-white/5 flex flex-col gap-1">
-            {isDesktop && <NotificationCenter enSidebar colapsado={collapsed} />}
-            <button
-              type="button"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              title={collapsed ? (theme === 'dark' ? t('lightMode') : t('darkMode')) : undefined}
-                aria-label={theme === 'dark' ? t('lightMode') : t('darkMode')}
-              className={`
-                flex items-center ${collapsed ? 'justify-center' : 'gap-4'} w-full px-5 py-3.5 rounded-xl
-                text-sm font-medium transition-all whitespace-nowrap
-              text-white/50 hover:text-white hover:bg-white/5
-              `}
-            >
-            <span className="shrink-0 flex items-center justify-center">
-                {theme === 'dark' ? <SunMedium size={20} strokeWidth={2.5} /> : <Moon size={20} strokeWidth={2.5} />}
-            </span>
-              {!collapsed && (
-                <span className="flex-1 min-w-0 truncate text-left">
-                  {theme === 'dark' ? t('lightMode') : t('darkMode')}
-            </span>
-              )}
-            </button>
-          </div>
+          {/* Avisos al final del menú: es una fila más, con su contador. */}
+          {isDesktop && (
+            <div className="mt-auto pt-4">
+              <NotificationCenter enSidebar colapsado={colapsado} />
+            </div>
+          )}
         </nav>
 
-        <div className={`border-t border-white/5 ${collapsed ? 'p-3' : 'p-6'}`}>
-          <div className={`flex items-center ${collapsed ? 'justify-center mb-3' : 'gap-3 mb-5'}`}>
-            <button
-              type="button"
-              onClick={() => navigate('/perfil')}
-              className="rounded-full transition-all hover:scale-105"
-              title={collapsed ? usuario?.nombre : undefined}
-            >
-              <UserAvatar
-                usuario={usuario}
-                size={40}
-                radius={999}
-                fontSize="0.85rem"
-                color="#ffffff"
-                background="rgba(255,255,255,0.12)"
-                borderColor="rgba(255,255,255,0.16)"
-              />
-            </button>
-
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-white truncate">{usuario?.nombre}</div>
-                <div className="text-[11px] text-white/40 font-medium truncate">
-                  {usuario?.email?.split('@')[0]}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={handleLogout}
-            title={collapsed ? t('logout') : undefined}
-            className={`w-full p-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-medium hover:bg-red-500/20 transition-all flex items-center justify-center whitespace-nowrap ${collapsed ? '' : 'gap-2'}`}
-          >
-            <span className="shrink-0 flex items-center justify-center"><IconLogout /></span>
-            {!collapsed && <span className="truncate">{t('logout')}</span>}
-          </button>
+        {/* Pie: la persona con su menú (perfil, seguridad, tema, idioma, salir) */}
+        <div className={`border-t border-[var(--color-border)] ${colapsado ? 'p-2' : 'p-3'}`}>
+          <MenuCuenta
+            usuario={usuario}
+            subtitulo={subtituloCuenta}
+            opciones={opcionesCuenta}
+            onCerrarSesion={handleLogout}
+            colapsado={colapsado}
+            plano
+          />
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 flex flex-col h-screen bg-[var(--color-bg-base)] overflow-hidden">
+      {/* Con el menu movil abierto el contenido queda inerte: ni foco ni lector */}
+      <main inert={menuMovilAbierto} className="flex-1 min-w-0 flex flex-col h-dvh bg-[var(--color-bg-base)] overflow-hidden">
         {/* Solo en movil: ahi la barra lateral esta oculta tras el boton de
             menu, asi que hace falta un sitio para abrirla y ver los avisos.
             En escritorio ya no hay barra superior; todo vive en el sidebar. */}
-        <header className="lg:hidden h-16 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4 gap-4 sticky top-0 z-[90]">
+        <header className="lg:hidden h-[calc(4rem+env(safe-area-inset-top))] [@media(max-height:500px)]:h-[calc(3.25rem+env(safe-area-inset-top))] shrink-0 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between pt-[env(safe-area-inset-top)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] gap-4 sticky top-0 z-[90]">
           <button
+            ref={botonMenuRef}
+            type="button"
             onClick={() => setOpen(true)}
             className="p-2 -ml-2 text-[var(--color-text)] hover:bg-[var(--color-surface-3)] rounded-xl transition-colors"
             aria-label={t('openMenu')}
+            aria-expanded={open}
           >
             <IconMenu />
           </button>
 
-          {!isDesktop && <NotificationCenter />}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={abrirBuscador}
+              className="p-2.5 text-[var(--color-text)] hover:bg-[var(--color-surface-3)] rounded-xl transition-colors"
+              aria-label={t('searchPlaceholder')}
+            >
+              <Search size={22} strokeWidth={2.5} />
+            </button>
+            {!isDesktop && <NotificationCenter />}
+          </div>
         </header>
 
-        <div ref={contenidoRef} className="flex-1 overflow-y-auto p-4 lg:p-8 xl:p-12 max-w-[1600px] w-full mx-auto">
+        {/* md: tablet en vertical (768-1023) ya no lleva el margen de telefono.
+            Se repiten las zonas seguras en md porque un telefono en horizontal
+            (844×390) tambien pasa de 768 y tiene el notch a un lado. */}
+        <div ref={contenidoRef} className="flex-1 overflow-y-auto p-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6 md:pl-[max(1.5rem,env(safe-area-inset-left))] md:pr-[max(1.5rem,env(safe-area-inset-right))] md:pb-[max(1.5rem,env(safe-area-inset-bottom))] [@media(max-height:500px)]:pt-3 lg:p-8 xl:p-12 max-w-[1600px] w-full mx-auto">
           {children}
         </div>
       </main>
 
+      {/* lg:hidden: si se gira la tablet a horizontal con el menu abierto, el
+          velo se quedaba tapando el escritorio */}
       <div
+        aria-hidden="true"
         className={`
-          fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99] transition-opacity duration-300
+          fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99] transition-opacity duration-300 lg:hidden
           ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}
         `}
         onClick={() => setOpen(false)}
       />
+
+      {/* Se monta solo mientras esta abierto: asi el texto escrito se limpia al
+          cerrar sin tener que vigilarlo con un efecto. */}
+      {buscadorAbierto && <GlobalSearch open onClose={() => setBuscadorAbierto(false)} />}
     </div>
   );
 };

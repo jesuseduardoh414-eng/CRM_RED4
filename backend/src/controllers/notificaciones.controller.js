@@ -1,5 +1,21 @@
 const prisma = require('../lib/prisma');
 
+// Para notificaciones antiguas que no guardaron `actorNombre`: se deduce del
+// texto. Las nuevas ya traen el campo en la fila y no pasan por aqui.
+const extraerActorNombre = (mensaje = '') => {
+  const patrones = [
+    /^(.*?) te ha invitado a:/i,
+    /^(.*?) coment[oó] en tu tarea:/i,
+  ];
+
+  for (const patron of patrones) {
+    const match = mensaje.match(patron);
+    if (match?.[1]) return match[1].trim();
+  }
+
+  return null;
+};
+
 const listar = async (req, res) => {
   try {
     const notificacionesBase = await prisma.notificacion.findMany({
@@ -34,33 +50,48 @@ const listar = async (req, res) => {
       : [];
 
     const tareasMap = new Map(tareas.map((tarea) => [tarea.id, tarea]));
-    const extraerActorNombre = (mensaje = '') => {
-      const patrones = [
-        /^(.*?) te ha invitado a:/i,
-        /^(.*?) coment[oó] en tu tarea:/i,
-      ];
 
-      for (const patron of patrones) {
-        const match = mensaje.match(patron);
-        if (match?.[1]) return match[1].trim();
-      }
+    // Proyectos referenciados directamente en la fila (`proyectoId`), para
+    // notificaciones que no cuelgan de una tarea.
+    const proyectoIds = [...new Set(
+      notificacionesBase
+        .map((notificacion) => notificacion.proyectoId)
+        .filter((value) => Number.isInteger(value))
+    )];
 
-      return null;
-    };
+    const proyectos = proyectoIds.length > 0
+      ? await prisma.proyecto.findMany({
+          where: { id: { in: proyectoIds } },
+          select: { id: true, nombre: true },
+        })
+      : [];
+
+    const proyectosMap = new Map(proyectos.map((proyecto) => [proyecto.id, proyecto]));
 
     const notificaciones = notificacionesBase.map((notificacion) => {
       const tarea = notificacion.tareaId ? tareasMap.get(notificacion.tareaId) || null : null;
+      const proyecto = (notificacion.proyectoId && proyectosMap.get(notificacion.proyectoId))
+        || tarea?.proyecto
+        || null;
       return {
         ...notificacion,
         tarea,
-        proyecto: tarea?.proyecto || null,
-        actorNombre: extraerActorNombre(notificacion.mensaje) || tarea?.creador?.nombre || null,
+        proyecto,
+        // Se prefieren los campos guardados en la fila; el regex y el creador
+        // de la tarea quedan solo como respaldo para filas antiguas.
+        proyectoId: notificacion.proyectoId ?? tarea?.proyectoId ?? null,
+        eventoId: notificacion.eventoId ?? null,
+        actorNombre: notificacion.actorNombre
+          || extraerActorNombre(notificacion.mensaje)
+          || tarea?.creador?.nombre
+          || null,
       };
     });
 
     res.json({ notificaciones });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[notificaciones.listar]', error);
+    res.status(500).json({ error: 'Error al obtener las notificaciones' });
   }
 };
 
@@ -73,7 +104,8 @@ const marcarLeida = async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[notificaciones.marcarLeida]', error);
+    res.status(500).json({ error: 'Error al actualizar la notificación' });
   }
 };
 
@@ -85,7 +117,8 @@ const marcarTodasLeidas = async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[notificaciones.marcarTodasLeidas]', error);
+    res.status(500).json({ error: 'Error al actualizar las notificaciones' });
   }
 };
 
@@ -97,7 +130,8 @@ const eliminar = async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[notificaciones.eliminar]', error);
+    res.status(500).json({ error: 'Error al eliminar la notificación' });
   }
 };
 

@@ -1,6 +1,6 @@
 // Página de detalle de un Proyecto
-// Muestra info del proyecto, barra de progreso, contadores y lista de tareas
-// Vistas: Lista | Kanban | Gantt | Muro
+// Cabecera, avance y cifras de tareas en texto plano, y las tareas en
+// Lista | Kanban | Gantt, o el historial de actividad del proyecto.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
@@ -8,24 +8,46 @@ import { proyectosService, tareasService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { useToast } from '../context/ToastContext';
+import { useConfiguracion } from '../context/ConfiguracionContext';
+import { useTextoPermisos } from '../hooks/useTextoPermisos';
+import { useTextoProyectos } from '../hooks/useTextoProyectos';
 import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
 import ActionMenu from '../components/ActionMenu';
+import UserAvatar from '../components/UserAvatar';
 import SelectorMultiple from '../components/SelectorMultiple';
+import SelectorSimple from '../components/SelectorSimple';
 import SelectorRangoFechas from '../components/SelectorRangoFechas';
 import FiltrosTareas from '../components/FiltrosTareas';
 import KanbanView from '../components/KanbanView';
 import GanttView  from '../components/GanttView';
+import ProjectActivityLog from '../components/ProjectActivityLog';
+import PanelClienteProyecto from '../components/portal/PanelClienteProyecto';
+import { useTextoPortal } from '../hooks/useTextoPortal';
 import { PageSkeleton } from '../components/Skeleton';
 import ModalImportar from '../components/ModalImportar';
 import TaskAttachments from '../components/TaskAttachments';
 import TaskComments from '../components/TaskComments';
+import { useConfirmacion } from '../components/ConfirmDialog';
 import { sortTareas, sortTareasLista } from '../utils/sorters';
 import { getEstadoProyecto, estaListoParaRevision } from '../utils/estadosProyecto';
-import { 
-  ArrowRight, 
-  RotateCcw, 
-  Trash2, 
+import { areasDeTexto } from '../utils/areas';
+import { alcanzaProyecto, puede, puedeEnTareas } from '../utils/permisos';
+import {
+  ESTADOS_TAREA,
+  PRIORIDADES_TAREA,
+  getEstadoTarea,
+  getPrioridadTarea,
+  siguienteEstadoTarea,
+  asignadosDeTarea,
+  puedeGestionarTarea,
+} from '../utils/estadosTarea';
+import { claveDiaLocal, claveDesdeISO, estaPorVencer } from '../utils/fechasLocales';
+import {
+  ArrowLeft,
+  ArrowRight,
+  RotateCcw,
+  Trash2,
   ArrowDownToLine,
   ArrowUpFromLine,
   Plus,
@@ -35,42 +57,49 @@ import {
   List,
   LayoutGrid,
   CalendarRange,
+  CalendarClock,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
   Search,
-  User2,
   Archive,
   ArchiveRestore,
   BadgeCheck,
+  Building2,
+  CheckCircle2,
   CheckSquare,
+  CircleDashed,
+  Eye,
+  History,
+  MessagesSquare,
+  ListChecks,
+  PlayCircle,
   X
 } from 'lucide-react';
 
 // ── Configuraciones ─────────────────────────────────────────────────────────
-const PRIORIDADES = [
-  { value: 'BAJA',  labelKey: 'priorityLow',    color: '#00a2ff', bg: 'rgba(0,162,255,0.1)' },
-  { value: 'MEDIA', labelKey: 'priorityMedium', color: '#ff9100', bg: 'rgba(255,145,0,0.1)' },
-  { value: 'ALTA',  labelKey: 'priorityHigh',   color: '#ff0055', bg: 'rgba(255,0,85,0.1)' },
-];
-
-const ESTADOS_TAREA = [
-  { value: 'PENDIENTE',   labelKey: 'statusTodo',       color: '#6c757d' },
-  { value: 'EN_PROGRESO', labelKey: 'statusInProgress', color: '#00a2ff' },
-  { value: 'HECHO',       labelKey: 'statusDone',       color: '#00d166' },
-];
+// Estados y prioridades salen del catalogo compartido (utils/estadosTarea):
+// antes cada vista tenia su propia tabla con nombres y colores distintos.
 
 // 10 por pagina, lo mismo que mostraba el antiguo "Ver mas tareas" por tanda.
 const TAREAS_POR_PAGINA = 10;
 
-const getPrioridad  = (v) => PRIORIDADES.find(p => p.value === v) || PRIORIDADES[1];
-const getEstadoConf = (v) => ESTADOS_TAREA.find(e => e.value === v) || ESTADOS_TAREA[0];
+// Icono de cada estado, el mismo del panel de inicio (ActividadEquipo)
+const ICONOS_ESTADO = {
+  PENDIENTE: CircleDashed,
+  EN_PROGRESO: PlayCircle,
+  HECHO: CheckCircle2,
+};
 
 const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
 const formatFecha = (iso) => {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' });
 };
+const formatFechaLarga = (iso) => (
+  iso ? new Date(iso).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : null
+);
 
 const getDateAtNoon = (value) => {
   if (!value) return null;
@@ -122,10 +151,7 @@ const tareaCoincideConRango = (tarea, rango) => {
   return true;
 };
 
-const getTaskAssignees = (tarea) => {
-  if (Array.isArray(tarea?.asignados) && tarea.asignados.length > 0) return tarea.asignados;
-  return tarea?.asignado ? [tarea.asignado] : [];
-};
+const getTaskAssignees = asignadosDeTarea;
 
 const isTaskAssignedToUser = (tarea, usuarioId) => (
   getTaskAssignees(tarea).some((asignado) => asignado.id === usuarioId)
@@ -136,40 +162,41 @@ const getTaskAssigneeNames = (tarea, fallback) => {
   return nombres.length > 0 ? nombres.join(', ') : fallback;
 };
 
-/**
- * Progreso en texto plano, sin tarjeta ni recuadro, igual que los indicadores
- * del Inicio. Antes era un numero suelto dentro de una caja con icono de fondo;
- * el usuario pidio el mismo tratamiento en las dos pantallas.
- */
-const BarraProgreso = ({ etiqueta, porcentaje, detalle, color }) => (
-  <div className="min-w-0 flex-1">
-    <div className="flex items-baseline gap-2">
-      <span className="text-2xl font-semibold leading-none tracking-tight" style={{ color }}>
-        {porcentaje}%
-      </span>
-      <span className="text-sm font-medium text-[var(--color-text-dim)]">{etiqueta}</span>
-      <span className="ml-auto text-xs font-normal text-[var(--color-text-muted)]">{detalle}</span>
-    </div>
-    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-3)]">
-      <div
-        className="h-full rounded-full transition-all duration-700"
-        style={{ width: `${porcentaje}%`, background: color }}
-      />
-    </div>
-  </div>
+/** Vencida y "por vencer" con la misma regla en la lista, las cifras y el filtro. */
+const tareaVencida = (tarea) => tarea.estado !== 'HECHO' && esFechaVencida(tarea.venceEn);
+const tareaPorVencer = (tarea, dias) => (
+  tarea.estado !== 'HECHO' && !esFechaVencida(tarea.venceEn) && estaPorVencer(tarea.venceEn, dias)
 );
+
+// Cifras de la franja de arriba. Cada una filtra la lista al pulsarla.
+const CIFRAS_TAREAS = [
+  { clave: 'PENDIENTE', textoKey: 'det_porHacer', icono: CircleDashed, color: 'var(--color-text-muted)' },
+  { clave: 'EN_PROGRESO', textoKey: 'det_enProgreso', icono: PlayCircle, color: 'var(--color-accent-blue)' },
+  { clave: 'HECHO', textoKey: 'det_hechas', icono: CheckCircle2, color: 'var(--color-success)' },
+  { clave: 'VENCIDAS', textoKey: 'det_vencidas', icono: AlertTriangle, color: 'var(--color-error)' },
+  { clave: 'POR_VENCER', textoKey: 'det_porVencer', icono: CalendarClock, color: 'var(--color-warning)' },
+];
+
+const tareaCoincideConCifra = (tarea, cifra, dias) => {
+  if (!cifra) return true;
+  if (cifra === 'VENCIDAS') return tareaVencida(tarea);
+  if (cifra === 'POR_VENCER') return tareaPorVencer(tarea, dias);
+  return tarea.estado === cifra;
+};
 
 /**
  * Etiqueta de campo de formulario. Marca los opcionales, para no tener que
- * adivinar cuales hacen falta de verdad para guardar.
+ * adivinar cuales hacen falta de verdad para guardar; los obligatorios llevan
+ * un asterisco en rojo.
  */
-const EtiquetaCampo = ({ texto, opcional = false }) => {
+const EtiquetaCampo = ({ texto, opcional = false, obligatorio = false, htmlFor }) => {
   const { t } = usePreferences();
   return (
-    <label className="flex items-baseline gap-1.5 text-sm font-medium text-[var(--color-text-muted)]">
+    <label htmlFor={htmlFor} className="form-label flex items-baseline gap-1">
       {texto}
+      {obligatorio && <span className="text-[var(--color-error)]" aria-hidden="true">*</span>}
       {opcional && (
-        <span className="text-xs font-normal text-[var(--color-text-muted)] opacity-70">
+        <span className="text-[12px] font-normal text-[var(--color-text-muted)]">
           · {t('fieldOptional')}
         </span>
       )}
@@ -177,23 +204,71 @@ const EtiquetaCampo = ({ texto, opcional = false }) => {
   );
 };
 
-// ── Tarjeta de Tarea (List View) ─────────────────────────────────────────────
-const TareaCard = ({
+/** Hasta tres caras de los responsables y un "+n" con el resto. */
+const AvataresResponsables = ({ asignados, vacio }) => {
+  if (!asignados.length) {
+    return <span className="text-[12px] text-[var(--color-text-muted)]">{vacio}</span>;
+  }
+  const visibles = asignados.slice(0, 3);
+  const resto = asignados.length - visibles.length;
+  return (
+    <span className="det-avatares" title={asignados.map((a) => a.nombre).filter(Boolean).join(', ')}>
+      {visibles.map((asignado) => (
+        <UserAvatar
+          key={asignado.id}
+          usuario={asignado}
+          size={24}
+          radius={999}
+          fontSize="0.6rem"
+          color="var(--color-text-dim)"
+          background="var(--color-surface-3)"
+          borderColor="var(--color-surface)"
+        />
+      ))}
+      {resto > 0 && <span className="det-avatar-mas">+{resto}</span>}
+    </span>
+  );
+};
+
+// ── Fila de tarea (vista de lista) ───────────────────────────────────────────
+// Antes cada tarea era una tarjeta grande con sombra; ahora es una fila de la
+// tabla, con el icono de estado como boton para avanzar.
+const TareaFila = ({
   tarea,
   usuarioActual,
   onClick,
   onEliminar,
   onCambiarEstado,
+  // Si el backend va a rechazar la accion (no eres admin del proyecto, ni
+  // creador, ni responsable), no se ofrece.
+  gestionable = true,
+  // Borrar pide ademas el permiso "borrar tareas" de la instalacion.
+  borrable = gestionable,
   seleccionable = false,
   seleccionada = false,
   onAlternarSeleccion,
 }) => {
   const { t } = usePreferences();
-  const prio = getPrioridad(tarea.prioridad);
-  const estado = getEstadoConf(tarea.estado);
-  const CICLO = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
-  const sigEstado = CICLO[(CICLO.indexOf(tarea.estado) + 1) % CICLO.length];
-  const vencido = esFechaVencida(tarea.venceEn) && tarea.estado !== 'HECHO';
+  const tp = useTextoPermisos();
+  const tx = useTextoProyectos();
+  const { reglasTareas } = useConfiguracion();
+  const prio = getPrioridadTarea(tarea.prioridad);
+  const estado = getEstadoTarea(tarea.estado);
+  const IconoEstado = ICONOS_ESTADO[estado.value] || CircleDashed;
+  const sigEstado = siguienteEstadoTarea(tarea.estado);
+  const hecha = tarea.estado === 'HECHO';
+  const vencido = tareaVencida(tarea);
+  // Aviso suave antes de vencer; los dias los fija la configuracion (0 = apagado).
+  const porVencer = tareaPorVencer(tarea, reglasTareas.diasPorVencer);
+  const acciones = [
+    gestionable && {
+      label: hecha ? t('taskReopen') : t('taskAdvanceStatus'),
+      icon: hecha ? <RotateCcw size={15} /> : <ArrowRight size={15} />,
+      onSelect: () => onCambiarEstado(tarea.id, sigEstado),
+    },
+    gestionable && borrable && { separator: true },
+    borrable && { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onEliminar(tarea), danger: true },
+  ].filter(Boolean);
   const asignados = getTaskAssignees(tarea);
   const creadorEsUsuarioActual = tarea.creador?.id === usuarioActual?.id
     || (!tarea.creador?.id && (asignados.length === 0 || isTaskAssignedToUser(tarea, usuarioActual?.id)));
@@ -202,115 +277,118 @@ const TareaCard = ({
   const asignadorLabel = creadorEsUsuarioActual
     ? null
     : `${t('taskAssignedBy')} ${tarea.creador?.nombre || t('taskCreatedBySystem')}`;
-  const responsableLabel = isTaskAssignedToUser(tarea, usuarioActual?.id)
-    ? t('taskAssignedToYou')
-    : `${t('projectResponsible')}: ${getTaskAssigneeNames(tarea, t('taskUnassigned'))}`;
+  const detalle = [tarea.descripcion, asignadorLabel].filter(Boolean).join(' · ');
+  const tonoFecha = vencido ? 'vencida' : porVencer ? 'por-vencer' : hecha ? 'hecha' : undefined;
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={() => (seleccionable ? onAlternarSeleccion?.(tarea.id) : onClick(tarea))}
-      className={`bg-[var(--color-surface)] border p-4 lg:p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 transition-all cursor-pointer shadow-sm hover:shadow-md ${
-        seleccionada
-          ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/25'
-          : 'border-[var(--color-border)] hover:translate-x-1'
-      }`}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        if (seleccionable) onAlternarSeleccion?.(tarea.id);
+        else onClick(tarea);
+      }}
+      className="det-fila"
+      data-seleccionada={seleccionada || undefined}
     >
-      {/* Icono de Estado y Título */}
-      <div className="flex items-start gap-4 flex-1 min-w-0">
-        {/* En modo seleccion la casilla sustituye al punto de estado: manda el
-            estar marcada o no, y dos indicadores juntos se estorban. */}
-        {seleccionable ? (
+      {/* En modo seleccion la casilla sustituye al icono de estado: manda el
+          estar marcada o no, y dos indicadores juntos se estorban. */}
+      {seleccionable ? (
+        <span className="det-fila-estado">
           <input
             type="checkbox"
             checked={seleccionada}
             onChange={() => onAlternarSeleccion?.(tarea.id)}
             onClick={(event) => event.stopPropagation()}
             aria-label={tarea.titulo}
-            className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-primary)]"
+            className="h-4 w-4 cursor-pointer accent-[var(--color-primary)]"
           />
-        ) : (
-          <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded-full shrink-0 mt-1.5"
-            style={{ background: estado.color, boxShadow: `0 0 10px ${estado.color}55` }}
-          />
+        </span>
+      ) : gestionable ? (
+        <Tooltip label={hecha ? t('taskReopen') : t('taskAdvanceStatus')}>
+          <button
+            type="button"
+            className="det-fila-estado det-estado-boton"
+            onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
+            style={{ color: estado.color }}
+          >
+            <IconoEstado size={17} />
+          </button>
+        </Tooltip>
+      ) : (
+        <span className="det-fila-estado" style={{ color: estado.color }} title={t(estado.labelKey)}>
+          <IconoEstado size={17} aria-hidden="true" />
+        </span>
+      )}
+
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-[13.5px] font-medium leading-snug ${hecha ? 'det-hecha' : 'text-[var(--color-text)]'}`}>
+          {tarea.numeroActividad ? <span className="mr-1.5 font-normal tabular-nums text-[var(--color-text-muted)]">#{tarea.numeroActividad}</span> : null}
+          {tarea.titulo}
+        </span>
+        {detalle && (
+          <span className="mt-0.5 block truncate text-[12px] text-[var(--color-text-muted)]">{detalle}</span>
         )}
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h4 className={`text-sm lg:text-base font-semibold text-[var(--color-text)] truncate ${tarea.estado === 'HECHO' ? 'line-through opacity-40' : ''}`}>
-              {tarea.titulo}
-            </h4>
-            <span className="text-[9px] font-medium px-2 py-0.5 rounded-md" style={{ background: prio.bg, color: prio.color }}>
-              {t(prio.labelKey)}
-            </span>
-          </div>
-          <p className="text-xs text-[var(--color-text-muted)] truncate font-normal">
-            {tarea.descripcion || t('taskNoDescription')}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-[var(--color-text-muted)]">
-            <span className="inline-flex items-center gap-1">
-              <User2 size={12} />
-              {responsableLabel}
-            </span>
-            {asignadorLabel && (
-              <>
-                <span className="hidden text-[var(--color-border)] lg:inline">•</span>
-                <span className="inline-flex items-center gap-1 text-[var(--color-text-dim)]">
-                  {asignadorLabel}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      </span>
 
-      <div className="flex items-center justify-between lg:justify-end gap-4 border-t lg:border-t-0 pt-3 lg:pt-0 border-[var(--color-border-light)]">
-        {/* Fecha */}
-        <div className={`text-[10px] lg:text-xs font-medium shrink-0 flex items-center gap-1 ${vencido ? 'text-red-500' : 'text-[var(--color-text-muted)]'}`}>
-          {tarea.venceEn ? (
-            <>
-              {vencido && <AlertTriangle size={12} />}
-              {formatFecha(tarea.venceEn)}
-            </>
-          ) : '-'}
-        </div>
+      <span className="det-fila-prioridad">
+        <span className="det-chip" style={{ background: prio.bg, color: prio.fg }}>{t(prio.labelKey)}</span>
+      </span>
 
-        {/* En modo seleccion se esconde: la accion la manda la barra de arriba,
-            y dejar aqui un "Eliminar" que borra solo esta despista. */}
-        <div className={`flex items-center gap-2 ml-4 ${seleccionable ? 'hidden' : ''}`}>
+      <span className="det-fila-responsables">
+        <AvataresResponsables asignados={asignados} vacio={tx('det_sinAsignar')} />
+        <span className="sr-only">{getTaskAssigneeNames(tarea, t('taskUnassigned'))}</span>
+      </span>
+
+      <span className="det-fila-fecha">
+        {tarea.venceEn ? (
+          <span className="det-vence" data-tono={tonoFecha} title={porVencer ? tp('tareaPorVencer') : vencido ? t('taskOverdue') : undefined}>
+            {vencido ? <AlertTriangle size={11} /> : <CalendarClock size={11} />}
+            {formatFecha(tarea.venceEn)}
+            {porVencer && <span className="det-vence-aviso">{tp('tareaPorVencer')}</span>}
+          </span>
+        ) : (
+          <span className="text-[12px] text-[var(--color-text-muted)]">{tx('det_sinFecha')}</span>
+        )}
+      </span>
+
+      {/* En modo seleccion se esconde: la accion la manda la barra de arriba,
+          y dejar aqui un "Eliminar" que borra solo esta despista. */}
+      <span className="det-fila-menu">
+        {!seleccionable && (
           <ActionMenu
-            size={16}
-            className="p-2 lg:p-2.5 bg-[var(--color-surface-3)] border border-[var(--color-border)] rounded-xl"
-            items={[
-              {
-                label: tarea.estado === 'HECHO' ? t('taskReopen') : t('taskAdvanceStatus'),
-                icon: tarea.estado === 'HECHO' ? <RotateCcw size={15} /> : <ArrowRight size={15} />,
-                onSelect: () => onCambiarEstado(tarea.id, sigEstado),
-              },
-              { separator: true },
-              { label: t('delete'), icon: <Trash2 size={15} />, onSelect: () => onEliminar(tarea), danger: true },
+            size={15}
+            items={acciones.length ? acciones : [
+              { label: t('viewDetail'), icon: <Eye size={15} />, onSelect: () => onClick(tarea) },
             ]}
           />
-        </div>
-      </div>
+        )}
+      </span>
     </div>
   );
 };
 
-// ── Toggle Vista (Material) ─────────────────────────────────────────────────
-const ToggleVista = ({ vista, onChange, t }) => (
-  <div className="flex bg-[var(--color-surface-3)] p-1 rounded-xl border border-[var(--color-border)] gap-1 w-full lg:w-auto">
+// ── Cambio de vista (segmento, como en el inicio) ───────────────────────────
+const ToggleVista = ({ vista, onChange, t, etiqueta }) => (
+  <div role="tablist" aria-label={etiqueta} className="dash-segmento det-segmento">
     {[
-      { k: 'lista',  l: t('projectList'), i: <List size={16} /> },
-      { k: 'kanban', l: t('projectKanban'), i: <LayoutGrid size={16} /> },
-      { k: 'gantt',  l: t('projectGantt'), i: <CalendarRange size={16} /> }
+      { k: 'lista',  l: t('projectList'), i: List },
+      { k: 'kanban', l: t('projectKanban'), i: LayoutGrid },
+      { k: 'gantt',  l: t('projectGantt'), i: CalendarRange }
     ].map(v => (
-      <button 
-        key={v.k} onClick={() => onChange(v.k)}
-        className={`
-          flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs lg:text-sm font-medium transition-all
-          ${vista === v.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'}
-        `}
+      <button
+        key={v.k}
+        type="button"
+        role="tab"
+        aria-selected={vista === v.k}
+        // En el movil solo se ve el icono: el nombre va en la etiqueta
+        aria-label={v.l}
+        onClick={() => onChange(v.k)}
       >
-        {v.i} <span className="hidden lg:inline">{v.l}</span>
+        <v.i size={14} /> <span className="hidden sm:inline">{v.l}</span>
       </button>
     ))}
   </div>
@@ -322,17 +400,45 @@ const ProyectoDetallePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { usuario } = useAuth();
   const { t } = usePreferences();
+  const tx = useTextoProyectos();
   const { showToast } = useToast();
+  const { confirmar, dialogo: dialogoConfirmacion } = useConfirmacion();
+  // Modulos y permisos de la instalacion: lo que el backend rechazaria
+  // (403/404) no se ofrece.
+  const { moduloActivo, reglasTareas, colorArea, nombreArea } = useConfiguracion();
+  // Borrar en lote solo se ofrece a quien tiene algun alcance para borrar.
+  const puedeBorrarTareas = puede(usuario, 'tareas.eliminar');
+  const adjuntosActivos = moduloActivo('adjuntos');
+  const portalActivo = moduloActivo('clientes') && moduloActivo('portalClientes');
+  const puedeSubirAdjuntos = adjuntosActivos && puede(usuario, 'tareas.adjuntos');
+  const diasPorVencer = reglasTareas.diasPorVencer;
 
   const [proyecto, setProyecto] = useState(null);
   const [tareas, setTareas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  // Id del proyecto cuyos datos estan en pantalla. "Cargando" se deriva de
+  // compararlo con el de la url, en vez de un setState sincrono en el efecto.
+  const [cargadoId, setCargadoId] = useState(null);
+  const cargando = cargadoId !== id;
   const [modal, setModal] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
   const [modalExportar, setModalExportar] = useState(false);
   const [modalPlantilla, setModalPlantilla] = useState(false);
   const [tareaEditando, setTareaEditando] = useState(null);
+  // "tareas" (lista / kanban / gantt), "actividad" (historial del proyecto) o
+  // "cliente" (conversación del portal de clientes). ?vista=cliente abre esa.
+  const vistaUrl = searchParams.get('vista');
+  // Con el portal apagado (retirado) la pestaña "Cliente" no existe: un enlace
+  // viejo con ?vista=cliente abre las tareas en vez de una página vacía.
+  const [seccion, setSeccion] = useState(vistaUrl === 'cliente' && portalActivo ? 'cliente' : 'tareas');
+  // Al llegar desde un aviso estando ya en el proyecto, cambia la pestaña sin
+  // un efecto (comparando con la URL del render anterior).
+  const [vistaUrlAnterior, setVistaUrlAnterior] = useState(vistaUrl);
+  if (vistaUrl !== vistaUrlAnterior) {
+    setVistaUrlAnterior(vistaUrl);
+    if (vistaUrl === 'cliente' && portalActivo) setSeccion('cliente');
+  }
+  const tpo = useTextoPortal();
   const [vista, setVista] = useState('lista');
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
@@ -342,40 +448,61 @@ const ProyectoDetallePage = () => {
   const [filtroPrioridad, setFiltroPrioridad] = useState('todas');
   const [filtroResponsable, setFiltroResponsable] = useState('todos');
   const [filtroFecha, setFiltroFecha] = useState({ from: null, to: null });
+  // Filtro rapido desde las cifras de arriba (por hacer, vencidas...). null = todas.
+  const [filtroCifra, setFiltroCifra] = useState(null);
 
   // Borrado en bloque. El modo se activa a mano para que el uso normal —abrir
   // una tarea al pulsarla— no cambie sin querer.
   const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState(() => new Set());
+  // Lo que el Kanban esta mostrando de verdad (tiene su propio filtro de dia).
+  // "Seleccionar todas" usa esta lista en esa vista, no la general.
+  const [tareasVisiblesKanban, setTareasVisiblesKanban] = useState(null);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
-    try {
-      const t = await tareasService.listar(id);
-      setProyecto(t.proyecto);
-      setTareas(sortTareas(t.tareas));
-      setUsuarios(t.proyecto?.miembros || []);
-    } catch (err) { showToast(err.message, 'error'); }
-    finally { setCargando(false); }
+  // Al cambiar rapido de proyecto, la respuesta del anterior podia llegar
+  // despues y pisar la del actual. La bandera `vigente` se apaga al limpiar el
+  // efecto, asi que lo que llegue tarde se descarta.
+  useEffect(() => {
+    let vigente = true;
+    const cargar = async () => {
+      try {
+        const respuesta = await tareasService.listar(id);
+        if (!vigente) return;
+        setProyecto(respuesta.proyecto);
+        setTareas(sortTareas(respuesta.tareas));
+        setUsuarios(respuesta.proyecto?.miembros || []);
+      } catch (err) {
+        if (!vigente) return;
+        // Si el proyecto nuevo falla (403/404), no dejar en pantalla el anterior
+        // bajo la URL equivocada.
+        setProyecto(null);
+        setTareas([]);
+        setUsuarios([]);
+        showToast(err.message, 'error');
+      } finally {
+        if (vigente) setCargadoId(id);
+      }
+    };
+    cargar();
+    return () => { vigente = false; };
   }, [id, showToast]);
 
-  useEffect(() => { 
-    const fetch = async () => {
-      await cargar();
-    };
-    fetch();
-  }, [cargar]);
-
-  useEffect(() => {
-    const tareaIdParam = searchParams.get('tarea');
-    if (!tareaIdParam || !tareas.length) return;
-
+  // ?tarea=ID (desde una notificacion) abre esa tarea. Se compara con el ultimo
+  // id atendido en el propio render en vez de usar un efecto: asi no hay un
+  // segundo render en cascada y la misma tarea se puede volver a abrir si la
+  // url vuelve a traerla.
+  const tareaIdParam = searchParams.get('tarea');
+  const [tareaParamAtendida, setTareaParamAtendida] = useState(null);
+  if (!tareaIdParam && tareaParamAtendida !== null) {
+    setTareaParamAtendida(null);
+  } else if (tareaIdParam && tareaIdParam !== tareaParamAtendida && tareas.length) {
     const tareaObjetivo = tareas.find((item) => String(item.id) === tareaIdParam);
-    if (!tareaObjetivo) return;
-
-    setTareaEditando(tareaObjetivo);
-    setModal(true);
-  }, [searchParams, tareas]);
+    if (tareaObjetivo) {
+      setTareaParamAtendida(tareaIdParam);
+      setTareaEditando(tareaObjetivo);
+      setModal(true);
+    }
+  }
 
   const cerrarModalTarea = useCallback(() => {
     setModal(false);
@@ -392,6 +519,8 @@ const ProyectoDetallePage = () => {
     const hechas = tareas.filter(t => t.estado === 'HECHO').length;
     const prog = tareas.filter(t => t.estado === 'EN_PROGRESO').length;
     const pendientes = tareas.filter(t => t.estado === 'PENDIENTE').length;
+    const vencidas = tareas.filter(tareaVencida).length;
+    const porVencer = tareas.filter((t) => tareaPorVencer(t, diasPorVencer)).length;
     const total = tareas.length;
     const pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
 
@@ -404,12 +533,14 @@ const ProyectoDetallePage = () => {
       hechas,
       progreso: prog,
       pendientes,
+      vencidas,
+      porVencer,
       pct,
       totalMiembro: tareasMiembro.length,
       hechasMiembro,
       pctMiembro,
     };
-  }, [tareas, usuario?.id]);
+  }, [tareas, usuario?.id, diasPorVencer]);
 
   const progresoGeneral = stats.pct;
   const estadoProyecto = getEstadoProyecto(proyecto?.estado);
@@ -432,11 +563,20 @@ const ProyectoDetallePage = () => {
     ? totalMiembro > 0
     : Boolean(usuario?.id);
 
+  const valorCifra = {
+    PENDIENTE: stats.pendientes,
+    EN_PROGRESO: stats.progreso,
+    HECHO: stats.hechas,
+    VENCIDAS: stats.vencidas,
+    POR_VENCER: stats.porVencer,
+  };
+  const cifraActiva = CIFRAS_TAREAS.find((c) => c.clave === filtroCifra) || null;
+
   const tareasFiltradas = useMemo(() => {
     if (!busqueda) return tareas;
     const b = busqueda.toLowerCase();
-    return tareas.filter(t => 
-      t.titulo?.toLowerCase().includes(b) || 
+    return tareas.filter(t =>
+      t.titulo?.toLowerCase().includes(b) ||
       t.descripcion?.toLowerCase().includes(b)
     );
   }, [tareas, busqueda]);
@@ -465,9 +605,11 @@ const ProyectoDetallePage = () => {
 
       if (!tareaCoincideConRango(tarea, filtroFecha)) return false;
 
+      if (!tareaCoincideConCifra(tarea, filtroCifra, diasPorVencer)) return false;
+
       return true;
     })
-  ), [filtroFecha, filtroPrioridad, filtroResponsable, tareasFiltradas]);
+  ), [filtroFecha, filtroPrioridad, filtroResponsable, filtroCifra, diasPorVencer, tareasFiltradas]);
 
   const tareasListaFiltradas = useMemo(() => sortTareasLista(tareasFiltradasAvanzadas), [tareasFiltradasAvanzadas]);
 
@@ -480,24 +622,73 @@ const ProyectoDetallePage = () => {
     paginaLista * TAREAS_POR_PAGINA,
   );
 
+  // Replica de la regla del backend: el alcance de "tareas.editar" o
+  // "tareas.eliminar" de la persona sobre esta tarea.
+  const puedeGestionar = useCallback(
+    (tarea) => puedeGestionarTarea(tarea, usuario, proyecto, 'tareas.editar'),
+    [usuario, proyecto],
+  );
+  const puedeBorrar = useCallback(
+    (tarea) => puedeGestionarTarea(tarea, usuario, proyecto, 'tareas.eliminar'),
+    [usuario, proyecto],
+  );
+
+  // Guardar como plantilla: permiso "proyectos.plantillas" y poder editar el
+  // proyecto, haberlo creado o ser miembro (misma regla que el backend).
+  const esParteDelProyecto = Boolean(usuario?.id) && (
+    (proyecto?.creadorId ?? proyecto?.creador?.id) === usuario.id
+    || (proyecto?.miembros || []).some((m) => m.id === usuario.id)
+  );
+  const puedeEditarProyecto = alcanzaProyecto(usuario, proyecto, 'proyectos.editar');
+  const puedeGuardarPlantilla = moduloActivo('plantillas') && puede(usuario, 'proyectos.plantillas')
+    && (puedeEditarProyecto || esParteDelProyecto);
+  const puedeCrearTareas = puedeEnTareas(usuario, proyecto, 'tareas.crear');
+  const puedeImportar = moduloActivo('importar') && puedeCrearTareas;
+  const mostrarDocsProyecto = vista === 'lista' && adjuntosActivos;
+
+  /** Pide confirmacion y borra. Devuelve true solo si se borro de verdad. */
   const handleEliminar = async (tarea) => {
-    if (!window.confirm(t('taskDeleteConfirm', { name: tarea.titulo }))) return;
+    const ok = await confirmar({
+      titulo: t('taskDeleteConfirm', { name: tarea.titulo }),
+      descripcion: tarea.titulo,
+      textoConfirmar: t('delete'),
+      peligro: true,
+    });
+    if (!ok) return false;
     try {
       await tareasService.eliminar(tarea.id);
       setTareas(prev => prev.filter(x => x.id !== tarea.id));
       showToast(t('taskDeleted'));
-    } catch (err) { showToast(err.message, 'error'); }
+      return true;
+    } catch (err) {
+      showToast(err.message, 'error');
+      return false;
+    }
   };
 
   // ── Seleccion multiple ────────────────────────────────────────────────────
   // "Todas" abarca lo filtrado y no solo la pagina a la vista: si acabas de
-  // filtrar para limpiar un grupo, esperas que entre todo el grupo.
+  // filtrar para limpiar un grupo, esperas que entre todo el grupo. En el
+  // Kanban manda lo que el tablero muestra (tiene su propio filtro de dia):
+  // antes se seleccionaban tambien las tareas que el filtro escondia y se
+  // borraban sin verlas.
   const seleccionActiva = modoSeleccion && vista !== 'gantt';
+  const tareasSeleccionables = vista === 'kanban' && tareasVisiblesKanban
+    ? tareasVisiblesKanban
+    : tareasFiltradasAvanzadas;
 
   const salirDeSeleccion = useCallback(() => {
     setModoSeleccion(false);
     setSeleccionadas(new Set());
   }, []);
+
+  // Al pasar al gantt se descarta la seleccion: ahi las tareas no muestran
+  // casilla, y al volver quedarian marcadas tareas que no se vieron elegir y
+  // que el borrado en lote podria eliminar sin darse cuenta.
+  const cambiarVista = useCallback((nuevaVista) => {
+    if (nuevaVista === 'gantt') salirDeSeleccion();
+    setVista(nuevaVista);
+  }, [salirDeSeleccion]);
 
   const alternarSeleccion = useCallback((tareaId) => {
     setSeleccionadas((prev) => {
@@ -508,10 +699,27 @@ const ProyectoDetallePage = () => {
     });
   }, []);
 
+  // Solo cuentan las marcadas que siguen a la vista. Si despues de marcar se
+  // busca o se filtra, las que quedan escondidas no se borran: antes el contador
+  // las seguia sumando y "Eliminar" se las llevaba sin verlas.
+  const idsSeleccionables = useMemo(
+    () => new Set(tareasSeleccionables.map((tarea) => tarea.id)),
+    [tareasSeleccionables],
+  );
+  const seleccionVisible = useMemo(
+    () => [...seleccionadas].filter((tareaId) => idsSeleccionables.has(tareaId)),
+    [seleccionadas, idsSeleccionables],
+  );
+
   const handleEliminarSeleccionadas = async () => {
-    const ids = [...seleccionadas];
+    const ids = seleccionVisible;
     if (!ids.length) return;
-    if (!window.confirm(t('taskDeleteManyConfirm', { count: ids.length }))) return;
+    const ok = await confirmar({
+      titulo: t('taskDeleteManyConfirm', { count: ids.length }),
+      textoConfirmar: t('delete'),
+      peligro: true,
+    });
+    if (!ok) return;
 
     try {
       const respuesta = await tareasService.eliminarVarias(ids);
@@ -572,14 +780,6 @@ const ProyectoDetallePage = () => {
     }
   };
 
-  const handleActualizarTarea = async (id, datos) => {
-    try {
-      const { tarea } = await tareasService.editar(id, datos);
-      setTareas(prev => sortTareas(prev.map(x => x.id === id ? tarea : x)));
-      showToast(t('taskUpdated'));
-    } catch (err) { showToast(err.message, 'error'); }
-  };
-
   const handleGuardarTarea = useCallback(({ tarea, creada = false } = {}) => {
     if (!tarea) {
       cerrarModalTarea();
@@ -620,15 +820,24 @@ const ProyectoDetallePage = () => {
       });
     }
 
-    setModalImportar(false);
-    showToast(t('taskImportSuccess', { count: resultado.creadas || tareasImportadas.length || 0 }));
+    // Si alguna fila no se pudo guardar, la ventana se queda abierta para que
+    // se vea cuales y por que. Antes se cerraba en cuanto habia una creada y
+    // ese aviso no llegaba a verse nunca.
+    const conErrores = Array.isArray(resultado.errores) && resultado.errores.length > 0;
+    if (!conErrores) setModalImportar(false);
+    showToast(
+      t('taskImportSuccess', { count: resultado.creadas || tareasImportadas.length || 0 }),
+      conErrores ? 'info' : 'success',
+    );
   }, [showToast, t]);
 
-  const handleExportar = (tipo) => {
+  // La descarga ya va con la cabecera Authorization (fetch + blob), asi que un
+  // fallo del servidor llega aqui como error y no como una pagina en blanco.
+  const handleExportar = async (tipo) => {
     try {
-      tareasService.exportarProyecto(id, tipo);
-      showToast(t('taskExportStarted', { type: tipo.toUpperCase() }));
       setModalExportar(false);
+      showToast(t('taskExportStarted', { type: tipo.toUpperCase() }), 'info');
+      await tareasService.exportarProyecto(id, tipo);
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -661,150 +870,243 @@ const ProyectoDetallePage = () => {
 
   if (cargando) return <PageSkeleton cards={4} />;
 
+  // Si la carga fallo (403/404 o sin conexion) no hay proyecto: antes se
+  // pintaba la cabecera vacia con "Nueva tarea" y el menu de acciones, que
+  // fallaban todos al pulsarlos.
+  if (!proyecto) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <Link to="/proyectos" className="cli-volver">
+          <ArrowLeft size={15} aria-hidden="true" /> {t('projects')}
+        </Link>
+        <div className="proy-vacio mt-4">
+          <AlertTriangle size={26} className="text-[var(--color-text-muted)]" aria-hidden="true" />
+          <p className="mt-2 text-[14px] font-medium text-[var(--color-text)]">{tx('det_noDisponible')}</p>
+          <p className="mt-0.5 max-w-sm text-[13px] text-[var(--color-text-muted)]">{tx('det_noDisponibleSub')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const veClientes = puede(usuario, 'clientes.ver');
+  const areasProyecto = areasDeTexto(proyecto?.area);
+  // El cliente solo se enlaza con el directorio activo; la ficha, a quien ve clientes.
+  const clienteProyecto = moduloActivo('clientes') ? proyecto?.cliente : null;
+  const fechaInicioProyecto = formatFechaLarga(proyecto?.fechaInicio);
+  const fechaFinProyecto = formatFechaLarga(proyecto?.fechaFin);
+  const abrirTarea = (x) => { setTareaEditando(x); setModal(true); };
+  const desdeLista = (paginaLista - 1) * TAREAS_POR_PAGINA + 1;
+  const hastaLista = Math.min(paginaLista * TAREAS_POR_PAGINA, tareasListaFiltradas.length);
+
   return (
-    <div className="max-w-7xl mx-auto">
-      
-      {/* Header Premium */}
-      <div className="mb-10 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-8">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-4">
-            <Link to="/proyectos" className="text-blue-600 font-medium text-[10px] lg:text-xs flex items-center gap-1 hover:gap-2 transition-all">
-              <ChevronLeft size={14} /> {t('projects')}
-            </Link>
-            <span className="text-[var(--color-border)]">/</span>
-            <span className="text-[10px] font-medium text-[var(--color-text-muted)] truncate max-w-[200px]">ID #{proyecto?.id}</span>
-          </div>
-          <h1 className="text-2xl lg:text-5xl font-semibold text-[var(--color-text)] tracking-tight leading-tight mb-2">
+    <div className="mx-auto max-w-7xl">
+      <Link to="/proyectos" className="cli-volver">
+        <ArrowLeft size={15} aria-hidden="true" /> {t('projects')}
+      </Link>
+
+      {/* Cabecera: nombre, estado y datos del proyecto en una linea; las
+          acciones a la derecha. Antes el titulo media 48px. */}
+      <header className="mb-6 mt-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-[var(--color-text)] [overflow-wrap:anywhere] md:text-[26px]">
             {proyecto?.nombre}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span
-              className="text-[10px] font-medium px-2.5 py-1 rounded-md"
-              style={{ color: estadoProyecto.color, background: estadoProyecto.bg }}
-            >
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-[var(--color-text-muted)]">
+            <span className="det-estado" style={{ color: estadoProyecto.color, background: estadoProyecto.bg }}>
+              <span className="det-estado-punto" style={{ background: estadoProyecto.dot || estadoProyecto.color }} aria-hidden="true" />
               {t(estadoProyecto.labelKey)}
             </span>
             {/* Mismo aviso que en la tarjeta: 100% de tareas pero sin visto bueno */}
             {listoParaRevision && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-md text-amber-700 bg-amber-100">
-                <BadgeCheck size={12} /> {t('projectReadyForReview')}
+              <span className="det-estado" style={{ color: 'var(--badge-warning-fg)', background: 'var(--badge-warning-bg)' }}>
+                <BadgeCheck size={12} aria-hidden="true" /> {t('projectReadyForReview')}
+              </span>
+            )}
+            {clienteProyecto && (
+              veClientes ? (
+                <Link to={`/clientes/${clienteProyecto.id}`} className="det-meta det-meta-enlace" title={tx('det_cliente')}>
+                  <Building2 size={13} aria-hidden="true" /> <span className="truncate">{clienteProyecto.nombre}</span>
+                </Link>
+              ) : (
+                <span className="det-meta" title={tx('det_cliente')}>
+                  <Building2 size={13} aria-hidden="true" /> <span className="truncate">{clienteProyecto.nombre}</span>
+                </span>
+              )
+            )}
+            {areasProyecto.map((a) => (
+              <span key={a} className="det-meta">
+                <span className="h-1.5 w-1.5 rounded-sm" style={{ background: colorArea(a) }} aria-hidden="true" />
+                {nombreArea(a)}
+              </span>
+            ))}
+            {fechaInicioProyecto && (
+              <span className="det-meta tabular-nums">
+                <CalendarDays size={13} aria-hidden="true" />
+                {fechaInicioProyecto} – {fechaFinProyecto || tx('det_sinFechaFin')}
               </span>
             )}
           </div>
 
-          <p className="text-sm lg:text-base text-[var(--color-text-dim)] font-normal max-w-2xl">{proyecto?.descripcion}</p>
+          {proyecto?.descripcion && (
+            <p className="mt-2.5 max-w-3xl text-[14px] leading-relaxed text-[var(--color-text-dim)]">{proyecto.descripcion}</p>
+          )}
         </div>
 
         {/* Importar y exportar viven en el menu: sacarlos como iconos sueltos
-            dejaba tres botones seguidos y se veia recargado. Lo que si cambio
-            son sus iconos, flechas que indican la direccion (entra / sale);
-            antes los dos usaban el mismo de descarga y no se distinguian. */}
-        <div className="flex items-center gap-2 w-full lg:w-auto">
-          <button
-            onClick={() => { setTareaEditando(null); setModal(true); }}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 lg:py-3.5 bg-blue-600 text-white rounded-xl text-xs lg:text-sm font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
-          >
-            <Plus size={18} /> {t('projectNewTask')}
-          </button>
+            dejaba tres botones seguidos y se veia recargado. Sus iconos son
+            flechas que indican la direccion (entra / sale). */}
+        <div className="flex w-full shrink-0 items-center justify-end gap-2 md:w-auto">
+          {puedeCrearTareas && (
+            <button
+              type="button"
+              onClick={() => { setTareaEditando(null); setModal(true); }}
+              className="btn-primary h-10 flex-1 justify-center !py-0 text-[13.5px] md:h-9 md:flex-none"
+            >
+              <Plus size={16} /> {t('projectNewTask')}
+            </button>
+          )}
 
           <ActionMenu
-            size={18}
-            className="shrink-0 p-3 lg:p-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm"
+            size={16}
+            className="h-10 w-10 shrink-0 border border-[var(--color-border)] bg-[var(--color-surface)] md:h-9 md:w-9"
             items={[
-              { label: t('projectImport'), icon: <ArrowDownToLine size={15} />, onSelect: () => setModalImportar(true) },
+              puedeImportar && { label: t('projectImport'), icon: <ArrowDownToLine size={15} />, onSelect: () => setModalImportar(true) },
               { label: t('projectExport'), icon: <ArrowUpFromLine size={15} />, onSelect: () => setModalExportar(true) },
-              usuario?.rol === 'ADMIN' && { separator: true },
-              usuario?.rol === 'ADMIN' && { label: t('projectSaveTemplate'), icon: <Save size={15} />, onSelect: () => setModalPlantilla(true) },
-              usuario?.rol === 'ADMIN' && { separator: true },
-              usuario?.rol === 'ADMIN' && estadoProyecto.value !== 'TERMINADO' && estadoProyecto.value !== 'ARCHIVADO' && {
+              puedeGuardarPlantilla && { separator: true },
+              puedeGuardarPlantilla && { label: t('projectSaveTemplate'), icon: <Save size={15} />, onSelect: () => setModalPlantilla(true) },
+              puedeEditarProyecto && { separator: true },
+              puedeEditarProyecto && estadoProyecto.value !== 'TERMINADO' && estadoProyecto.value !== 'ARCHIVADO' && {
                 label: t('projectMarkFinished'),
                 icon: <BadgeCheck size={15} />,
                 onSelect: () => handleCambiarEstadoProyecto('TERMINADO'),
               },
-              usuario?.rol === 'ADMIN' && estadoProyecto.value !== 'ACTIVO' && {
+              puedeEditarProyecto && estadoProyecto.value !== 'ACTIVO' && {
                 label: t('projectReactivate'),
                 icon: <RotateCcw size={15} />,
                 onSelect: () => handleCambiarEstadoProyecto('ACTIVO'),
               },
-              usuario?.rol === 'ADMIN' && (estadoProyecto.value === 'ARCHIVADO'
+              puedeEditarProyecto && (estadoProyecto.value === 'ARCHIVADO'
                 ? { label: t('projectUnarchive'), icon: <ArchiveRestore size={15} />, onSelect: () => handleCambiarEstadoProyecto('ACTIVO') }
                 : { label: t('projectArchive'), icon: <Archive size={15} />, onSelect: () => handleCambiarEstadoProyecto('ARCHIVADO') }),
             ]}
           />
         </div>
-      </div>
+      </header>
 
-      {/* Solo los dos progresos. Las tres tarjetas de pendientes, en marcha y
-          hechas se quitaron: repetian lo que ya cuenta el Kanban columna a
-          columna, y ocupaban toda una franja de la pantalla.
+      {/* Avance y cifras en texto plano, en una sola franja, como en el inicio.
+          Cada cifra filtra las tareas al pulsarla.
 
           "Mi progreso" solo sale si de verdad tienes tareas aqui. A un admin que
           entra a supervisar le salia un 0% que no significaba nada. */}
-      <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:gap-10">
-        <BarraProgreso
-          etiqueta={t('projectGeneralProgress')}
-          porcentaje={progresoGeneral}
-          detalle={`${stats.hechas} ${t('projectOfTasksDone', { total: totalGeneral })}`}
-          color="#2563eb"
-        />
-        {mostrarMiProgreso && (
-          <BarraProgreso
-            etiqueta={t('projectMyProgress')}
-            porcentaje={progresoMiembro}
-            detalle={`${totalMiembro} ${t('taskAssignedPlural')}`}
-            color="#10b981"
-          />
-        )}
+      <dl className="det-cifras mb-6">
+        <div className="det-cifra-avance">
+          <dt>{tx('det_avance')}</dt>
+          <dd>
+            <strong>{progresoGeneral}%</strong>
+            <span>{tx('det_avanceSub', { hechas: stats.hechas, total: totalGeneral })}</span>
+          </dd>
+          <span className="dash-barra det-barra" aria-hidden="true">
+            <span style={{ width: `${progresoGeneral}%`, background: 'var(--color-primary)' }} />
+          </span>
+          {mostrarMiProgreso && (
+            <span className="det-mi-avance">
+              <span className="dash-barra" aria-hidden="true">
+                <span style={{ width: `${progresoMiembro}%`, background: 'var(--color-success)' }} />
+              </span>
+              {tx('det_miAvance', { hechas: stats.hechasMiembro, total: totalMiembro, pct: progresoMiembro })}
+            </span>
+          )}
+        </div>
+        {CIFRAS_TAREAS.map((cifra) => {
+          const valor = valorCifra[cifra.clave];
+          const activa = filtroCifra === cifra.clave;
+          const sub = cifra.clave === 'POR_VENCER'
+            ? (diasPorVencer > 0 ? tx('det_porVencerSub', { n: diasPorVencer }) : tx('det_porVencerApagado'))
+            : null;
+          return (
+            <div key={cifra.clave}>
+              <button
+                type="button"
+                onClick={() => { setFiltroCifra(activa ? null : cifra.clave); setSeccion('tareas'); }}
+                aria-pressed={activa}
+                title={tx('det_filtrarCifra')}
+                data-activo={activa || undefined}
+              >
+                <dt><cifra.icono size={14} style={{ color: cifra.color }} /> {tx(cifra.textoKey)}</dt>
+                <dd>
+                  <strong style={valor && (cifra.clave === 'VENCIDAS' || cifra.clave === 'POR_VENCER') ? { color: cifra.color } : undefined}>{valor}</strong>
+                  {sub && <span>{sub}</span>}
+                </dd>
+              </button>
+            </div>
+          );
+        })}
+      </dl>
+
+      {/* Tareas o historial de actividad del proyecto. El historial ya existia
+          en el backend (GET /proyectos/:id/logs) pero no se mostraba. */}
+      <div className="det-pestanas-fila">
+        <div role="tablist" aria-label={tx('det_secciones')} className="dash-pestanas">
+          <button type="button" role="tab" aria-selected={seccion === 'tareas'} onClick={() => setSeccion('tareas')}>
+            <ListChecks size={15} /> {t('projectTasksTab')}
+            <span className="det-pestana-conteo">{totalGeneral}</span>
+          </button>
+          <button type="button" role="tab" aria-selected={seccion === 'actividad'} onClick={() => setSeccion('actividad')}>
+            <History size={15} /> {t('projectActivityTab')}
+          </button>
+          {portalActivo && (
+            <button type="button" role="tab" aria-selected={seccion === 'cliente'} onClick={() => setSeccion('cliente')}>
+              <MessagesSquare size={15} /> {tpo('ptlTabCliente')}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Toolbar Vistas */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '300px' }}>
-          <ToggleVista vista={vista} onChange={setVista} t={t} />
-          
-          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
-            <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dim)', opacity: 0.5 }} />
-            <input 
-              type="text"
-              placeholder={t('projectTaskSearch')}
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.65rem 1rem 0.65rem 2.5rem',
-                background: 'var(--color-surface-2)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '12px',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                outline: 'none',
-                transition: 'all 0.2s'
-              }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--color-primary)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
-            />
-          </div>
+      {seccion === 'actividad' && <ProjectActivityLog proyectoId={id} />}
+      {seccion === 'cliente' && portalActivo && <PanelClienteProyecto proyectoId={id} />}
+
+      {seccion === 'tareas' && (
+      <>
+      {/* Barra de herramientas: vista y busqueda a un lado; cuantas se ven,
+          seleccionar y filtros al otro. Todo a 36px de alto. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
+        <ToggleVista vista={vista} onChange={cambiarVista} t={t} etiqueta={tx('det_vistas')} />
+
+        <div className="relative min-w-[180px] flex-1 sm:max-w-[300px]">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+          <input
+            type="search"
+            placeholder={t('projectTaskSearch')}
+            aria-label={t('projectTaskSearch')}
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="det-control w-full pl-9 pr-3"
+          />
         </div>
-        
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-dim)' }}>
+
+        {cifraActiva && (
+          <button type="button" className="det-filtro-chip" onClick={() => setFiltroCifra(null)} title={tx('det_quitarFiltro')}>
+            {tx('det_filtroActivo', { nombre: tx(cifraActiva.textoKey).toLowerCase() })}
+            <X size={13} aria-hidden="true" />
+          </button>
+        )}
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <span className="text-[12.5px] text-[var(--color-text-muted)] tabular-nums">
             {t('projectShowing')} {tareasFiltradasAvanzadas.length} {tareasFiltradasAvanzadas.length === 1 ? t('projectTaskSingular') : t('projectTaskPlural')}
           </span>
 
           {/* El gantt se queda fuera: ahi las tareas son barras de tiempo y
               marcarlas una a una no aporta nada. */}
-          {vista !== 'gantt' && (
+          {vista !== 'gantt' && puedeBorrarTareas && (
             <button
               type="button"
               onClick={() => (modoSeleccion ? salirDeSeleccion() : setModoSeleccion(true))}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
-                modoSeleccion
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                  : 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-              }`}
+              aria-pressed={modoSeleccion}
+              className="det-control det-boton"
             >
-              <CheckSquare size={16} />
+              <CheckSquare size={15} />
               {modoSeleccion ? t('cancel') : t('taskSelect')}
             </button>
           )}
@@ -815,7 +1117,7 @@ const ProyectoDetallePage = () => {
             onFechaChange={(rango) => setFiltroFecha(rango || { from: null, to: null })}
             prioridad={filtroPrioridad}
             onPrioridadChange={setFiltroPrioridad}
-            prioridades={PRIORIDADES}
+            prioridades={PRIORIDADES_TAREA}
             responsable={filtroResponsable}
             onResponsableChange={setFiltroResponsable}
             responsables={responsablesFiltro}
@@ -826,45 +1128,43 @@ const ProyectoDetallePage = () => {
       {/* Barra de la seleccion. Va pegada arriba al desplazar para que el boton
           de eliminar siga a mano con una lista larga. */}
       {seleccionActiva && (
-        <div className="sticky top-2 z-20 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-3 shadow-md">
-          <span className="text-sm font-medium text-[var(--color-text)]">
-            {t('taskSelectedCount', { count: seleccionadas.size })}
+        <div className="det-seleccion">
+          <span className="text-[13.5px] font-semibold text-[var(--color-text)] tabular-nums">
+            {t('taskSelectedCount', { count: seleccionVisible.length })}
           </span>
+          <span className="h-4 w-px bg-[var(--color-border)]" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={() => setSeleccionadas(new Set(tareasSeleccionables.map((tarea) => tarea.id)))}
+            disabled={!tareasSeleccionables.length}
+            className="det-texto-boton"
+          >
+            {t('taskSelectAll')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSeleccionadas(new Set())}
+            disabled={!seleccionVisible.length}
+            className="det-texto-boton"
+          >
+            {t('taskSelectNone')}
+          </button>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSeleccionadas(new Set(tareasFiltradasAvanzadas.map((tarea) => tarea.id)))}
-              disabled={!tareasFiltradasAvanzadas.length}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)] disabled:opacity-40"
-            >
-              {t('taskSelectAll')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSeleccionadas(new Set())}
-              disabled={!seleccionadas.size}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)] disabled:opacity-40"
-            >
-              {t('taskSelectNone')}
-            </button>
+          <div className="ml-auto flex items-center gap-1.5">
             <button
               type="button"
               onClick={handleEliminarSeleccionadas}
-              disabled={!seleccionadas.size}
-              className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-40"
+              disabled={!seleccionVisible.length}
+              className="det-boton-peligro"
             >
-              <Trash2 size={15} />
+              <Trash2 size={14} />
               {t('delete')}
             </button>
-            <button
-              type="button"
-              onClick={salirDeSeleccion}
-              aria-label={t('cancel')}
-              className="rounded-lg p-1.5 text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
-            >
-              <X size={16} />
-            </button>
+            <Tooltip label={t('cancel')}>
+              <button type="button" onClick={salirDeSeleccion} className="dash-icono" aria-label={t('cancel')}>
+                <X size={16} />
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}
@@ -872,60 +1172,73 @@ const ProyectoDetallePage = () => {
       {/* Documentos del proyecto a la derecha, solo junto a la lista. El Kanban
           y el gantt necesitan todo el ancho: con la columna al lado, las tres
           columnas del tablero y las barras del gantt quedaban estrujadas. */}
-      <div className={`grid gap-6 ${vista === 'lista' ? 'xl:grid-cols-[minmax(0,1fr)_320px]' : ''}`}>
-      <div style={{ minHeight: '500px' }}>
+      <div className={`grid gap-5 ${mostrarDocsProyecto ? 'xl:grid-cols-[minmax(0,1fr)_300px]' : ''}`}>
+      <div className="min-w-0">
         {vista === 'lista' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {/* Sin tope de alto ni scroll propio: con 10 tareas por pagina la
-                lista ya no crece sin fin, y dos desplazamientos anidados (el de
-                la lista y el de la pagina) se estorbaban entre si. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {tareasListaFiltradas.length === 0 ? (
-                <div style={{ padding: '4rem', textAlign: 'center', background: 'var(--color-surface-2)', borderRadius: '1.5rem', border: '1px dashed var(--color-border)', color: 'var(--color-text-dim)' }}>
-                  <Search size={40} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
-                  <p style={{ fontWeight: 400 }}>{t('projectNoTasksFound')}</p>
+          // Sin tope de alto ni scroll propio: con 10 tareas por pagina la
+          // lista ya no crece sin fin, y dos desplazamientos anidados (el de
+          // la lista y el de la pagina) se estorbaban entre si.
+          <section className="det-panel">
+            {tareasListaFiltradas.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-surface-3)] text-[var(--color-text-muted)]">
+                  <Search size={18} />
+                </span>
+                <p className="text-[13.5px] text-[var(--color-text-muted)]">{t('projectNoTasksFound')}</p>
+                {cifraActiva && (
+                  <button type="button" className="cli-enlace" onClick={() => setFiltroCifra(null)}>{tx('det_quitarFiltro')}</button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="det-lista-cabecera" aria-hidden="true">
+                  <span className="det-fila-estado" />
+                  <span className="flex-1">{tx('det_colTarea')}</span>
+                  <span className="det-fila-prioridad">{tx('det_colPrioridad')}</span>
+                  <span className="det-fila-responsables">{tx('det_colResponsables')}</span>
+                  <span className="det-fila-fecha">{tx('det_colVence')}</span>
+                  <span className="det-fila-menu" />
                 </div>
-              ) : (
-                tareasDeLaPagina.map(t => (
-                  <TareaCard
-                    key={t.id}
-                    tarea={t}
-                    usuarioActual={usuario}
-                    onClick={(x) => { setTareaEditando(x); setModal(true); }}
-                    onEliminar={handleEliminar}
-                    onCambiarEstado={handleCambiarEstado}
-                    seleccionable={seleccionActiva}
-                    seleccionada={seleccionadas.has(t.id)}
-                    onAlternarSeleccion={alternarSeleccion}
-                  />
-                ))
-              )}
-            </div>
+                <div>
+                  {tareasDeLaPagina.map(tarea => (
+                    <TareaFila
+                      key={tarea.id}
+                      tarea={tarea}
+                      usuarioActual={usuario}
+                      onClick={abrirTarea}
+                      onEliminar={handleEliminar}
+                      onCambiarEstado={handleCambiarEstado}
+                      gestionable={puedeGestionar(tarea)}
+                      borrable={puedeBorrar(tarea)}
+                      seleccionable={seleccionActiva}
+                      seleccionada={seleccionadas.has(tarea.id)}
+                      onAlternarSeleccion={alternarSeleccion}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
 
             {/* Paginacion en vez del antiguo "Ver mas tareas": con ese boton la
                 lista solo crecia y no habia forma de volver atras ni de saber
                 por donde ibas. */}
             {totalPaginasLista > 1 && (
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <span className="text-sm font-normal text-[var(--color-text-muted)]">
-                  {t('timelineRange', {
-                    desde: (paginaLista - 1) * TAREAS_POR_PAGINA + 1,
-                    hasta: Math.min(paginaLista * TAREAS_POR_PAGINA, tareasListaFiltradas.length),
-                    total: tareasListaFiltradas.length,
-                  })}
+              <div className="det-pie">
+                <span className="tabular-nums">
+                  {tx('det_rango', { desde: desdeLista, hasta: hastaLista, total: tareasListaFiltradas.length })}
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <Tooltip label={t('previous')}>
                     <button
                       type="button"
                       onClick={() => setPagina((n) => Math.max(1, n - 1))}
                       disabled={paginaLista === 1}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                      className="dash-icono"
                     >
                       <ChevronLeft size={16} />
                     </button>
                   </Tooltip>
-                  <span className="min-w-[70px] text-center text-sm font-medium text-[var(--color-text)]">
+                  <span className="min-w-[48px] text-center text-[12.5px] font-medium tabular-nums text-[var(--color-text)]">
                     {paginaLista} / {totalPaginasLista}
                   </span>
                   <Tooltip label={t('next')}>
@@ -933,7 +1246,7 @@ const ProyectoDetallePage = () => {
                       type="button"
                       onClick={() => setPagina((n) => Math.min(totalPaginasLista, n + 1))}
                       disabled={paginaLista === totalPaginasLista}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
+                      className="dash-icono"
                     >
                       <ChevronRight size={16} />
                     </button>
@@ -941,62 +1254,70 @@ const ProyectoDetallePage = () => {
                 </div>
               </div>
             )}
-          </div>
+          </section>
         )}
         {vista === 'kanban' && (
           <KanbanView
             tareas={tareasFiltradasAvanzadas}
-            onClick={(x) => { setTareaEditando(x); setModal(true); }}
+            onClick={abrirTarea}
             onEliminar={handleEliminar}
             onCambiarEstado={handleCambiarEstado}
-            onEditar={(x) => { setTareaEditando(x); setModal(true); }}
-            onActualizarTarea={handleActualizarTarea}
+            onEditar={abrirTarea}
+            puedeGestionar={puedeGestionar}
+            puedeBorrar={puedeBorrar}
+            onTareasVisiblesChange={setTareasVisiblesKanban}
             seleccionable={seleccionActiva}
             seleccionadas={seleccionadas}
             onAlternarSeleccion={alternarSeleccion}
           />
         )}
-        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradasAvanzadas} onSeleccionarTarea={(x) => { setTareaEditando(x); setModal(true); }} />}
+        {vista === 'gantt' && <GanttView proyecto={proyecto} tareas={tareasFiltradasAvanzadas} onSeleccionarTarea={abrirTarea} />}
       </div>
 
-        {vista === 'lista' && (
+        {mostrarDocsProyecto && (
         <aside className="xl:sticky xl:top-6 xl:self-start">
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <p className="mb-3 text-xs font-normal leading-relaxed text-[var(--color-text-muted)]">
-              {t('projectDocsHint')}
-            </p>
-            <TaskAttachments
-              compacto
-              tareaId={proyecto?.id}
-              type="proyectos"
-              title={t('projectFieldDocuments')}
-              uploadLabel={t('projectAddFiles')}
-            />
-          </div>
+          <TaskAttachments
+            compacto
+            tareaId={proyecto?.id}
+            type="proyectos"
+            title={t('projectFieldDocuments')}
+            ayuda={t('projectDocsHint')}
+            uploadLabel={t('projectAddFiles')}
+            showUploader={puedeSubirAdjuntos}
+            compartirCliente={portalActivo && puede(usuario, 'clientes.editar') && Boolean(clienteProyecto)}
+          />
         </aside>
         )}
       </div>
+      </>
+      )}
 
       {/* Modales */}
       {modal && (
-        <ModalTarea 
-          tarea={tareaEditando} 
-          proyectoId={id} 
+        <ModalTarea
+          tarea={tareaEditando}
+          proyectoId={id}
           usuarioActual={usuario}
-          usuarios={usuarios} 
-          onClose={cerrarModalTarea} 
-          onGuardar={handleGuardarTarea} 
+          usuarios={usuarios}
+          gestionable={!tareaEditando || puedeGestionar(tareaEditando)}
+          borrable={Boolean(tareaEditando) && puedeBorrar(tareaEditando)}
+          adjuntosActivos={adjuntosActivos}
+          puedeSubirAdjuntos={puedeSubirAdjuntos}
+          comentariosActivos={moduloActivo('comentarios')}
+          onClose={cerrarModalTarea}
+          onGuardar={handleGuardarTarea}
           onTareaMutada={handleSincronizarTarea}
           onEliminar={handleEliminar}
         />
       )}
-      {modalImportar && (
-        <ModalImportar 
-          proyectoId={id} 
-          usuarios={usuarios} 
+      {dialogoConfirmacion}
+      {modalImportar && puedeImportar && (
+        <ModalImportar
+          proyectoId={id}
+          usuarios={usuarios}
           usuarioActual={usuario}
-          onClose={() => setModalImportar(false)} 
-          onImportado={handleImportado} 
+          onClose={() => setModalImportar(false)}
+          onImportado={handleImportado}
         />
       )}
       {modalExportar && (
@@ -1006,7 +1327,7 @@ const ProyectoDetallePage = () => {
           onExportar={handleExportar}
         />
       )}
-      {modalPlantilla && (
+      {modalPlantilla && puedeGuardarPlantilla && (
         <ModalGuardarPlantilla
           proyecto={proyecto}
           onClose={() => setModalPlantilla(false)}
@@ -1017,9 +1338,23 @@ const ProyectoDetallePage = () => {
   );
 };
 
-// ── Modal de Tarea (Simplified & Professional) ──────────────────────────────
-const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGuardar, onTareaMutada, onEliminar }) => {
+// ── Modal de Tarea ───────────────────────────────────────────────────────────
+const ModalTarea = ({
+  tarea, proyectoId, usuarioActual, usuarios, gestionable = true, borrable = gestionable,
+  adjuntosActivos = true, puedeSubirAdjuntos = true, comentariosActivos = true,
+  onClose, onGuardar, onTareaMutada, onEliminar,
+}) => {
   const { t } = usePreferences();
+  const tp = useTextoPermisos();
+  const tx = useTextoProyectos();
+  const { showToast } = useToast();
+  const { reglasTareas } = useConfiguracion();
+  // Reglas de alta (solo al crear): el backend asigna al creador si nadie se
+  // elige, la opcion esta activa y el creador es miembro del proyecto.
+  const exigirFecha = !tarea && reglasTareas.exigirFechaLimite;
+  const seAsignaAlCreador = reglasTareas.asignarAlCreador
+    && usuarios.some((u) => u.id === usuarioActual?.id);
+  const exigirResponsable = !tarea && reglasTareas.exigirResponsable && !seAsignaAlCreador;
   const creadorEsUsuarioActual = tarea?.creador?.id === usuarioActual?.id
     || (!tarea?.creador?.id && (getTaskAssignees(tarea).length === 0 || isTaskAssignedToUser(tarea, usuarioActual?.id)));
   const [form, setForm] = useState({
@@ -1027,25 +1362,42 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
     descripcion: tarea?.descripcion || '',
     numeroActividad: tarea?.numeroActividad || '',
     asignadoIds: getTaskAssignees(tarea).map((asignado) => asignado.id),
-    prioridad: tarea?.prioridad || 'MEDIA',
-    estado: tarea?.estado || 'PENDIENTE',
-    fechaInicio: tarea?.fechaInicio ? tarea.fechaInicio.slice(0,10) : new Date().toISOString().slice(0,10),
-    venceEn: tarea?.venceEn ? tarea.venceEn.slice(0,10) : ''
+    prioridad: tarea?.prioridad || reglasTareas.prioridadDefecto || 'MEDIA',
+    estado: tarea?.estado || reglasTareas.estadoInicial || 'PENDIENTE',
+    // Hoy en hora local: toISOString() daba el dia en UTC, que de noche en
+    // Mexico ya es mañana.
+    fechaInicio: tarea?.fechaInicio ? claveDesdeISO(tarea.fechaInicio) : claveDiaLocal(),
+    venceEn: tarea?.venceEn ? claveDesdeISO(tarea.venceEn) : ''
   });
   const [cargando, setCargando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [archivos, setArchivos] = useState([]);
+  const [errorTitulo, setErrorTitulo] = useState('');
+  const [errorResponsable, setErrorResponsable] = useState('');
+  const [errorFecha, setErrorFecha] = useState('');
+  const tareaId = tarea?.id;
 
   const sincronizarTarea = useCallback((cambios = {}) => {
-    if (!tarea?.id) return;
-    onTareaMutada?.(tarea.id, cambios);
-  }, [onTareaMutada, tarea?.id]);
+    if (!tareaId) return;
+    onTareaMutada?.(tareaId, cambios);
+  }, [onTareaMutada, tareaId]);
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
+    if (!gestionable) return;
+    // El `required` del campo no actua: el boton de guardar vive en el pie de
+    // la ventana, fuera del <form>, asi que la validacion va aqui.
+    const faltaTitulo = !form.titulo.trim();
+    const faltaResponsable = exigirResponsable && form.asignadoIds.length === 0;
+    const faltaFecha = exigirFecha && !form.venceEn;
+    setErrorTitulo(faltaTitulo ? t('taskTitleRequired') : '');
+    setErrorResponsable(faltaResponsable ? tp('tareaResponsableObligatorio') : '');
+    setErrorFecha(faltaFecha ? tp('tareaFechaLimiteObligatoria') : '');
+    if (faltaTitulo || faltaResponsable || faltaFecha) return;
     setCargando(true);
     try {
       if (tarea) {
-        const response = await tareasService.editar(tarea.id, form);
+        const response = await tareasService.editar(tarea.id, { ...form, titulo: form.titulo.trim() });
         onGuardar({ tarea: response.tarea, creada: false });
       } else {
         const fd = new FormData();
@@ -1054,94 +1406,141 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
             fd.append(k, JSON.stringify(v));
             return;
           }
-          fd.append(k,v);
+          fd.append(k, k === 'titulo' ? v.trim() : v);
         });
         archivos.forEach((file) => fd.append('archivos', file));
         const response = await tareasService.crear(proyectoId, fd);
         onGuardar({ tarea: response.tarea, creada: true });
       }
-    } catch (err) { alert(err.message); }
+    } catch (err) { showToast(err.message, 'error'); }
     finally { setCargando(false); }
+  };
+
+  // Solo se cierra si de verdad se borro: antes se cerraba aunque se cancelara
+  // la confirmacion y la tarea seguia ahi.
+  const handleEliminar = async () => {
+    setEliminando(true);
+    try {
+      const borrada = await onEliminar(tarea);
+      if (borrada) onClose();
+    } finally {
+      setEliminando(false);
+    }
   };
 
   return (
     <Modal
       open
       onClose={onClose}
-      maxWidth="672px"
+      maxWidth="640px"
       title={tarea ? t('taskEditTitle') : t('taskNewTitle')}
       footer={(
-        <div className="flex flex-col-reverse lg:flex-row gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-6 py-4 rounded-2xl text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-all"
-          >
-            {t('cancel')}
-          </button>
-          {tarea && (
+        // Eliminar se aparta a la izquierda; cancelar y guardar, a la derecha.
+        <div className="flex flex-wrap items-center gap-2">
+          {tarea && borrable && (
             <button
               type="button"
-              onClick={() => { onEliminar(tarea); onClose(); }}
-              className="flex-1 px-6 py-4 bg-red-50 text-red-600 rounded-2xl text-xs font-medium hover:bg-red-100 transition-all"
+              onClick={handleEliminar}
+              disabled={eliminando}
+              className="det-texto-boton det-texto-peligro"
             >
-              {t('delete')}
+              <Trash2 size={14} /> {t('delete')}
             </button>
           )}
-          <button onClick={handleSubmit} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50" disabled={cargando}>
-            {cargando ? t('saving') : t('save')}
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={onClose} className="det-control det-boton">
+              {gestionable ? t('cancel') : t('close')}
+            </button>
+            {gestionable && (
+              <button type="button" onClick={handleSubmit} className="btn-primary h-9 !py-0 text-[13.5px]" disabled={cargando}>
+                {cargando ? t('saving') : t('save')}
+              </button>
+            )}
+          </div>
         </div>
       )}
     >
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Sin permiso (ni admin del proyecto, ni creador, ni responsable) la
+              tarea se ve pero no se edita: el backend rechazaria el guardado. */}
+          {!gestionable && (
+            <div className="alert-info mb-4 text-[13px]">
+              {t('taskNoPermissionHint')}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="det-form space-y-4">
+            <fieldset disabled={!gestionable} className="space-y-4 border-0 p-0 m-0 min-w-0">
             {/* ── Lo necesario para dar de alta la tarea ─────────────────── */}
-            <div className="space-y-2">
-              <EtiquetaCampo texto={t('taskTitle')} />
+            <div className="space-y-1.5">
+              <EtiquetaCampo texto={t('taskTitle')} obligatorio htmlFor="tarea-titulo" />
               <input
+                id="tarea-titulo"
                 className="form-input"
                 value={form.titulo}
-                onChange={e => setForm({...form, titulo: e.target.value})}
+                onChange={e => { setForm({...form, titulo: e.target.value}); if (errorTitulo) setErrorTitulo(''); }}
                 required
+                aria-invalid={Boolean(errorTitulo)}
+                aria-describedby={errorTitulo ? 'tarea-titulo-error' : undefined}
                 placeholder={t('taskTitlePlaceholder')}
+                style={errorTitulo ? { borderColor: 'var(--color-error)' } : undefined}
               />
+              {errorTitulo && (
+                <p id="tarea-titulo-error" className="text-[12.5px] font-medium" style={{ color: 'var(--color-error)' }}>
+                  {errorTitulo}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-2">
-              <EtiquetaCampo texto={t('taskAssignedTo')} />
+            <div className="space-y-1.5">
+              <EtiquetaCampo texto={t('taskAssignedTo')} obligatorio={exigirResponsable} />
               {/* Antes eran todos los nombres del equipo como botones a la
                   vista; con un equipo grande el bloque medía media ventana. */}
               <SelectorMultiple
                 conBuscador
                 placeholder={t('taskUnassigned')}
                 seleccionados={form.asignadoIds}
-                onToggle={(id) => setForm((prev) => ({
-                  ...prev,
-                  asignadoIds: prev.asignadoIds.includes(id)
-                    ? prev.asignadoIds.filter((asignadoId) => asignadoId !== id)
-                    : [...prev.asignadoIds, id],
-                }))}
+                onToggle={(id) => {
+                  setErrorResponsable('');
+                  setForm((prev) => ({
+                    ...prev,
+                    asignadoIds: prev.asignadoIds.includes(id)
+                      ? prev.asignadoIds.filter((asignadoId) => asignadoId !== id)
+                      : [...prev.asignadoIds, id],
+                  }));
+                }}
                 opciones={usuarios.map((u) => ({ valor: u.id, etiqueta: u.nombre }))}
               />
+              {errorResponsable && (
+                <p className="text-[12.5px] font-medium" style={{ color: 'var(--color-error)' }}>{errorResponsable}</p>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <EtiquetaCampo texto={t('taskStatus')} />
-                <select className="form-input form-select" value={form.estado} onChange={e => setForm({...form, estado: e.target.value})}>
-                  {ESTADOS_TAREA.map(e => <option key={e.value} value={e.value}>{t(e.labelKey)}</option>)}
-                </select>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <EtiquetaCampo texto={t('taskStatus')} htmlFor="tarea-estado" />
+                <SelectorSimple
+                  id="tarea-estado"
+                  valor={form.estado}
+                  onCambio={estado => setForm(prev => ({ ...prev, estado }))}
+                  opciones={ESTADOS_TAREA.map(e => ({ valor: e.value, etiqueta: t(e.labelKey) }))}
+                  disabled={!gestionable}
+                />
               </div>
 
-              <div className="space-y-2">
-                <EtiquetaCampo texto={t('taskPriority')} />
-                <select className="form-input form-select" value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})}>
-                  {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{t(p.labelKey)}</option>)}
-                </select>
+              <div className="space-y-1.5">
+                <EtiquetaCampo texto={t('taskPriority')} htmlFor="tarea-prioridad" />
+                <SelectorSimple
+                  id="tarea-prioridad"
+                  valor={form.prioridad}
+                  onCambio={prioridad => setForm(prev => ({ ...prev, prioridad }))}
+                  opciones={PRIORIDADES_TAREA.map(p => ({ valor: p.value, etiqueta: t(p.labelKey) }))}
+                  disabled={!gestionable}
+                />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <EtiquetaCampo texto={t('taskDuration')} />
+            <div className="space-y-1.5">
+              <EtiquetaCampo texto={t('taskDuration')} obligatorio={exigirFecha} />
               {/* Calendario en linea. Antes abria una ventana sobre la ventana
                   de la tarea: se veia encimado y los desplegables nativos del
                   formulario (prioridad, estado) se dibujaban por encima. */}
@@ -1150,25 +1549,30 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
                 conLeyenda={false}
                 desde={form.fechaInicio}
                 hasta={form.venceEn}
-                onChange={({ desde, hasta }) => setForm({ ...form, fechaInicio: desde, venceEn: hasta })}
+                onChange={({ desde, hasta }) => { setErrorFecha(''); setForm({ ...form, fechaInicio: desde, venceEn: hasta }); }}
               />
+              {errorFecha && (
+                <p className="text-[12.5px] font-medium" style={{ color: 'var(--color-error)' }}>{errorFecha}</p>
+              )}
             </div>
 
             {/* Igual que en la lista: solo se dice quien asigno si fue otro */}
             {!creadorEsUsuarioActual && tarea?.creador?.nombre && (
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs font-medium text-blue-700">
-                {t('taskAssignedBy')} {tarea.creador.nombre}
-              </div>
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                {t('taskAssignedBy')} <span className="font-medium text-[var(--color-text-dim)]">{tarea.creador.nombre}</span>
+              </p>
             )}
 
             {/* ── Lo opcional, al final ─────────────────────────────────────
                 Antes la descripcion y el numero de actividad iban entre el
                 titulo y los responsables, asi que para llegar a lo que de
                 verdad hace falta habia que pasar por encima de ellos. */}
-            <div className="border-t border-[var(--color-border)] pt-5 space-y-6">
-              <div className="space-y-2">
-                <EtiquetaCampo texto={t('taskDescription')} opcional />
+            <div className="space-y-4 border-t border-[var(--color-border)] pt-4">
+              <p className="det-etiqueta">{tx('det_opcional')}</p>
+              <div className="space-y-1.5">
+                <EtiquetaCampo texto={t('taskDescription')} htmlFor="tarea-descripcion" />
                 <textarea
+                  id="tarea-descripcion"
                   className="form-input resize-none"
                   rows="3"
                   value={form.descripcion}
@@ -1177,9 +1581,10 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
                 />
               </div>
 
-              <div className="space-y-2">
-                <EtiquetaCampo texto={t('taskActivityNumber')} opcional />
+              <div className="space-y-1.5 sm:max-w-[220px]">
+                <EtiquetaCampo texto={t('taskActivityNumber')} htmlFor="tarea-numero" />
                 <input
+                  id="tarea-numero"
                   type="number"
                   min="1"
                   className="form-input"
@@ -1188,7 +1593,13 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
                   placeholder={t('taskActivityPlaceholder')}
                 />
               </div>
+            </div>
+            </fieldset>
 
+            {/* Sin el modulo de adjuntos el bloque entero desaparece */}
+            {adjuntosActivos && (
+            <div className="border-t border-[var(--color-border)] pt-4">
+              {/* Fuera del fieldset: los adjuntos tienen sus propios permisos */}
               <TaskAttachments
                 tareaId={tarea?.id}
                 type="tareas"
@@ -1196,15 +1607,16 @@ const ModalTarea = ({ tarea, proyectoId, usuarioActual, usuarios, onClose, onGua
                 pendingFiles={archivos}
                 onPendingFilesChange={setArchivos}
                 onAttachmentsChange={(adjuntos) => sincronizarTarea({ adjuntos })}
-                showUploader
+                showUploader={gestionable && puedeSubirAdjuntos}
                 showExisting={Boolean(tarea?.id)}
                 uploadLabel={tarea ? t('taskAddFiles') : t('taskSelectFiles')}
               />
             </div>
+            )}
           </form>
 
-          {tarea?.id && (
-            <div className="mt-8 border-t border-[var(--color-border)] pt-6">
+          {tarea?.id && comentariosActivos && (
+            <div className="mt-5 border-t border-[var(--color-border)] pt-4">
               <TaskComments
                 tareaId={tarea.id}
                 type="tareas"
@@ -1222,30 +1634,33 @@ const ModalExportarProyecto = ({ proyecto, onClose, onExportar }) => {
   <Modal
     open
     onClose={onClose}
-    maxWidth="448px"
+    maxWidth="420px"
     title={t('taskExportTitle')}
     subtitle={proyecto?.nombre}
     footer={(
-      <button onClick={onClose} className="w-full px-6 py-3 rounded-2xl text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-all">
-        {t('close')}
-      </button>
+      <div className="flex justify-end">
+        <button type="button" onClick={onClose} className="det-control det-boton">
+          {t('close')}
+        </button>
+      </div>
     )}
   >
-      <div className="space-y-3">
-        <button
-          onClick={() => onExportar('excel')}
-          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-all"
-        >
-          <span className="flex items-center gap-3 text-sm font-medium text-[var(--color-text)]"><FileSpreadsheet size={18} /> Excel</span>
-          <span className="text-xs font-medium text-[var(--color-text-muted)]">.xlsx</span>
-        </button>
-        <button
-          onClick={() => onExportar('json')}
-          className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-all"
-        >
-          <span className="flex items-center gap-3 text-sm font-medium text-[var(--color-text)]"><FileJson size={18} /> JSON</span>
-          <span className="text-xs font-medium text-[var(--color-text-muted)]">.json</span>
-        </button>
+      <div className="det-panel overflow-hidden">
+        {[
+          { tipo: 'excel', nombre: 'Excel', ext: '.xlsx', icono: <FileSpreadsheet size={17} style={{ color: 'var(--color-success)' }} /> },
+          { tipo: 'json', nombre: 'JSON', ext: '.json', icono: <FileJson size={17} style={{ color: 'var(--color-text-muted)' }} /> },
+        ].map((opcion) => (
+          <button
+            key={opcion.tipo}
+            type="button"
+            onClick={() => onExportar(opcion.tipo)}
+            className="cli-fila w-full text-left first:border-t-0"
+          >
+            {opcion.icono}
+            <span className="flex-1 text-[13.5px] font-medium text-[var(--color-text)]">{opcion.nombre}</span>
+            <span className="text-[12px] text-[var(--color-text-muted)]">{opcion.ext}</span>
+          </button>
+        ))}
       </div>
   </Modal>
   );
@@ -1269,38 +1684,45 @@ const ModalGuardarPlantilla = ({ proyecto, onClose, onGuardar }) => {
     }
   };
 
+  // Los botones van en el pie de la ventana, enlazados al formulario por su id
   return (
     <Modal
       open
       onClose={onClose}
-      maxWidth="512px"
+      maxWidth="480px"
       title={t('projectSaveTemplate')}
+      subtitle={proyecto?.nombre}
+      footer={(
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="det-control det-boton">
+            {t('cancel')}
+          </button>
+          <button type="submit" form="form-guardar-plantilla" disabled={guardando} className="btn-primary h-9 !py-0 text-[13.5px]">
+            {guardando ? t('saving') : t('save')}
+          </button>
+        </div>
+      )}
     >
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-2">
-            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldName')}</label>
+        <form id="form-guardar-plantilla" onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <EtiquetaCampo texto={t('fieldName')} obligatorio htmlFor="plantilla-nombre" />
             <input
+              id="plantilla-nombre"
               className="form-input"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
               required
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('taskDescription')}</label>
-            <input
-              className="form-input"
+          <div className="space-y-1.5">
+            <EtiquetaCampo texto={t('taskDescription')} opcional htmlFor="plantilla-descripcion" />
+            <textarea
+              id="plantilla-descripcion"
+              className="form-input resize-none"
+              rows="3"
               value={form.descripcion}
               onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
             />
-          </div>
-          <div className="flex flex-col-reverse lg:flex-row gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 px-6 py-4 rounded-2xl text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-3)] transition-all">
-              {t('cancel')}
-            </button>
-            <button type="submit" disabled={guardando} className="flex-[2] px-6 py-4 bg-blue-600 text-white rounded-2xl text-xs font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20">
-              {guardando ? t('saving') : t('save')}
-            </button>
           </div>
         </form>
     </Modal>

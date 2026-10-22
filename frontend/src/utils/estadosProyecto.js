@@ -3,14 +3,55 @@
 // Antes esta lista estaba duplicada en ProyectosPage, DashboardPage y EquipoPage,
 // cada una con sus propios colores. El backend tiene su equivalente en
 // backend/src/utils/estados.utils.js — si cambias uno, cambia el otro.
+//
+// Colores: variables del tema (index.css), nunca hex, para que el modo oscuro
+// funcione. Cada estado trae:
+//   color       texto del chip (par con `bg`, >= 4.5:1 en los dos temas)
+//   bg          fondo suave del chip
+//   dot         color vivo para un punto/indicador sin texto encima
+//   glow        halo translúcido para sombras (antes se hacía `${color}55`,
+//               que con una variable CSS deja de funcionar)
+//   badgeClass  clase utilitaria equivalente (`.badge-success`...)
 
 export const ESTADO_PROYECTO_DEFAULT = 'ACTIVO';
 
 export const ESTADOS_PROYECTO = [
-  { value: 'ACTIVO',    labelKey: 'statusActive',   color: '#00d166', bg: 'rgba(0,209,102,0.12)' },
-  { value: 'INACTIVO',  labelKey: 'statusInactive', color: '#ff9100', bg: 'rgba(255,145,0,0.12)' },
-  { value: 'TERMINADO', labelKey: 'statusFinished', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-  { value: 'ARCHIVADO', labelKey: 'statusArchived', color: '#6c757d', bg: 'rgba(108,117,125,0.12)' },
+  {
+    value: 'ACTIVO',
+    labelKey: 'statusActive',
+    color: 'var(--badge-success-fg)',
+    bg: 'var(--badge-success-bg)',
+    dot: 'var(--color-accent-success)',
+    glow: 'color-mix(in srgb, var(--color-accent-success) 35%, transparent)',
+    badgeClass: 'badge-success',
+  },
+  {
+    value: 'INACTIVO',
+    labelKey: 'statusInactive',
+    color: 'var(--badge-warning-fg)',
+    bg: 'var(--badge-warning-bg)',
+    dot: 'var(--color-accent-warning)',
+    glow: 'color-mix(in srgb, var(--color-accent-warning) 35%, transparent)',
+    badgeClass: 'badge-warning',
+  },
+  {
+    value: 'TERMINADO',
+    labelKey: 'statusFinished',
+    color: 'var(--badge-info-fg)',
+    bg: 'var(--badge-info-bg)',
+    dot: 'var(--color-primary)',
+    glow: 'var(--color-primary-40)',
+    badgeClass: 'badge-info',
+  },
+  {
+    value: 'ARCHIVADO',
+    labelKey: 'statusArchived',
+    color: 'var(--badge-neutral-fg)',
+    bg: 'var(--badge-neutral-bg)',
+    dot: 'var(--color-text-muted)',
+    glow: 'color-mix(in srgb, var(--color-text-muted) 35%, transparent)',
+    badgeClass: 'badge-neutral',
+  },
 ];
 
 // Nombres antiguos que pueden seguir vivos en la base

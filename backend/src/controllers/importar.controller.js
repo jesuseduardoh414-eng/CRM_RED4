@@ -1,7 +1,11 @@
 /**
  * Controlador de Importación Masiva de Tareas
- * 
- * POST /api/proyectos/:proyectoId/tareas/importar
+ *
+ * POST /api/proyectos/:id/tareas/importar            (directo, sin vista previa)
+ * POST /api/proyectos/:id/tareas/importar/preview
+ * POST /api/proyectos/:id/tareas/importar/confirmar
+ * GET  /api/proyectos/:id/tareas/exportar/json
+ * GET  /api/proyectos/:id/tareas/exportar/excel
  * GET  /api/tareas/plantilla/json
  * GET  /api/tareas/plantilla/excel
  */
@@ -11,197 +15,130 @@ const XLSX = require('xlsx');
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
 const { serializeTasksForExport } = require('../utils/plantillas.utils');
-const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
+const { puedeActuarEnTarea, cargarProyectoVisible } = require('../utils/permissions.utils');
+const { alcanceDe } = require('../utils/permisosArea.utils');
+const { visibilidadTareasPara } = require('./tareas.controller');
 const {
+  ErrorImportacion,
   construirVistaPrevia,
   parseRowsFromFile,
   procesarFilas,
-  procesarJSON,
-  procesarExcel,
   generarPlantillaJSON,
   generarPlantillaExcel,
 } = require('../utils/importador.utils');
 
+const MODOS_ASIGNACION = ['yo', 'miembro', 'archivo'];
+
 const toFileSlug = (value) => String(value || 'proyecto')
   .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[̀-ͯ]/g, '')
   .replace(/[^a-zA-Z0-9]+/g, '_')
   .replace(/^_+|_+$/g, '')
   .toLowerCase() || 'proyecto';
 
-const verificarAccesoProyecto = async (proyectoId, usuario) => {
-  const proyecto = await prisma.proyecto.findUnique({
-    where: { id: proyectoId },
-    include: {
-      creador: { select: { id: true } },
-      miembros: { select: { id: true } },
-    },
-  });
-
-  if (!proyecto) return { error: 'Proyecto no encontrado', status: 404 };
-  if (esAdmin(usuario)) {
-    if (!puedeAdministrarProyecto(usuario, proyecto)) {
-      return { error: 'No tienes permiso para acceder a este proyecto', status: 403 };
-    }
-    return { proyecto };
+// Los errores "de usuario" (archivo mal formado, fila invalida, miembro que no
+// pertenece al proyecto...) llegan como ErrorImportacion y se devuelven con su
+// mensaje. Cualquier otro error es un 500 generico: el detalle va al log.
+const responderErrorImportacion = (res, error, contexto) => {
+  if (error instanceof ErrorImportacion) {
+    return res.status(error.status || 400).json({ error: error.message });
   }
-
-  const esMiembro = proyecto.miembros.some(m => m.id === usuario.id);
-  const esCreador = proyecto.creador?.id === usuario.id;
-  if (!esMiembro && !esCreador) {
-    return { error: 'No tienes permiso para acceder a este proyecto', status: 403 };
-  }
-
-  return { proyecto };
+  console.error(contexto, error);
+  return res.status(500).json({ error: 'Error interno al procesar la importación' });
 };
 
+// Quien importa debe poder crear tareas en el proyecto ("tareas.crear").
 const resolverAsignadoPorDefecto = (modoAsignacion, proyecto, usuario, asignadoIdRaw) => {
-  if (modoAsignacion === 'yo') return usuario.id;
+  if (modoAsignacion === 'yo') {
+    if (!proyecto.miembros.some((m) => m.id === usuario.id)) {
+      throw new ErrorImportacion('Para asignarte las tareas debes ser miembro del proyecto');
+    }
+    return usuario.id;
+  }
 
   if (modoAsignacion === 'miembro') {
     const miembroId = parseInt(asignadoIdRaw, 10);
     if (Number.isNaN(miembroId)) {
-      throw new Error('El miembro seleccionado no es valido');
+      throw new ErrorImportacion('El miembro seleccionado no es valido');
     }
-    const esMiembro = proyecto.miembros.some((m) => m.id === miembroId);
-    if (!esMiembro) {
-      throw new Error('El miembro seleccionado no pertenece a este proyecto');
+    if (!proyecto.miembros.some((m) => m.id === miembroId)) {
+      throw new ErrorImportacion('El miembro seleccionado no pertenece a este proyecto');
     }
     return miembroId;
   }
 
+  // modo 'archivo': se respeta la columna de correo del archivo
   return null;
 };
 
-const obtenerProyectoImportacion = async (proyectoId) => {
-  return prisma.proyecto.findUnique({
+// Preparacion comun a los tres caminos de importacion (directo, vista previa y
+// confirmar): proyecto, permiso y responsable por defecto. Antes el camino
+// directo tenia su propia validacion, distinta de la de los otros dos.
+const prepararImportacion = async (req) => {
+  const proyectoId = parseInt(req.params.id);
+  if (isNaN(proyectoId)) throw new ErrorImportacion('ID de proyecto inválido');
+
+  const proyecto = await prisma.proyecto.findUnique({
     where: { id: proyectoId },
     include: { miembros: { select: { id: true, email: true, nombre: true } } },
   });
+  if (!proyecto) throw new ErrorImportacion('Proyecto no encontrado', 404);
+
+  if (!puedeActuarEnTarea(req.usuario, proyecto, 'tareas.crear')) {
+    throw new ErrorImportacion('No tienes permiso para importar tareas en este proyecto', 403);
+  }
+
+  const modoSolicitado = String(req.body?.modoAsignacion || 'archivo');
+  if (!MODOS_ASIGNACION.includes(modoSolicitado)) {
+    throw new ErrorImportacion(`Modo de asignación inválido. Usa: ${MODOS_ASIGNACION.join(', ')}`);
+  }
+  const asignadoPorDefecto = resolverAsignadoPorDefecto(modoSolicitado, proyecto, req.usuario, req.body?.asignadoId);
+
+  return { proyectoId, proyecto, modoAsignacion: modoSolicitado, asignadoPorDefecto };
 };
 
-//  POST /api/proyectos/:proyectoId/tareas/importar 
+const leerFilasDelArchivo = (file) => {
+  if (!file) {
+    throw new ErrorImportacion('No se recibió ningún archivo. Envía el archivo en el campo "archivo"');
+  }
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  return parseRowsFromFile(file.buffer, ext);
+};
+
+//  POST /api/proyectos/:id/tareas/importar  (sin vista previa)
 const importar = async (req, res) => {
-  // El routerProyecto se monta en /api/proyectos/:id/tareas,
-  // por lo que el parámetro del proyecto se llama 'id'
-  const proyectoId = parseInt(req.params.id);
-
-  if (isNaN(proyectoId)) {
-    return res.status(400).json({ error: 'ID de proyecto inválido' });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({ error: 'No se recibió ningún archivo. Envía el archivo en el campo "archivo"' });
-  }
-
-  const fileBuffer = req.file.buffer;
-
   try {
-    // 1. Verificar que el proyecto existe
-    const proyecto = await prisma.proyecto.findUnique({
-      where: { id: proyectoId },
-      include: { miembros: { select: { id: true, email: true, nombre: true } } },
-    });
+    const { proyectoId, proyecto, asignadoPorDefecto } = await prepararImportacion(req);
+    const filas = leerFilasDelArchivo(req.file);
 
-    if (!proyecto) {
-      return res.status(404).json({ error: 'Proyecto no encontrado' });
-    }
+    const resultado = await procesarFilas(
+      filas,
+      proyectoId,
+      proyecto.miembros,
+      registrarActividad,
+      req.usuario.id,
+      asignadoPorDefecto,
+      { proyectoNombre: proyecto.nombre },
+    );
 
-    // 2. Verificar permisos: ADMIN puede siempre, MIEMBRO debe estar en el proyecto
-    if (esAdmin(req.usuario)) {
-      if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
-        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
-      }
-    } else {
-      const esMiembro = proyecto.miembros.some(m => m.id === req.usuario.id);
-      if (!esMiembro) {
-        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
-      }
-    }
-
-    // 3. Determinar el asignado por defecto según el modo elegido en el frontend
-    //    modoAsignacion: 'yo' | 'miembro' | 'archivo'
-    const modoAsignacion = req.body.modoAsignacion || 'archivo';
-    let asignadoPorDefecto = null;
-
-    if (modoAsignacion === 'yo') {
-      // Asignar al usuario que hace la subida
-      asignadoPorDefecto = req.usuario.id;
-    } else if (modoAsignacion === 'miembro') {
-      const miembroId = parseInt(req.body.asignadoId);
-      if (!isNaN(miembroId)) {
-        // Validar que el miembro pertenezca al proyecto
-        const esMiembro = proyecto.miembros.some(m => m.id === miembroId);
-        if (!esMiembro) {
-          return res.status(400).json({ error: 'El miembro seleccionado no pertenece a este proyecto' });
-        }
-        asignadoPorDefecto = miembroId;
-      }
-    }
-    // modo 'archivo' → asignadoPorDefecto = null (respeta columna del archivo)
-
-    // 4. Detectar tipo de archivo por extensión
-    if (asignadoPorDefecto && !proyecto.miembros.some(m => m.id === asignadoPorDefecto)) {
-      return res.status(400).json({ error: 'Solo puedes asignar tareas a miembros de este proyecto' });
-    }
-
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    let resultado;
-
-    if (ext === '.json') {
-      resultado = await procesarJSON(fileBuffer, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
-    } else if (ext === '.xlsx' || ext === '.xls') {
-      resultado = await procesarExcel(fileBuffer, proyectoId, proyecto.miembros, registrarActividad, req.usuario.id, asignadoPorDefecto);
-    } else {
-      return res.status(400).json({ error: 'Tipo de archivo no soportado. Usa .json, .xlsx o .xls' });
-    }
-
-    // 5. Respuesta
     return res.status(200).json({
       creadas: resultado.creadas,
       errores: resultado.errores,
       tareas: resultado.tareas || [],
     });
-
   } catch (error) {
-    console.error('[importar tareas]', error);
-    return res.status(400).json({ error: error.message });
+    return responderErrorImportacion(res, error, '[importar tareas]');
   }
 };
 
+//  POST /api/proyectos/:id/tareas/importar/preview
 const vistaPreviaImportacion = async (req, res) => {
-  const proyectoId = parseInt(req.params.id);
-
-  if (isNaN(proyectoId)) {
-    return res.status(400).json({ error: 'ID de proyecto inválido' });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({ error: 'No se recibió ningún archivo. Envía el archivo en el campo "archivo"' });
-  }
-
   try {
-    const proyecto = await obtenerProyectoImportacion(proyectoId);
-    if (!proyecto) {
-      return res.status(404).json({ error: 'Proyecto no encontrado' });
-    }
-
-    if (esAdmin(req.usuario)) {
-      if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
-        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
-      }
-    } else {
-      const esMiembro = proyecto.miembros.some((m) => m.id === req.usuario.id);
-      if (!esMiembro) {
-        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
-      }
-    }
-
-    const modoAsignacion = req.body.modoAsignacion || 'archivo';
-    const asignadoPorDefecto = resolverAsignadoPorDefecto(modoAsignacion, proyecto, req.usuario, req.body.asignadoId);
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    const filas = parseRowsFromFile(req.file.buffer, ext);
-    const preview = construirVistaPrevia(filas, proyecto.miembros, asignadoPorDefecto);
+    const { proyecto, modoAsignacion, asignadoPorDefecto } = await prepararImportacion(req);
+    const filas = leerFilasDelArchivo(req.file);
+    const preview = construirVistaPrevia(filas, proyecto.miembros, asignadoPorDefecto, {
+      creadorId: req.usuario.id,
+    });
 
     return res.status(200).json({
       archivo: req.file.originalname,
@@ -209,41 +146,18 @@ const vistaPreviaImportacion = async (req, res) => {
       ...preview,
     });
   } catch (error) {
-    console.error('[preview importar tareas]', error);
-    return res.status(400).json({ error: error.message });
+    return responderErrorImportacion(res, error, '[preview importar tareas]');
   }
 };
 
+//  POST /api/proyectos/:id/tareas/importar/confirmar
 const confirmarImportacion = async (req, res) => {
-  const proyectoId = parseInt(req.params.id);
-
-  if (isNaN(proyectoId)) {
-    return res.status(400).json({ error: 'ID de proyecto inválido' });
-  }
-
   try {
-    const proyecto = await obtenerProyectoImportacion(proyectoId);
-    if (!proyecto) {
-      return res.status(404).json({ error: 'Proyecto no encontrado' });
-    }
-
-    if (esAdmin(req.usuario)) {
-      if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
-        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
-      }
-    } else {
-      const esMiembro = proyecto.miembros.some((m) => m.id === req.usuario.id);
-      if (!esMiembro) {
-        return res.status(403).json({ error: 'No tienes permiso para importar tareas en este proyecto' });
-      }
-    }
-
-    const modoAsignacion = req.body.modoAsignacion || 'archivo';
-    const asignadoPorDefecto = resolverAsignadoPorDefecto(modoAsignacion, proyecto, req.usuario, req.body.asignadoId);
-    const filas = Array.isArray(req.body.filas) ? req.body.filas : [];
+    const { proyectoId, proyecto, asignadoPorDefecto } = await prepararImportacion(req);
+    const filas = Array.isArray(req.body?.filas) ? req.body.filas : [];
 
     if (filas.length === 0) {
-      return res.status(400).json({ error: 'No hay filas para importar' });
+      throw new ErrorImportacion('No hay filas para importar');
     }
 
     const resultado = await procesarFilas(
@@ -252,17 +166,17 @@ const confirmarImportacion = async (req, res) => {
       proyecto.miembros,
       registrarActividad,
       req.usuario.id,
-      asignadoPorDefecto
+      asignadoPorDefecto,
+      { proyectoNombre: proyecto.nombre },
     );
 
     return res.status(200).json(resultado);
   } catch (error) {
-    console.error('[confirmar importar tareas]', error);
-    return res.status(400).json({ error: error.message });
+    return responderErrorImportacion(res, error, '[confirmar importar tareas]');
   }
 };
 
-//  GET /api/tareas/plantilla/json 
+//  GET /api/tareas/plantilla/json
 const plantillaJSON = (_req, res) => {
   const datos = generarPlantillaJSON();
   const json  = JSON.stringify(datos, null, 2);
@@ -272,13 +186,43 @@ const plantillaJSON = (_req, res) => {
   res.send(json);
 };
 
-//  GET /api/tareas/plantilla/excel 
+//  GET /api/tareas/plantilla/excel
 const plantillaExcel = (_req, res) => {
   const buffer = generarPlantillaExcel();
 
   res.setHeader('Content-Disposition', 'attachment; filename="plantilla_tareas.xlsx"');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buffer);
+};
+
+// Carga el proyecto con las tareas que el usuario puede ver, con la misma
+// regla que el listado ("tareas.ver"): todas, o solo las suyas, las sin
+// responsable y las que creo. Devuelve null si no existe o no lo puede ver.
+const cargarProyectoParaExportar = async (proyectoId, usuario) => {
+  const { proyecto: visible, permitido } = await cargarProyectoVisible(prisma, usuario, proyectoId);
+  if (!visible) return { status: 404, error: 'Proyecto no encontrado' };
+  if (!permitido) return { status: 403, error: 'No tienes permiso para acceder a este proyecto' };
+
+  const proyecto = await prisma.proyecto.findUnique({
+    where: { id: visible.id },
+    select: {
+      id: true,
+      nombre: true,
+      descripcion: true,
+      estado: true,
+      area: true,
+      fechaInicio: true,
+      fechaFin: true,
+      tareas: {
+        where: alcanceDe(usuario, 'tareas.ver') === 'todos' ? undefined : visibilidadTareasPara(usuario.id),
+        include: {
+          asignado: { select: { id: true, nombre: true, email: true, area: true } },
+        },
+      },
+    },
+  });
+
+  return { proyecto };
 };
 
 const exportarJSON = async (req, res) => {
@@ -288,26 +232,9 @@ const exportarJSON = async (req, res) => {
   }
 
   try {
-    const acceso = await verificarAccesoProyecto(proyectoId, req.usuario);
+    const acceso = await cargarProyectoParaExportar(proyectoId, req.usuario);
     if (acceso.error) return res.status(acceso.status).json({ error: acceso.error });
-
-    const proyecto = await prisma.proyecto.findUnique({
-      where: { id: proyectoId },
-      select: {
-        id: true,
-        nombre: true,
-        descripcion: true,
-        estado: true,
-        area: true,
-        fechaInicio: true,
-        fechaFin: true,
-        tareas: {
-          include: {
-            asignado: { select: { id: true, nombre: true, email: true, area: true } },
-          },
-        },
-      },
-    });
+    const { proyecto } = acceso;
 
     const tareas = serializeTasksForExport({ proyecto, tareas: proyecto.tareas });
     const payload = {
@@ -340,21 +267,9 @@ const exportarExcel = async (req, res) => {
   }
 
   try {
-    const acceso = await verificarAccesoProyecto(proyectoId, req.usuario);
+    const acceso = await cargarProyectoParaExportar(proyectoId, req.usuario);
     if (acceso.error) return res.status(acceso.status).json({ error: acceso.error });
-
-    const proyecto = await prisma.proyecto.findUnique({
-      where: { id: proyectoId },
-      select: {
-        id: true,
-        nombre: true,
-        tareas: {
-          include: {
-            asignado: { select: { id: true, nombre: true, email: true, area: true } },
-          },
-        },
-      },
-    });
+    const { proyecto } = acceso;
 
     const tareas = serializeTasksForExport({ proyecto, tareas: proyecto.tareas });
     const wb = XLSX.utils.book_new();

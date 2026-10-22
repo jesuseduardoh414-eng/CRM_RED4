@@ -1,0 +1,6 @@
+# Huella SSH del servidor de cPanel de RED 4 para el despliegue automático
+# (.github/workflows/desplegar-cpanel.yml). Vacío a propósito: hasta que se
+# agregue la huella real (o la variable CPANEL_KNOWN_HOSTS en GitHub), el
+# despliegue no se conecta a ningún servidor. Para sacarla:
+#   ssh-keyscan -p 22 crm.tudominio.com
+# y pega aquí las líneas que devuelva (una por tipo de llave).

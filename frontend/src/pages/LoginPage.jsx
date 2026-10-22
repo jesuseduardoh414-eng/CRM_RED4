@@ -1,132 +1,251 @@
-// Página de Login
-// Formulario de email/password — guarda el JWT y redirige al dashboard
-
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+// Página de inicio de sesión.
+// Paso 1: correo + contraseña (+ "mantener sesión 30 días").
+// Paso 2 (solo si la cuenta tiene 2FA): código de la app o de respaldo.
+// Los estados especiales que devuelve el backend (correo sin verificar,
+// pendiente de aprobación, cuenta bloqueada) se muestran con su propio aviso.
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { authService } from '../services/api';
+import AuthLayout from '../components/auth/AuthLayout';
+import { AuthAlert, AuthHeader, BotonAuth, CampoPassword, CampoTexto, CodigoOtp } from '../components/auth/AuthUI';
+import { enfocarAlCargar } from '../utils/dispositivo';
+
+const TONO_POR_CODIGO = {
+  CUENTA_BLOQUEADA: 'aviso',
+  PENDIENTE_APROBACION: 'info',
+  CUENTA_INACTIVA: 'aviso',
+  PORTAL_DESACTIVADO: 'aviso',
+};
+
 
 const LoginPage = () => {
   const { t } = usePreferences();
-  const navigate       = useNavigate();
-  const { login }      = useAuth();
+  const [autoEnfocar] = useState(enfocarAlCargar);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
 
-  const [form, setForm]       = useState({ email: '', password: '' });
-  const [verPassword, setVerPassword] = useState(false);
-  const [error, setError]     = useState('');
+  const [form, setForm] = useState({ email: location.state?.email || '', password: '' });
+  const [recordar, setRecordar] = useState(false);
+  // { tono, texto }. Puede llegar uno de otra pantalla (p. ej. tras restablecer la contraseña).
+  const [aviso, setAviso] = useState(() => (location.state?.mensaje ? { tono: 'exito', texto: location.state.mensaje } : null));
   const [cargando, setCargando] = useState(false);
+  const [registro, setRegistro] = useState('cerrado');
+  const [recordarConfig, setRecordarConfig] = useState({ permitido: true, dias: 30 });
 
-  // Actualizar campo del formulario
+  // Paso 2FA
+  const [desafio, setDesafio] = useState(null);
+  const [codigo, setCodigo] = useState('');
+  const [usarRespaldo, setUsarRespaldo] = useState(false);
+
+  const destino = location.state?.from?.pathname && location.state.from.pathname !== '/login'
+    ? `${location.state.from.pathname}${location.state.from.search || ''}`
+    : '/dashboard';
+
+  useEffect(() => {
+    document.title = `${t('authLogin')} · ${t('appName')}`;
+    return () => { document.title = t('appName'); };
+  }, [t]);
+
+  useEffect(() => {
+    let cancelado = false;
+    authService.config()
+      .then((config) => {
+        if (cancelado) return;
+        setRegistro(config.registro);
+        setRecordarConfig({ permitido: config.permitirRecordar !== false, dias: config.recordarDias || 30 });
+      })
+      .catch(() => {});
+    return () => { cancelado = true; };
+  }, []);
+
+  const entrar = (data) => {
+    login(data);
+    // La cuenta de configuración va directo a su panel.
+    if (data.usuario?.debeActivar2FA) { navigate('/activar-2fa', { replace: true }); return; }
+    // El configurador y el cliente siempre van a su panel; el equipo, a donde iba.
+    const rol = data.usuario?.rol;
+    navigate(rol === 'CONFIGURADOR' ? '/configuracion' : rol === 'CLIENTE' ? (destino.startsWith('/portal') ? destino : '/portal') : destino, { replace: true });
+  };
+
   const handleChange = (e) => {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    setError(''); // Limpiar error al escribir
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    if (aviso?.tono === 'error') setAviso(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setCargando(true);
-    setError('');
-
+    setAviso(null);
     try {
-      const data = await authService.login(form.email, form.password);
-      login(data.token, data.usuario); // Guardar en contexto y localStorage
-      navigate('/dashboard');
+      const data = await authService.login(form.email.trim(), form.password, recordar);
+      if (data.requiere2FA) {
+        setDesafio(data.desafio);
+        setCodigo('');
+        setForm((prev) => ({ ...prev, password: '' }));
+        return;
+      }
+      entrar(data);
     } catch (err) {
-      setError(err.message);
+      if (err.codigo === 'EMAIL_NO_VERIFICADO') {
+        navigate('/verificar-correo', { state: { email: err.data?.email || form.email.trim(), reenviar: true } });
+        return;
+      }
+      setAviso({ tono: TONO_POR_CODIGO[err.codigo] || 'error', texto: err.message });
     } finally {
       setCargando(false);
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-white p-4 lg:p-8">
-      <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
+  const verificar2fa = async (valor = codigo) => {
+    if (!valor || cargando) return;
+    setCargando(true);
+    setAviso(null);
+    try {
+      entrar(await authService.login2fa(desafio, valor));
+    } catch (err) {
+      if (err.codigo === 'DESAFIO_EXPIRADO') {
+        setDesafio(null);
+      }
+      setAviso({ tono: TONO_POR_CODIGO[err.codigo] || 'error', texto: err.message });
+      setCodigo('');
+    } finally {
+      setCargando(false);
+    }
+  };
 
-        {/* Logo / Título */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-full max-w-[180px] lg:max-w-[220px] mb-6">
-            <img src="/logo_login.jpeg" alt="Logo" className="w-full h-auto object-contain" />
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-semibold text-slate-900 tracking-tight">
-            Panel Interno
-          </h1>
-          <p className="text-slate-400 font-normal mt-1 text-sm lg:text-base">
-            Inicia sesión para continuar
-          </p>
-        </div>
+  const volver = () => {
+    setDesafio(null);
+    setCodigo('');
+    setUsarRespaldo(false);
+    setAviso(null);
+  };
 
-        {/* Tarjeta del formulario */}
-        <div className="bg-white p-8 lg:p-10 rounded-[32px] shadow-2xl shadow-slate-200 border border-slate-50">
-          <form onSubmit={handleSubmit} className="space-y-6">
+  if (desafio) {
+    return (
+      <AuthLayout>
+        <AuthHeader
+          icono={ShieldCheck}
+          titulo={t('auth2faTitle')}
+          subtitulo={usarRespaldo ? t('auth2faBackupSubtitle') : t('auth2faSubtitle')}
+        />
+        <form onSubmit={(e) => { e.preventDefault(); verificar2fa(); }} className="space-y-5" noValidate>
+          {aviso && <AuthAlert tono={aviso.tono}>{aviso.texto}</AuthAlert>}
 
-            {/* Error global */}
-            {error && (
-              <div className="bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl text-xs font-medium text-center animate-shake">
-                {error}
-              </div>
-            )}
+          {usarRespaldo ? (
+            <CampoTexto
+              label={t('authBackupCodeLabel')}
+              icono={KeyRound}
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+              placeholder="XXXXX-XXXXX"
+              autoComplete="one-time-code"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={11}
+              autoFocus
+              required
+            />
+          ) : (
+            <CodigoOtp
+              valor={codigo}
+              onChange={setCodigo}
+              onCompleto={verificar2fa}
+              invalido={aviso?.tono === 'error'}
+              deshabilitado={cargando}
+            />
+          )}
 
-            {/* Email */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-medium text-slate-400 ml-1" htmlFor="email">Correo electrónico</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                placeholder="tu@empresa.com"
-                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-medium focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
-                value={form.email}
-                onChange={handleChange}
-              />
-            </div>
+          <BotonAuth cargando={cargando} textoCargando={t('authVerifyingShort')} disabled={usarRespaldo ? codigo.length < 10 : codigo.length !== 6}>
+            {t('auth2faVerify')}
+          </BotonAuth>
 
-            {/* Password */}
-            <div className="space-y-2 relative">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-medium text-slate-400" htmlFor="password">Contraseña</label>
-                <Link to="/forgot-password" size={18} className="text-[10px] font-medium text-blue-600 hover:text-blue-700 transition-colors">
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              </div>
-              <div className="relative">
-                <input
-                  id="password"
-                  name="password"
-                  type={verPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  required
-                  placeholder="••••••••"
-                  className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-medium focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none pr-12"
-                  value={form.password}
-                  onChange={handleChange}
-                />
-                <button
-                  type="button"
-                  onClick={() => setVerPassword(!verPassword)}
-                  aria-label={verPassword ? t('hidePassword') : t('showPassword')}
-                  title={verPassword ? t('hidePassword') : t('showPassword')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors p-1"
-                >
-                  {verPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 mt-2"
-              disabled={cargando}
-            >
-              {cargando ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          <div className="flex flex-col items-center gap-3 pt-1 text-sm">
+            <button type="button" className="auth-link" onClick={() => { setUsarRespaldo((v) => !v); setCodigo(''); setAviso(null); }}>
+              {usarRespaldo ? t('auth2faUseApp') : t('auth2faUseBackup')}
             </button>
-          </form>
-        </div>
+            <button type="button" className="inline-flex min-h-10 items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" onClick={volver}>
+              <ArrowLeft size={15} aria-hidden="true" /> {t('authOtherAccount')}
+            </button>
+          </div>
+        </form>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout>
+      <AuthHeader titulo={t('authWelcomeBack')} subtitulo={t('authLoginSubtitle')} />
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {aviso && (
+          <AuthAlert tono={aviso.tono} className={aviso.tono === 'error' ? 'animate-shake' : ''}>
+            {aviso.texto}
+            {aviso.tono === 'aviso' && (
+              <> <Link to="/forgot-password" state={{ email: form.email }} className="font-semibold underline">{t('authForgotLink')}</Link></>
+            )}
+          </AuthAlert>
+        )}
+
+        <CampoTexto
+          name="email"
+          type="email"
+          label={t('authEmail')}
+          icono={Mail}
+          autoComplete="username"
+          inputMode="email"
+          placeholder={t('authEmailPlaceholder')}
+          value={form.email}
+          onChange={handleChange}
+          maxLength={191}
+          autoFocus={autoEnfocar && !form.email}
+          required
+        />
+
+        <CampoPassword
+          name="password"
+          label={t('authPassword')}
+          icono={LockKeyhole}
+          autoComplete="current-password"
+          value={form.password}
+          onChange={handleChange}
+          maxLength={200}
+          autoFocus={autoEnfocar && Boolean(form.email)}
+          required
+          extraLabel={(
+            <Link to="/forgot-password" state={{ email: form.email }} className="auth-link text-[0.8125rem]">
+              {t('authForgotLink')}
+            </Link>
+          )}
+        />
+
+        {recordarConfig.permitido && <label className="auth-check">
+          <input type="checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} />
+          <span className="text-sm">
+            <span className="block font-medium text-[var(--color-text)]">{t('authRememberMe')}</span>
+            <span className="block text-xs text-[var(--color-text-muted)]">{t('authRememberHint', { n: recordarConfig.dias })}</span>
+          </span>
+        </label>}
+
+        <BotonAuth cargando={cargando} textoCargando={t('authLoggingIn')}>
+          {t('authLogin')}
+        </BotonAuth>
+      </form>
+
+      <div className="mt-8 border-t border-[var(--color-border)] pt-6 text-center text-sm text-[var(--color-text-muted)]">
+        {registro === 'cerrado' ? (
+          <p>{t('authInviteOnly')}</p>
+        ) : (
+          <p>
+            {t('authNoAccount')}{' '}
+            <Link to="/registro" className="auth-link">{t('authRequestAccess')}</Link>
+          </p>
+        )}
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 

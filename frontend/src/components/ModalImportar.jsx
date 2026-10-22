@@ -1,8 +1,14 @@
 import { useRef, useState } from 'react';
 import { tareasService } from '../services/api';
+import { usePreferences } from '../context/PreferencesContext';
+import { useConfiguracion } from '../context/ConfiguracionContext';
+import { useTextoProyectos } from '../hooks/useTextoProyectos';
 import Modal from './Modal';
+import SelectorSimple from './SelectorSimple';
+import { ESTADOS_TAREA, PRIORIDADES_TAREA } from '../utils/estadosTarea';
 import {
   AlertTriangle,
+  ArrowDownToLine,
   Braces,
   CheckCircle2,
   Download,
@@ -18,45 +24,37 @@ import {
   XCircle,
 } from 'lucide-react';
 
+// El `accept` lleva las extensiones y tambien los tipos MIME: en Android, con
+// solo extensiones el selector a veces deja los archivos en gris.
 const FORMAT_INFO = {
   excel: {
     label: 'Excel',
     ext: '.xlsx,.xls',
-    columnas: [
-      { campo: 'numeroActividad', desc: 'Opcional. Entero para ordenar tareas secuenciales.' },
-      { campo: 'titulo', desc: 'Obligatorio. Nombre de la tarea.' },
-      { campo: 'descripcion', desc: 'Opcional. Contexto adicional.' },
-      { campo: 'estado', desc: 'PENDIENTE | EN_PROGRESO | HECHO (default: PENDIENTE)' },
-      { campo: 'prioridad', desc: 'BAJA | MEDIA | ALTA (default: MEDIA)' },
-      { campo: 'fechaInicio', desc: 'Opcional. Fecha de comienzo (YYYY-MM-DD)' },
-      { campo: 'venceEn', desc: 'Opcional. Fecha límite (YYYY-MM-DD)' },
-      { campo: 'asignadoEmail', desc: 'Opcional. Solo se usa si eliges "Según el archivo"' },
-    ],
+    accept: '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
   },
   json: {
     label: 'JSON',
     ext: '.json',
-    columnas: [
-      { campo: 'numeroActividad', desc: 'Opcional. Entero para ordenar tareas secuenciales.' },
-      { campo: 'titulo', desc: 'Obligatorio. Texto de la tarea.' },
-      { campo: 'descripcion', desc: 'Opcional.' },
-      { campo: 'estado', desc: '"PENDIENTE" | "EN_PROGRESO" | "HECHO"' },
-      { campo: 'prioridad', desc: '"BAJA" | "MEDIA" | "ALTA"' },
-      { campo: 'fechaInicio', desc: 'Opcional. "YYYY-MM-DD"' },
-      { campo: 'venceEn', desc: 'Opcional. "YYYY-MM-DD"' },
-      { campo: 'asignadoEmail', desc: 'Opcional. Solo se usa si eliges "Según el archivo"' },
-    ],
-  }
+    accept: '.json,application/json',
+  },
 };
 
+// Mismo tope que el backend (uploadImport.middleware): 4 MB. Antes aqui se
+// anunciaban 5 y un archivo de 4.5 MB fallaba sin explicacion clara.
+const MAXIMO_IMPORTAR_MB = 4;
+
 const MODOS = [
-  { key: 'yo', label: 'Para mí', icon: <User size={18} strokeWidth={2.5} />, desc: 'Todas las tareas quedan asignadas a ti' },
-  { key: 'miembro', label: 'Para un miembro', icon: <Users size={18} strokeWidth={2.5} />, desc: 'Elige quién será el responsable' },
-  { key: 'archivo', label: 'Según el archivo', icon: <FileText size={18} strokeWidth={2.5} />, desc: 'Usa la columna asignadoEmail del archivo' },
+  { key: 'yo', labelKey: 'imp_modoYo', descKey: 'imp_modoYoDesc', Icono: User },
+  { key: 'miembro', labelKey: 'imp_modoMiembro', descKey: 'imp_modoMiembroDesc', Icono: Users },
+  { key: 'archivo', labelKey: 'imp_modoArchivo', descKey: 'imp_modoArchivoDesc', Icono: FileText },
 ];
 
 const ESTADOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 const PRIORIDADES = ['BAJA', 'MEDIA', 'ALTA'];
+
+const formatSize = (bytes = 0) => (
+  bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`
+);
 
 const normalizarEstado = (value) => {
   const raw = String(value || '').trim().toUpperCase();
@@ -103,49 +101,73 @@ const normalizarFila = (fila = {}) => ({
   fechaInicio: fila.fechaInicio ?? '',
   venceEn: fila.venceEn ?? '',
   asignadoEmail: fila.asignadoEmail ?? '',
+  completadoEn: fila.completadoEn ?? '',
+  horaCompletado: fila.horaCompletado ?? '',
+  // El archivo trae cuando se hizo pero la fila no esta HECHO (solo lo sabe
+  // el servidor: el valor original puede ser un "Si" que aqui no se ve)
+  traeCierre: (fila.avisos || []).some((aviso) => aviso.startsWith('Trae fecha de completado')),
   omitida: !!fila.omitida,
 });
 
-const validarFilaPreview = (fila) => {
+// Aproximado en hora del navegador; la cuenta exacta (zona de la empresa) la
+// hace el servidor al guardar.
+const instanteCompletado = (fila) => new Date(`${fila.completadoEn}T${fila.horaCompletado || '12:00'}`).getTime();
+
+// Una fecha anterior al 2000 en un archivo de tareas es casi siempre un error
+// de formato (Excel que exporta "1900-01-00", un numero suelto...). Antes
+// pasaba como valida y se guardaba una tarea en el siglo pasado.
+const ANIO_MINIMO = 2000;
+const esFechaRazonable = (valor) => {
+  const fecha = new Date(valor);
+  return !Number.isNaN(fecha.getTime()) && fecha.getFullYear() >= ANIO_MINIMO;
+};
+
+// `exigirFecha` refleja la regla de la instalacion: el backend rechaza esas
+// filas. `estadoPorDefecto` es el que toma una fila sin estado. Devuelve
+// claves de textosProyectos; el texto se resuelve al pintar.
+const validarFilaPreview = (fila, exigirFecha = false, estadoPorDefecto = 'PENDIENTE') => {
   const errores = [];
-  if (!String(fila.titulo || '').trim()) errores.push('El título es obligatorio.');
+  if (!String(fila.titulo || '').trim()) errores.push('imp_errTitulo');
+  if (exigirFecha && !fila.venceEn) errores.push('imp_errFecha');
 
   if (fila.numeroActividad !== '' && fila.numeroActividad !== null && fila.numeroActividad !== undefined) {
     const numero = Number(fila.numeroActividad);
-    if (!Number.isInteger(numero) || numero <= 0) errores.push('El número de actividad debe ser un entero mayor a 0.');
+    if (!Number.isInteger(numero) || numero <= 0) errores.push('imp_errNumero');
   }
 
-  if (fila.estado && !ESTADOS.includes(normalizarEstado(fila.estado))) {
-    errores.push('El estado no es válido.');
-  }
+  if (fila.estado && !ESTADOS.includes(normalizarEstado(fila.estado))) errores.push('imp_errEstado');
+  if (fila.prioridad && !PRIORIDADES.includes(normalizarPrioridad(fila.prioridad))) errores.push('imp_errPrioridad');
+  if (fila.fechaInicio && !esFechaRazonable(fila.fechaInicio)) errores.push('imp_errInicio');
+  if (fila.venceEn && !esFechaRazonable(fila.venceEn)) errores.push('imp_errLimite');
 
-  if (fila.prioridad && !PRIORIDADES.includes(normalizarPrioridad(fila.prioridad))) {
-    errores.push('La prioridad no es válida.');
-  }
-
-  if (fila.fechaInicio && Number.isNaN(new Date(fila.fechaInicio).getTime())) {
-    errores.push('La fecha de inicio no es válida.');
-  }
-
-  if (fila.venceEn && Number.isNaN(new Date(fila.venceEn).getTime())) {
-    errores.push('La fecha límite no es válida.');
+  // La fecha y hora de cierre solo cuentan en tareas hechas (y son opcionales)
+  if (normalizarEstado(fila.estado || estadoPorDefecto) === 'HECHO') {
+    if (fila.completadoEn && !esFechaRazonable(fila.completadoEn)) {
+      errores.push('imp_errCompletado');
+    } else if (fila.horaCompletado && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(fila.horaCompletado)) {
+      errores.push('imp_errHora');
+    } else if (fila.horaCompletado && !fila.completadoEn) {
+      errores.push('imp_errHoraSinFecha');
+    } else if (fila.completadoEn && instanteCompletado(fila) > Date.now()) {
+      errores.push('imp_errFutura');
+    } else if (fila.completadoEn && fila.fechaInicio && fila.completadoEn < fila.fechaInicio) {
+      errores.push('imp_errAnterior');
+    }
   }
 
   return errores;
 };
 
-const getFilaAsignacion = (fila, modo, miembroId, usuarios = [], usuarioActual) => {
-  if (modo === 'yo') return usuarioActual?.nombre ? `${usuarioActual.nombre} (yo)` : 'Tú';
-  if (modo === 'miembro') {
-    const miembro = usuarios.find((u) => String(u.id) === String(miembroId)) || (usuarioActual && String(usuarioActual.id) === String(miembroId) ? usuarioActual : null);
-    return miembro ? miembro.nombre : 'Sin responsable';
-  }
-  if (!fila.asignadoEmail) return 'Sin asignar';
-  const miembro = usuarios.find((u) => String(u.email || '').toLowerCase() === String(fila.asignadoEmail || '').toLowerCase());
-  return miembro ? miembro.nombre : 'Correo no encontrado';
-};
+const correoEsDeMiembro = (correo, usuarios) => usuarios.some(
+  (u) => String(u.email || '').toLowerCase() === String(correo || '').toLowerCase(),
+);
 
 const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onImportado }) => {
+  const { t } = usePreferences();
+  const tx = useTextoProyectos();
+  // Sin estado o prioridad en la fila, el backend usa los de la configuracion:
+  // la vista previa muestra esos mismos.
+  const { reglasTareas } = useConfiguracion();
   const [tab, setTab] = useState('excel');
   const [archivo, setArchivo] = useState(null);
   const [cargando, setCargando] = useState(false);
@@ -156,19 +178,35 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
   const [miembroId, setMiembroId] = useState('');
   const [previewRows, setPreviewRows] = useState([]);
   const [previewArchivo, setPreviewArchivo] = useState('');
+  const [arrastrando, setArrastrando] = useState(false);
   const inputRef = useRef(null);
 
   const fmt = FORMAT_INFO[tab];
   const previewActiva = previewRows.length > 0 && !resultado;
   const filasActivas = previewRows.filter((fila) => !fila.omitida);
-  const filasInvalidas = filasActivas.filter((fila) => validarFilaPreview(fila).length > 0);
-  const filasConAvisos = filasActivas.filter((fila) => modo === 'archivo' && fila.asignadoEmail && !usuarios.some((u) => String(u.email || '').toLowerCase() === String(fila.asignadoEmail || '').toLowerCase()));
+  const filasInvalidas = filasActivas.filter((fila) => validarFilaPreview(fila, reglasTareas.exigirFechaLimite, reglasTareas.estadoInicial).length > 0);
+  const filasConAvisos = filasActivas.filter((fila) => modo === 'archivo' && fila.asignadoEmail && !correoEsDeMiembro(fila.asignadoEmail, usuarios));
+
+  const nombreAsignacion = (fila) => {
+    if (modo === 'yo') return usuarioActual?.nombre ? tx('imp_yo', { nombre: usuarioActual.nombre }) : tx('imp_tu');
+    if (modo === 'miembro') {
+      const miembro = usuarios.find((u) => String(u.id) === String(miembroId))
+        || (usuarioActual && String(usuarioActual.id) === String(miembroId) ? usuarioActual : null);
+      return miembro ? miembro.nombre : tx('imp_sinResponsable');
+    }
+    if (!fila.asignadoEmail) return tx('imp_sinAsignar');
+    const miembro = usuarios.find((u) => String(u.email || '').toLowerCase() === String(fila.asignadoEmail).toLowerCase());
+    return miembro ? miembro.nombre : tx('imp_correoNoEncontrado');
+  };
 
   const validarArchivo = (file, tipoActual) => {
     if (!file) return null;
     const nombre = String(file.name || '').toLowerCase();
-    if (tipoActual === 'json' && !nombre.endsWith('.json')) return 'El archivo seleccionado no es un JSON válido.';
-    if (tipoActual === 'excel' && !(nombre.endsWith('.xlsx') || nombre.endsWith('.xls'))) return 'El archivo seleccionado no es un Excel válido.';
+    if (tipoActual === 'json' && !nombre.endsWith('.json')) return tx('imp_noJson');
+    if (tipoActual === 'excel' && !(nombre.endsWith('.xlsx') || nombre.endsWith('.xls'))) return tx('imp_noExcel');
+    if (file.size > MAXIMO_IMPORTAR_MB * 1024 * 1024) {
+      return tx('imp_muyGrande', { size: formatSize(file.size), max: MAXIMO_IMPORTAR_MB });
+    }
     return null;
   };
 
@@ -186,8 +224,9 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
     resetFlujo();
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0] || null;
+  /** Mismo camino para el selector y para soltar un archivo encima. */
+  const elegirArchivo = (file) => {
+    if (!file) return;
     const errorArchivo = validarArchivo(file, tab);
     if (errorArchivo) {
       resetFlujo();
@@ -203,11 +242,11 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 
   const handlePreview = async () => {
     if (!archivo) {
-      setErrorGlobal('Selecciona un archivo antes de revisar.');
+      setErrorGlobal(tx('imp_faltaArchivo'));
       return;
     }
     if (modo === 'miembro' && !miembroId) {
-      setErrorGlobal('Selecciona un miembro.');
+      setErrorGlobal(tx('imp_faltaMiembro'));
       return;
     }
 
@@ -229,15 +268,15 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 
   const handleGuardarPreview = async () => {
     if (filasActivas.length === 0) {
-      setErrorGlobal('No hay filas activas para guardar.');
+      setErrorGlobal(tx('imp_sinFilas'));
       return;
     }
     if (filasInvalidas.length > 0) {
-      setErrorGlobal('Corrige las filas marcadas antes de guardar.');
+      setErrorGlobal(tx('imp_corrige'));
       return;
     }
     if (modo === 'miembro' && !miembroId) {
-      setErrorGlobal('Selecciona un miembro.');
+      setErrorGlobal(tx('imp_faltaMiembro'));
       return;
     }
 
@@ -254,6 +293,8 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
         fechaInicio: fila.fechaInicio,
         venceEn: fila.venceEn,
         asignadoEmail: fila.asignadoEmail,
+        completadoEn: fila.completadoEn,
+        horaCompletado: fila.horaCompletado,
       }));
       const asignadoId = modo === 'miembro' ? miembroId : null;
       const data = await tareasService.confirmarImportacion(proyectoId, payload, modo, asignadoId);
@@ -267,7 +308,16 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
     }
   };
 
-  const handleCerrar = () => onClose();
+  // La plantilla se descarga con la cabecera Authorization (fetch + blob), asi
+  // que un fallo del servidor llega aqui en vez de abrir una pestaña en blanco.
+  const handleDescargarPlantilla = async () => {
+    setErrorGlobal('');
+    try {
+      await tareasService.descargarPlantilla(tab === 'excel' ? 'excel' : 'json');
+    } catch (err) {
+      setErrorGlobal(err.message || t('downloadFailed'));
+    }
+  };
 
   const updateFila = (filaIndex, field, value) => {
     setPreviewRows((prev) => prev.map((fila, index) => (
@@ -285,38 +335,64 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
     )));
   };
 
+  // Los botones van en el pie fijo de la ventana: con la vista previa larga
+  // quedaban al final del scroll y en el movil habia que bajar hasta abajo.
+  const pie = (
+    <div className="imp-pie">
+      <button type="button" onClick={onClose} className="det-control det-boton">
+        {t('close')}
+      </button>
+
+      {previewActiva && (
+        <button
+          type="button"
+          onClick={() => { setPreviewRows([]); setErrorGlobal(''); setResultado(null); }}
+          className="det-control det-boton"
+        >
+          {tx('imp_cambiarArchivo')}
+        </button>
+      )}
+
+      {!previewActiva && !resultado && (
+        <button type="button" onClick={handlePreview} disabled={cargando || !archivo} className="btn-primary imp-principal">
+          {cargando ? <><Loader2 size={16} className="animate-spin" /> {tx('imp_revisando')}</> : <><Info size={16} /> {tx('imp_revisar')}</>}
+        </button>
+      )}
+
+      {previewActiva && (
+        <button
+          type="button"
+          onClick={handleGuardarPreview}
+          disabled={guardando || filasActivas.length === 0 || filasInvalidas.length > 0}
+          className="btn-primary imp-principal"
+        >
+          {guardando ? <><Loader2 size={16} className="animate-spin" /> {t('saving')}</> : <><ArrowDownToLine size={16} /> {tx('imp_guardar')}</>}
+        </button>
+      )}
+
+      {resultado && (
+        <button type="button" onClick={resetFlujo} className="btn-primary imp-principal">
+          <RotateCcw size={16} /> {tx('imp_otro')}
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <Modal
       open
-      onClose={handleCerrar}
+      onClose={onClose}
       maxWidth="1100px"
-      title={(
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <Download size={22} strokeWidth={2.5} color="var(--color-primary)" />
-          Importar tareas
-        </span>
-      )}
-      subtitle="Revisa el archivo antes de guardar y corrige cualquier fila aquí mismo."
+      title={tx('imp_titulo')}
+      subtitle={tx('imp_subtitulo')}
+      footer={pie}
     >
-
         {!resultado && (
-          <div style={{ marginBottom: '1.25rem' }}>
-            <p style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--color-text-muted)', marginBottom: '0.6rem' }}>
-              ¿A quién asignar las tareas?
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <fieldset className="mb-5 min-w-0">
+            <legend className="mb-2 text-[13px] font-medium text-[var(--color-text-dim)]">{tx('imp_aQuien')}</legend>
+            <div className="flex flex-col gap-1.5">
               {MODOS.map((m) => (
-                <label
-                  key={m.key}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.75rem',
-                    padding: '0.65rem 0.9rem',
-                    border: `1.5px solid ${modo === m.key ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                    borderRadius: '0.6rem', cursor: 'pointer',
-                    background: modo === m.key ? 'rgba(99,102,241,0.08)' : 'transparent',
-                    transition: 'all 0.15s',
-                  }}
-                >
+                <label key={m.key} className="imp-modo" data-activo={modo === m.key || undefined}>
                   <input
                     type="radio"
                     name="modoAsignacion"
@@ -325,64 +401,52 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
                     onChange={() => {
                       setModo(m.key);
                       setPreviewRows([]);
+                      setErrorGlobal('');
                       setResultado(null);
                     }}
-                    style={{ accentColor: 'var(--color-primary)' }}
+                    className="accent-[var(--color-primary)]"
                   />
-                  <div style={{ color: modo === m.key ? 'var(--color-primary)' : 'var(--color-text-muted)', display: 'flex' }}>{m.icon}</div>
-                  <div>
-                    <div style={{ fontWeight: 500, fontSize: '0.88rem' }}>{m.label}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{m.desc}</div>
-                  </div>
+                  <m.Icono size={18} className="imp-modo-icono shrink-0" aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="block text-[13.5px] font-medium text-[var(--color-text)]">{tx(m.labelKey)}</span>
+                    <span className="block text-[12px] text-[var(--color-text-muted)]">{tx(m.descKey)}</span>
+                  </span>
                 </label>
               ))}
             </div>
 
             {modo === 'miembro' && (
-              <div style={{ marginTop: '0.75rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--color-text-muted)' }}>
-                  Miembro responsable:
-                </label>
-                <select
-                  value={miembroId}
-                  onChange={(e) => setMiembroId(e.target.value)}
-                  className="form-input form-select"
-                  style={{ width: '100%' }}
-                >
-                  <option value="">— Selecciona un miembro —</option>
-                  {usuarioActual && <option value={usuarioActual.id}>{usuarioActual.nombre} (yo)</option>}
-                  {usuarios.filter((u) => u.id !== usuarioActual?.id).map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nombre} — {u.email}
-                    </option>
-                  ))}
-                </select>
+              <div className="mt-3 space-y-1.5">
+                <span className="form-label block">{tx('imp_miembro')}</span>
+                <SelectorSimple
+                  aria-label={tx('imp_miembro')}
+                  valor={miembroId}
+                  onCambio={setMiembroId}
+                  placeholder={tx('imp_miembroPlaceholder')}
+                  opciones={[
+                    ...(usuarioActual ? [{ valor: String(usuarioActual.id), etiqueta: tx('imp_yo', { nombre: usuarioActual.nombre }) }] : []),
+                    ...usuarios.filter((u) => u.id !== usuarioActual?.id).map((u) => ({
+                      valor: String(u.id),
+                      etiqueta: `${u.nombre} — ${u.email}`,
+                    })),
+                  ]}
+                />
               </div>
             )}
-          </div>
+          </fieldset>
         )}
 
         {!resultado && (
-          <div style={{
-            display: 'flex', gap: '0.25rem', marginBottom: '1rem',
-            background: 'var(--color-surface-3)', borderRadius: '0.6rem',
-            padding: '0.25rem', border: '1px solid var(--color-border)',
-          }}>
-            {['excel', 'json'].map((t) => (
+          <div role="tablist" aria-label={tx('imp_formatoAria')} className="imp-formatos mb-4">
+            {['excel', 'json'].map((formato) => (
               <button
-                key={t}
-                onClick={() => handleTabChange(t)}
-                style={{
-                  flex: 1, padding: '0.5rem 0.75rem',
-                  borderRadius: '0.4rem', border: 'none',
-                  cursor: 'pointer', fontWeight: tab === t ? '700' : '400',
-                  fontSize: '0.9rem', transition: 'all 0.15s',
-                  background: tab === t ? 'var(--color-primary)' : 'transparent',
-                  color: tab === t ? '#fff' : 'var(--color-text-muted)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                }}
+                key={formato}
+                type="button"
+                role="tab"
+                aria-selected={tab === formato}
+                onClick={() => handleTabChange(formato)}
               >
-                {t === 'excel' ? <FileSpreadsheet size={16} strokeWidth={2.5} /> : <Braces size={16} strokeWidth={2.5} />} {FORMAT_INFO[t].label}
+                {formato === 'excel' ? <FileSpreadsheet size={16} /> : <Braces size={16} />} {FORMAT_INFO[formato].label}
               </button>
             ))}
           </div>
@@ -390,212 +454,193 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
 
         {!previewActiva && !resultado && (
           <>
-            <button
-              onClick={() => tareasService.descargarPlantilla(tab === 'excel' ? 'excel' : 'json')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                width: '100%', padding: '0.65rem 1rem', marginBottom: '1rem',
-                background: 'transparent', border: '1px dashed var(--color-border)',
-                borderRadius: '0.6rem', color: 'var(--color-text-muted)', cursor: 'pointer',
-                fontSize: '0.85rem', fontWeight: 500
-              }}
-            >
-              <Download size={14} /> Descargar plantilla de ejemplo ({fmt.label})
+            <button type="button" onClick={handleDescargarPlantilla} className="imp-plantilla mb-4">
+              <Download size={14} /> {tx('imp_descargarPlantilla', { formato: fmt.label })}
             </button>
 
-            <div style={{ marginBottom: '1rem', padding: '0.9rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', background: 'rgba(148,163,184,0.08)' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: '0.45rem' }}>
-                Campos esperados
-              </div>
-              <div style={{ display: 'grid', gap: '0.35rem' }}>
-                {fmt.columnas.map((col) => (
-                  <div key={col.campo} style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                    <strong style={{ color: 'var(--color-text)' }}>{col.campo}</strong>: {col.desc}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-muted)' }}>
-                Seleccionar archivo {fmt.label}:
-              </label>
-              <div
-                style={{
-                  border: `2px dashed ${archivo ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                  borderRadius: '0.75rem', padding: '1.25rem', textAlign: 'center',
-                  cursor: 'pointer', transition: 'border-color 0.15s',
-                  background: archivo ? 'rgba(99,102,241,0.05)' : 'transparent',
-                }}
+            <div className="mb-5">
+              <span className="form-label mb-1.5 block">{tx('imp_seleccionar', { formato: fmt.label })}</span>
+              {/* Boton real: la zona se alcanza con el teclado y en el movil
+                  abre el selector de archivos al tocarla. */}
+              <button
+                type="button"
+                className="imp-soltar"
+                data-con-archivo={archivo ? '' : undefined}
+                data-arrastrando={arrastrando || undefined}
                 onClick={() => inputRef.current?.click()}
-                onDragOver={(e) => e.preventDefault()}
+                onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+                onDragLeave={() => setArrastrando(false)}
                 onDrop={(e) => {
                   e.preventDefault();
-                  const file = e.dataTransfer.files?.[0];
-                  const errorArchivo = validarArchivo(file, tab);
-                  if (errorArchivo) {
-                    resetFlujo();
-                    setErrorGlobal(errorArchivo);
-                    return;
-                  }
-                  setArchivo(file);
-                  setErrorGlobal('');
+                  setArrastrando(false);
+                  elegirArchivo(e.dataTransfer.files?.[0]);
                 }}
               >
-                <input ref={inputRef} type="file" accept={fmt.ext} style={{ display: 'none' }} onChange={handleFileChange} />
                 {archivo ? (
-                  <div>
-                    <div style={{ color: 'var(--color-primary)', display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
-                      <File size={32} />
-                    </div>
-                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{archivo.name}</div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: '0.2rem' }}>
-                      {(archivo.size / 1024).toFixed(1)} KB
-                    </div>
-                  </div>
+                  <>
+                    <File size={30} className="text-[var(--color-primary)]" aria-hidden="true" />
+                    <span className="max-w-full break-all text-[14px] font-medium text-[var(--color-text)]">{archivo.name}</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">{formatSize(archivo.size)}</span>
+                  </>
                 ) : (
-                  <div>
-                    <div style={{ color: 'var(--color-text-dim)', display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                      <UploadCloud size={40} />
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>
-                      Arrastra tu archivo aquí o <span style={{ color: 'var(--color-primary)' }}>haz clic</span>
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
-                      {fmt.ext} · Máximo 5 MB
-                    </div>
-                  </div>
+                  <>
+                    <UploadCloud size={36} className="text-[var(--color-text-dim)]" aria-hidden="true" />
+                    <span className="text-[14px] font-semibold text-[var(--color-text)]">{tx('imp_elegir')}</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">{tx('imp_limite', { ext: fmt.ext, max: MAXIMO_IMPORTAR_MB })}</span>
+                  </>
                 )}
-              </div>
+              </button>
+              <input
+                ref={inputRef}
+                type="file"
+                accept={fmt.accept}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(e) => {
+                  elegirArchivo(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
             </div>
           </>
         )}
 
         {errorGlobal && (
-          <div style={{
-            background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-            borderRadius: '0.6rem', padding: '0.75rem 1rem', marginBottom: '1rem',
-            color: '#f87171', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
-          }}>
-            <XCircle size={16} /> {errorGlobal}
+          <div className="alert-error mb-4 text-[13.5px]" role="alert">
+            <XCircle size={16} className="shrink-0" /> {errorGlobal}
           </div>
         )}
 
         {previewActiva && (
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: '1rem', fontWeight: 500 }}>Vista previa de importación</div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>{previewArchivo}</div>
+          <div className="mb-2">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium text-[var(--color-text)]">{tx('imp_vistaPrevia')}</p>
+                <p className="break-all text-[12.5px] text-[var(--color-text-muted)]">{previewArchivo}</p>
               </div>
-              <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(59,130,246,0.12)', color: '#2563eb', fontSize: '0.78rem', fontWeight: 500 }}>
-                  {filasActivas.length} activas
-                </div>
-                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', fontSize: '0.78rem', fontWeight: 500 }}>
-                  {filasInvalidas.length} con error
-                </div>
-                <div style={{ padding: '0.55rem 0.8rem', borderRadius: '999px', background: 'rgba(245,158,11,0.12)', color: '#d97706', fontSize: '0.78rem', fontWeight: 500 }}>
-                  {filasConAvisos.length} con aviso
-                </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="badge-info">{tx('imp_activas', { n: filasActivas.length })}</span>
+                <span className="badge-danger">{tx('imp_conError', { n: filasInvalidas.length })}</span>
+                <span className="badge-warning">{tx('imp_conAviso', { n: filasConAvisos.length })}</span>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gap: '0.85rem' }}>
+            <div className="grid gap-3">
               {previewRows.map((fila, index) => {
-                const errores = fila.omitida ? [] : validarFilaPreview(fila);
-                const asignacion = getFilaAsignacion(fila, modo, miembroId, usuarios, usuarioActual);
+                const errores = fila.omitida ? [] : validarFilaPreview(fila, reglasTareas.exigirFechaLimite, reglasTareas.estadoInicial);
+                const estadoFila = fila.estado || reglasTareas.estadoInicial;
+                const avisoCorreo = !fila.omitida && modo === 'archivo' && fila.asignadoEmail && !correoEsDeMiembro(fila.asignadoEmail, usuarios);
 
                 return (
                   <div
                     key={`fila-${fila.fila}-${index}`}
-                    style={{
-                      border: `1px solid ${fila.omitida ? 'rgba(148,163,184,0.3)' : errores.length ? 'rgba(239,68,68,0.35)' : 'var(--color-border)'}`,
-                      borderRadius: '1rem',
-                      background: fila.omitida ? 'rgba(148,163,184,0.07)' : 'var(--color-surface)',
-                      padding: '1rem',
-                    }}
+                    className="imp-fila"
+                    data-omitida={fila.omitida || undefined}
+                    data-error={errores.length > 0 || undefined}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.9rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <div>
-                        <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--color-text)' }}>Fila {fila.fila}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Asignación final: {asignacion}</div>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-[var(--color-text)]">{tx('imp_fila', { n: fila.fila })}</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)]">{tx('imp_asignacion', { nombre: nombreAsignacion(fila) })}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => updateFila(index, 'omitida', !fila.omitida)}
-                        style={{
-                          border: '1px solid var(--color-border)',
-                          background: fila.omitida ? 'rgba(16,185,129,0.08)' : 'transparent',
-                          color: fila.omitida ? '#059669' : 'var(--color-text-muted)',
-                          borderRadius: '999px',
-                          padding: '0.45rem 0.8rem',
-                          fontSize: '0.75rem',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                        }}
+                        aria-pressed={fila.omitida}
+                        className="det-control det-boton"
                       >
-                        {fila.omitida ? 'Reactivar fila' : 'Omitir fila'}
+                        {fila.omitida ? tx('imp_reactivar') : tx('imp_omitir')}
                       </button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                      <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Número</span>
-                        <input disabled={fila.omitida} value={fila.numeroActividad} onChange={(e) => updateFila(index, 'numeroActividad', e.target.value)} className="form-input" type="number" min="1" />
+                    {/* Una columna en el movil, dos en tablet y cuatro en
+                        escritorio. Antes era `auto-fit` con campos que ocupaban
+                        dos columnas, y en un movil la rejilla se salia de la
+                        ventana por la derecha. */}
+                    <div className="imp-campos">
+                      <label className="imp-campo">
+                        <span>{tx('imp_colNumero')}</span>
+                        <input disabled={fila.omitida} value={fila.numeroActividad} onChange={(e) => updateFila(index, 'numeroActividad', e.target.value)} className="form-input" type="number" min="1" inputMode="numeric" />
                       </label>
-                      <label style={{ display: 'grid', gap: '0.35rem', gridColumn: 'span 2' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Título</span>
+                      <label className="imp-campo imp-campo-ancho">
+                        <span>{tx('imp_colTitulo')}</span>
                         <input disabled={fila.omitida} value={fila.titulo} onChange={(e) => updateFila(index, 'titulo', e.target.value)} className="form-input" />
                       </label>
-                      <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Estado</span>
-                        <select disabled={fila.omitida} value={fila.estado || 'PENDIENTE'} onChange={(e) => updateFila(index, 'estado', e.target.value)} className="form-input form-select">
-                          {ESTADOS.map((estado) => <option key={estado} value={estado}>{estado}</option>)}
-                        </select>
+                      <div className="imp-campo">
+                        <span>{tx('imp_colEstado')}</span>
+                        <SelectorSimple
+                          aria-label={tx('imp_estadoFila', { n: fila.fila })}
+                          disabled={fila.omitida}
+                          valor={estadoFila}
+                          onCambio={(v) => updateFila(index, 'estado', v)}
+                          opciones={ESTADOS_TAREA.map((e) => ({ valor: e.value, etiqueta: t(e.labelKey) }))}
+                        />
+                      </div>
+                      <div className="imp-campo">
+                        <span>{tx('imp_colPrioridad')}</span>
+                        <SelectorSimple
+                          aria-label={tx('imp_prioridadFila', { n: fila.fila })}
+                          disabled={fila.omitida}
+                          valor={fila.prioridad || reglasTareas.prioridadDefecto}
+                          onCambio={(v) => updateFila(index, 'prioridad', v)}
+                          opciones={PRIORIDADES_TAREA.map((p) => ({ valor: p.value, etiqueta: t(p.labelKey) }))}
+                        />
+                      </div>
+                      <label className="imp-campo">
+                        <span>{tx('imp_colInicio')}</span>
+                        <input disabled={fila.omitida} value={fila.fechaInicio} onChange={(e) => updateFila(index, 'fechaInicio', e.target.value)} className="form-input" type="date" min={`${ANIO_MINIMO}-01-01`} aria-invalid={Boolean(fila.fechaInicio) && !esFechaRazonable(fila.fechaInicio)} />
                       </label>
-                      <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Prioridad</span>
-                        <select disabled={fila.omitida} value={fila.prioridad || 'MEDIA'} onChange={(e) => updateFila(index, 'prioridad', e.target.value)} className="form-input form-select">
-                          {PRIORIDADES.map((prioridad) => <option key={prioridad} value={prioridad}>{prioridad}</option>)}
-                        </select>
+                      <label className="imp-campo">
+                        <span>{tx('imp_colLimite')}</span>
+                        <input disabled={fila.omitida} value={fila.venceEn} onChange={(e) => updateFila(index, 'venceEn', e.target.value)} className="form-input" type="date" min={`${ANIO_MINIMO}-01-01`} aria-invalid={Boolean(fila.venceEn) && !esFechaRazonable(fila.venceEn)} />
                       </label>
-                      <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Inicio</span>
-                        <input disabled={fila.omitida} value={fila.fechaInicio} onChange={(e) => updateFila(index, 'fechaInicio', e.target.value)} className="form-input" type="date" />
+                      {/* Cuando se hizo: solo en tareas hechas, y opcional. Sin
+                          fecha se usa la limite (si ya paso) o el momento de
+                          importar; sin hora, el mediodia. */}
+                      {estadoFila === 'HECHO' && (
+                        <>
+                          <label className="imp-campo">
+                            <span>{tx('imp_colCompletada')}</span>
+                            <input disabled={fila.omitida} value={fila.completadoEn} onChange={(e) => updateFila(index, 'completadoEn', e.target.value)} className="form-input" type="date" min={`${ANIO_MINIMO}-01-01`} aria-invalid={Boolean(fila.completadoEn) && !esFechaRazonable(fila.completadoEn)} />
+                          </label>
+                          <label className="imp-campo">
+                            <span>{tx('imp_colHora')}</span>
+                            <input disabled={fila.omitida} value={fila.horaCompletado} onChange={(e) => updateFila(index, 'horaCompletado', e.target.value)} className="form-input" type="time" />
+                          </label>
+                        </>
+                      )}
+                      <label className="imp-campo imp-campo-ancho">
+                        <span>{tx('imp_colDescripcion')}</span>
+                        <textarea disabled={fila.omitida} value={fila.descripcion} onChange={(e) => updateFila(index, 'descripcion', e.target.value)} className="form-input resize-y" rows="2" />
                       </label>
-                      <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Límite</span>
-                        <input disabled={fila.omitida} value={fila.venceEn} onChange={(e) => updateFila(index, 'venceEn', e.target.value)} className="form-input" type="date" />
-                      </label>
-                      <label style={{ display: 'grid', gap: '0.35rem', gridColumn: 'span 2' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Descripción</span>
-                        <textarea disabled={fila.omitida} value={fila.descripcion} onChange={(e) => updateFila(index, 'descripcion', e.target.value)} className="form-input" rows="2" style={{ resize: 'vertical' }} />
-                      </label>
-                      <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Correo asignado</span>
+                      <label className="imp-campo">
+                        <span>{tx('imp_colCorreo')}</span>
                         <input
                           disabled={fila.omitida || modo !== 'archivo'}
                           value={fila.asignadoEmail}
                           onChange={(e) => updateFila(index, 'asignadoEmail', e.target.value)}
                           className="form-input"
-                          placeholder={modo === 'archivo' ? 'correo@empresa.com' : 'Lo define el modo de asignación'}
+                          type="email"
+                          inputMode="email"
+                          autoCapitalize="none"
+                          placeholder={modo === 'archivo' ? tx('imp_correoPlaceholder') : tx('imp_correoPorModo')}
                         />
                       </label>
                     </div>
 
                     {!fila.omitida && errores.length > 0 && (
-                      <div style={{ padding: '0.75rem 0.85rem', borderRadius: '0.75rem', background: 'rgba(239,68,68,0.08)', color: '#dc2626', display: 'grid', gap: '0.3rem' }}>
-                        {errores.map((error) => (
-                          <div key={error} style={{ fontSize: '0.78rem', fontWeight: 500 }}>{error}</div>
-                        ))}
-                      </div>
+                      <ul className="imp-aviso imp-aviso-error mt-3">
+                        {errores.map((clave) => <li key={clave}>{tx(clave)}</li>)}
+                      </ul>
                     )}
 
-                    {!fila.omitida && modo === 'archivo' && fila.asignadoEmail && !usuarios.some((u) => String(u.email || '').toLowerCase() === String(fila.asignadoEmail || '').toLowerCase()) && (
-                      <div style={{ marginTop: '0.65rem', padding: '0.75rem 0.85rem', borderRadius: '0.75rem', background: 'rgba(245,158,11,0.08)', color: '#b45309', fontSize: '0.78rem', fontWeight: 500 }}>
-                        El correo no coincide con un miembro del proyecto. Se usará la asignación por defecto si existe; si no, quedará sin asignar.
-                      </div>
+                    {!fila.omitida && fila.traeCierre && estadoFila !== 'HECHO' && (
+                      <p className="imp-aviso imp-aviso-alerta mt-2.5">{tx('imp_avisoCierre')}</p>
+                    )}
+
+                    {avisoCorreo && (
+                      <p className="imp-aviso imp-aviso-alerta mt-2.5">{tx('imp_avisoCorreo')}</p>
                     )}
                   </div>
                 );
@@ -605,104 +650,31 @@ const ModalImportar = ({ proyectoId, usuarios = [], usuarioActual, onClose, onIm
         )}
 
         {resultado && (
-          <div style={{ marginBottom: '1.25rem' }}>
+          <div className="space-y-3">
             {resultado.creadas > 0 && (
-              <div style={{
-                background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-                borderRadius: '0.6rem', padding: '0.75rem 1rem', marginBottom: '0.75rem',
-                color: '#34d399', fontSize: '0.95rem', fontWeight: 500,
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-              }}>
-                <CheckCircle2 size={18} /> {resultado.creadas} tarea{resultado.creadas !== 1 ? 's' : ''} creada{resultado.creadas !== 1 ? 's' : ''} correctamente
+              <div className="alert-success text-[14px] font-medium">
+                <CheckCircle2 size={18} className="shrink-0" />
+                {resultado.creadas === 1 ? tx('imp_creadaUna') : tx('imp_creadas', { n: resultado.creadas })}
               </div>
             )}
 
             {resultado.errores?.length > 0 && (
-              <div style={{
-                background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)',
-                borderRadius: '0.6rem', padding: '0.75rem 1rem',
-              }}>
-                <p style={{ fontSize: '0.82rem', fontWeight: 400, color: '#f59e0b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <AlertTriangle size={14} /> {resultado.errores.length} fila{resultado.errores.length !== 1 ? 's' : ''} no se pudo guardar:
+              <div className="imp-aviso imp-aviso-alerta">
+                <p className="mb-2 flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  {resultado.errores.length === 1 ? tx('imp_errorUna') : tx('imp_errores', { n: resultado.errores.length })}
                 </p>
-                <div style={{ display: 'grid', gap: '0.35rem' }}>
+                <ul className="grid gap-1.5">
                   {resultado.errores.map((error, i) => (
-                    <div key={`${error.fila}-${i}`} style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-                      <strong style={{ color: '#f59e0b' }}>Fila {error.fila}:</strong> {error.razon}
-                    </div>
+                    <li key={`${error.fila}-${i}`} className="text-[var(--color-text-dim)]">
+                      <strong className="text-[var(--badge-warning-fg)]">{tx('imp_fila', { n: error.fila })}:</strong> {error.razon}
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
           </div>
         )}
-
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-          <button
-            onClick={handleCerrar}
-            style={{
-              flex: 1, padding: '0.75rem',
-              background: 'transparent', border: '1px solid var(--color-border)',
-              borderRadius: '0.75rem', color: 'var(--color-text-muted)',
-              cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem'
-            }}
-          >
-            Cerrar
-          </button>
-
-          {previewActiva && (
-            <button
-              onClick={() => {
-                setPreviewRows([]);
-                setErrorGlobal('');
-                setResultado(null);
-              }}
-              style={{
-                flex: 1, padding: '0.75rem',
-                background: 'transparent', border: '1px solid var(--color-border)',
-                borderRadius: '0.75rem', color: 'var(--color-text-muted)',
-                cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem'
-              }}
-            >
-              Cambiar archivo
-            </button>
-          )}
-
-          {!previewActiva && !resultado && (
-            <button
-              onClick={handlePreview}
-              disabled={cargando || !archivo}
-              className="btn-primary"
-              style={{ flex: 1.5, padding: '0.75rem', fontSize: '0.9rem', opacity: !archivo ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-            >
-              {cargando ? <><Loader2 size={16} className="animate-spin" /> Revisando...</> : <><Info size={16} /> Revisar archivo</>}
-            </button>
-          )}
-
-          {previewActiva && (
-            <button
-              onClick={handleGuardarPreview}
-              disabled={guardando || filasActivas.length === 0 || filasInvalidas.length > 0}
-              className="btn-primary"
-              style={{ flex: 1.5, padding: '0.75rem', fontSize: '0.9rem', opacity: filasActivas.length === 0 || filasInvalidas.length > 0 ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-            >
-              {guardando ? <><Loader2 size={16} className="animate-spin" /> Guardando...</> : <><Download size={16} strokeWidth={2.5} /> Guardar tareas</>}
-            </button>
-          )}
-
-          {resultado && (
-            <button
-              onClick={() => {
-                resetFlujo();
-                setResultado(null);
-              }}
-              className="btn-primary"
-              style={{ flex: 1.5, padding: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-            >
-              <RotateCcw size={16} /> Importar otro archivo
-            </button>
-          )}
-        </div>
     </Modal>
   );
 };

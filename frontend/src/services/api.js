@@ -3,6 +3,10 @@
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const PUBLIC_BASE_URL = API_URL.startsWith('http') ? API_URL.replace(/\/api\/?$/, '') : '';
+// Access token (JWT de 15 min) y refresh token (rota en cada uso). Los dos
+// llevan el prefijo crm_ para que AuthContext los borre al cerrar sesion.
+const TOKEN_KEY = 'crm_token';
+const REFRESH_KEY = 'crm_refresh';
 
 // ── Helpers internos ──────────────────────────────────────────────────────
 
@@ -18,8 +22,101 @@ const construirQuery = (params = {}) => {
   return texto ? `?${texto}` : '';
 };
 
+const getToken = () => localStorage.getItem(TOKEN_KEY);
+const getRefreshToken = () => localStorage.getItem(REFRESH_KEY);
+
+/** Guarda el par de tokens que devuelven login, 2FA, invitacion y refresh. */
+export const guardarTokens = ({ token, refreshToken }) => {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
+};
+
+export const borrarTokens = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+};
+
+export const hayTokens = () => Boolean(getToken() && getRefreshToken());
+export const REFRESH_STORAGE_KEY = REFRESH_KEY;
+
+const esperar = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+// ── Renovacion de sesion ─────────────────────────────────────────────────
+// Cuando el access token caduca (401 con codigo TOKEN_EXPIRADO) se canjea el
+// refresh token por un par nuevo y se repite la peticion una vez.
+//  - Una sola renovacion a la vez por pestaña (las demas peticiones esperan).
+//  - Entre pestañas se usa Web Locks: el refresh token rota y si dos pestañas
+//    lo gastaran a la vez el servidor lo tomaria por un robo. La que entra
+//    segunda ve que el token guardado ya cambio y lo reutiliza.
+let renovacionEnCurso = null;
+
+const renovarSesion = (tokenUsado) => {
+  if (renovacionEnCurso) return renovacionEnCurso;
+
+  const tarea = async () => {
+    for (let intento = 0; intento < 3; intento += 1) {
+      const actual = getToken();
+      if (actual && actual !== tokenUsado) return true; // otra pestaña ya renovo
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return false;
+
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (res.ok) {
+        guardarTokens(await res.json());
+        return true;
+      }
+      // 409: otra pestaña (sin Web Locks) lo esta rotando ahora mismo.
+      if (res.status === 409) {
+        await esperar(500 * (intento + 1));
+        continue;
+      }
+      return false;
+    }
+    return false;
+  };
+
+  const conBloqueo = typeof navigator !== 'undefined' && navigator.locks?.request
+    ? navigator.locks.request('crm_renovar_sesion', tarea)
+    : tarea();
+
+  renovacionEnCurso = conBloqueo.finally(() => { renovacionEnCurso = null; });
+  return renovacionEnCurso;
+};
+
+const codigoDeError = async (res) => {
+  try {
+    const data = await res.clone().json();
+    return data?.codigo || null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * fetch con renovacion automatica de sesion. Todas las llamadas de este
+ * archivo pasan por aqui. Si la renovacion falla, devuelve el 401 original y
+ * handleResponse cierra la sesion como siempre.
+ */
+const apiFetch = async (url, opciones = {}) => {
+  const tokenUsado = getToken();
+  const res = await fetch(url, opciones);
+  if (res.status !== 401 || !tokenUsado) return res;
+  if ((await codigoDeError(res)) !== 'TOKEN_EXPIRADO') return res;
+
+  const renovada = await renovarSesion(tokenUsado);
+  if (!renovada) return res;
+
+  const headers = new Headers(opciones.headers || {});
+  headers.set('Authorization', `Bearer ${getToken()}`);
+  return fetch(url, { ...opciones, headers });
+};
+
 const getHeaders = (isMultipart = false) => {
-  const token = localStorage.getItem('crm_token');
+  const token = getToken();
   const headers = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
@@ -29,7 +126,34 @@ const getHeaders = (isMultipart = false) => {
   return headers;
 };
 
-const handleResponse = async (res) => {
+/** Error con el codigo HTTP, para que quien llama distinga un 401 de un fallo de red. */
+export class ApiError extends Error {
+  constructor(message, status, data = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    // Datos extra del backend: `codigo` (EMAIL_NO_VERIFICADO, CUENTA_BLOQUEADA...)
+    // y `detalles` (requisitos de contraseña que no se cumplen).
+    this.codigo = data.codigo || null;
+    this.detalles = Array.isArray(data.detalles) ? data.detalles : [];
+    this.data = data;
+  }
+}
+
+/**
+ * Un 401 con token guardado significa que la sesion ya no vale: el token
+ * expiro o el usuario fue desactivado. Se borra el token y se avisa a la app
+ * (AuthContext escucha este evento) para que limpie la cache y mande al login.
+ * No se usa para las rutas publicas (login, invitaciones...), donde un 401 es
+ * simplemente "credenciales incorrectas".
+ */
+const avisarSesionInvalida = (mensaje) => {
+  borrarTokens();
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('crm:sesion-invalida', { detail: { mensaje } }));
+};
+
+const handleResponse = async (res, { publica = false } = {}) => {
   const raw = await res.text();
   let data = {};
   if (raw) {
@@ -39,8 +163,52 @@ const handleResponse = async (res) => {
       data = { error: raw };
     }
   }
-  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  if (!res.ok) {
+    const mensaje = data.error || 'Error en la petición';
+    if (res.status === 401 && !publica && getToken()) avisarSesionInvalida(mensaje);
+    // La política exige 2FA y aún no está activa: la app lleva a activarla.
+    if (res.status === 403 && data.codigo === 'REQUIERE_2FA' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('crm:requiere-2fa'));
+    }
+    throw new ApiError(mensaje, res.status, data);
+  }
   return data;
+};
+
+/** Nombre de archivo de la cabecera Content-Disposition, si el backend lo manda. */
+const nombreDesdeCabecera = (cabecera) => {
+  if (!cabecera) return null;
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cabecera);
+  if (utf8) {
+    try { return decodeURIComponent(utf8[1]); } catch { /* se usa el respaldo */ }
+  }
+  const simple = /filename="?([^";]+)"?/i.exec(cabecera);
+  return simple ? simple[1] : null;
+};
+
+/**
+ * Descarga autenticada. El backend ya no acepta el token por `?token=` en la
+ * URL, asi que un enlace directo no sirve: se pide con `fetch` y la cabecera
+ * Authorization, se convierte a blob y se dispara la descarga desde memoria.
+ */
+const descargarArchivo = async (url, nombreArchivo) => {
+  const res = await apiFetch(url, { headers: getHeaders(true) });
+  if (!res.ok) await handleResponse(res); // lanza con el mensaje del backend
+
+  const blob = await res.blob();
+  const nombre = nombreDesdeCabecera(res.headers.get('Content-Disposition')) || nombreArchivo;
+  const objectUrl = URL.createObjectURL(blob);
+
+  const enlace = document.createElement('a');
+  enlace.href = objectUrl;
+  enlace.download = nombre;
+  enlace.style.display = 'none';
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // Se libera despues, no al instante: algunos navegadores leen el blob de
+  // forma asincrona y revocarlo en seguida cancelaba la descarga.
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
 };
 
 const emitScheduleSync = (detail = {}) => {
@@ -50,82 +218,79 @@ const emitScheduleSync = (detail = {}) => {
 
 export const getPublicAssetUrl = (value) => {
   if (!value) return '';
-  if (/^data:/i.test(value)) return value;
+  if (/^(data|blob):/i.test(value)) return value;
   if (/^https?:\/\//i.test(value)) return value;
   return `${PUBLIC_BASE_URL}${value}`;
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 
+// Peticion JSON a /auth. `publica` evita que un 401 (credenciales malas)
+// se interprete como "sesion caducada".
+const pedirAuth = async (ruta, { metodo = 'GET', cuerpo, publica = false } = {}) => {
+  const res = await apiFetch(`${API_URL}/auth${ruta}`, {
+    method: metodo,
+    headers: publica ? { 'Content-Type': 'application/json' } : getHeaders(),
+    ...(cuerpo !== undefined ? { body: JSON.stringify(cuerpo) } : {}),
+  });
+  return handleResponse(res, { publica });
+};
+
+const segmento = (valor) => encodeURIComponent(String(valor ?? ''));
+
 export const authService = {
-  register: async (datos) => {
-    const res = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
-    });
-    return handleResponse(res);
+  // ── Públicas ──
+  config: () => pedirAuth('/config', { publica: true }),
+  login: (email, password, recordar = false) => pedirAuth('/login', { metodo: 'POST', cuerpo: { email, password, recordar }, publica: true }),
+  login2fa: (desafio, codigo) => pedirAuth('/2fa/login', { metodo: 'POST', cuerpo: { desafio, codigo }, publica: true }),
+  register: (datos) => pedirAuth('/register', { metodo: 'POST', cuerpo: datos, publica: true }),
+  verificarEmail: (email, codigo) => pedirAuth('/verificar-email', { metodo: 'POST', cuerpo: { email, codigo }, publica: true }),
+  reenviarCodigo: (email) => pedirAuth('/reenviar-codigo', { metodo: 'POST', cuerpo: { email }, publica: true }),
+  forgotPassword: (email) => pedirAuth('/forgot-password', { metodo: 'POST', cuerpo: { email }, publica: true }),
+  validarReset: (token) => pedirAuth(`/reset-password/${segmento(token)}`, { publica: true }),
+  resetPassword: (token, password) => pedirAuth(`/reset-password/${segmento(token)}`, { metodo: 'POST', cuerpo: { password }, publica: true }),
+  verifyAccount: (token) => pedirAuth(`/verify/${segmento(token)}`, { publica: true }),
+  // Cierra la sesion en el servidor. No necesita access token (puede haber caducado).
+  logout: () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return Promise.resolve();
+    return pedirAuth('/logout', { metodo: 'POST', cuerpo: { refreshToken }, publica: true }).catch(() => {});
   },
 
-  login: async (email, password) => {
-    const res = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST', headers: getHeaders(), body: JSON.stringify({ email, password }),
-    });
-    return handleResponse(res);
-  },
-
-  me: async () => {
-    const res = await fetch(`${API_URL}/auth/me`, { headers: getHeaders() });
-    return handleResponse(res);
-  },
-
-  forgotPassword: async (email) => {
-    const res = await fetch(`${API_URL}/auth/forgot-password`, {
-      method: 'POST', headers: getHeaders(), body: JSON.stringify({ email }),
-    });
-    return handleResponse(res);
-  },
-
-  resetPassword: async (token, password) => {
-    const res = await fetch(`${API_URL}/auth/reset-password/${token}`, {
-      method: 'POST', headers: getHeaders(), body: JSON.stringify({ password }),
-    });
-    return handleResponse(res);
-  },
-
-  verifyAccount: async (token) => {
-    const res = await fetch(`${API_URL}/auth/verify/${token}`);
-    return handleResponse(res);
-  },
-  
   // Invitaciones
-  verificarInvitacion: async (token) => {
-    const res = await fetch(`${API_URL}/auth/invitacion/${token}`);
-    return handleResponse(res);
-  },
-  
-  aceptarInvitacion: async (token, datos) => {
-    const res = await fetch(`${API_URL}/auth/invitacion/${token}/aceptar`, {
-      method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
-    });
-    return handleResponse(res);
-  },
+  verificarInvitacion: (token) => pedirAuth(`/invitacion/${segmento(token)}`, { publica: true }),
+  aceptarInvitacion: (token, datos) => pedirAuth(`/invitacion/${segmento(token)}/aceptar`, { metodo: 'POST', cuerpo: datos, publica: true }),
+
+  // ── Con sesión ──
+  me: () => pedirAuth('/me'),
+  seguridad: () => pedirAuth('/seguridad'),
+  cambiarPassword: (passwordActual, passwordNueva) => pedirAuth('/cambiar-password', { metodo: 'POST', cuerpo: { passwordActual, passwordNueva } }),
+  sesiones: () => pedirAuth('/sesiones'),
+  cerrarSesion: (id) => pedirAuth(`/sesiones/${segmento(id)}`, { metodo: 'DELETE' }),
+  cerrarOtrasSesiones: () => pedirAuth('/sesiones', { metodo: 'DELETE' }),
+  eventos: (limite = 30) => pedirAuth(`/eventos?limite=${limite}`),
+  configurar2fa: (password) => pedirAuth('/2fa/configurar', { metodo: 'POST', cuerpo: { password } }),
+  activar2fa: (codigo) => pedirAuth('/2fa/activar', { metodo: 'POST', cuerpo: { codigo } }),
+  desactivar2fa: (password, codigo) => pedirAuth('/2fa/desactivar', { metodo: 'POST', cuerpo: { password, codigo } }),
+  regenerarCodigos: (password) => pedirAuth('/2fa/codigos-respaldo', { metodo: 'POST', cuerpo: { password } }),
 };
 
 // ── Proyectos ─────────────────────────────────────────────────────────────
 
 export const proyectosService = {
   listar: async (params = {}) => {
-    const res = await fetch(`${API_URL}/proyectos${construirQuery(params)}`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/proyectos${construirQuery(params)}`, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   equipoDeProyecto: async (id) => {
-    const res = await fetch(`${API_URL}/proyectos/${id}/equipo`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/proyectos/${id}/equipo`, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   crear: async (datos) => {
     const isMultipart = datos instanceof FormData;
-    const res = await fetch(`${API_URL}/proyectos`, {
+    const res = await apiFetch(`${API_URL}/proyectos`, {
       method: 'POST',
       headers: getHeaders(isMultipart),
       body: isMultipart ? datos : JSON.stringify(datos),
@@ -135,7 +300,7 @@ export const proyectosService = {
 
   editar: async (id, datos) => {
     const isMultipart = datos instanceof FormData;
-    const res = await fetch(`${API_URL}/proyectos/${id}`, {
+    const res = await apiFetch(`${API_URL}/proyectos/${id}`, {
       method: 'PUT',
       headers: getHeaders(isMultipart),
       body: isMultipart ? datos : JSON.stringify(datos),
@@ -143,20 +308,16 @@ export const proyectosService = {
     return handleResponse(res);
   },
 
-  eliminar: async (id) => {
-    const res = await fetch(`${API_URL}/proyectos/${id}`, {
-      method: 'DELETE', headers: getHeaders(),
-    });
-    return handleResponse(res);
-  },
+  // El borrado de proyectos sigue existiendo en el backend, pero por decision
+  // del usuario (P3/P9) no hay forma de llamarlo desde la interfaz: se archiva.
 
   listarPlantillas: async () => {
-    const res = await fetch(`${API_URL}/proyectos/plantillas`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/proyectos/plantillas`, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   guardarComoPlantilla: async (proyectoId, datos) => {
-    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/plantilla`, {
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/plantilla`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
     });
     return handleResponse(res);
@@ -168,7 +329,7 @@ export const proyectosService = {
 export const tareasService = {
   // Listar tareas de un proyecto (también devuelve info del proyecto)
   listar: async (proyectoId) => {
-    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas`, {
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/tareas`, {
       headers: getHeaders(),
     });
     return handleResponse(res);
@@ -176,7 +337,7 @@ export const tareasService = {
 
   crear: async (proyectoId, datos) => {
     const isMultipart = datos instanceof FormData;
-    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas`, {
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/tareas`, {
       method: 'POST',
       headers: getHeaders(isMultipart),
       body: isMultipart ? datos : JSON.stringify(datos),
@@ -187,7 +348,7 @@ export const tareasService = {
   },
 
   editar: async (id, datos) => {
-    const res = await fetch(`${API_URL}/tareas/${id}`, {
+    const res = await apiFetch(`${API_URL}/tareas/${id}`, {
       method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos),
     });
     const data = await handleResponse(res);
@@ -196,7 +357,7 @@ export const tareasService = {
   },
 
   eliminar: async (id) => {
-    const res = await fetch(`${API_URL}/tareas/${id}`, {
+    const res = await apiFetch(`${API_URL}/tareas/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
     const data = await handleResponse(res);
@@ -207,7 +368,7 @@ export const tareasService = {
   // Borrado en bloque. Va por POST y no por DELETE porque el cuerpo con la
   // lista de ids no viaja fiable en un DELETE.
   eliminarVarias: async (ids) => {
-    const res = await fetch(`${API_URL}/tareas/eliminar-multiples`, {
+    const res = await apiFetch(`${API_URL}/tareas/eliminar-multiples`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify({ ids }),
     });
     const data = await handleResponse(res);
@@ -217,7 +378,7 @@ export const tareasService = {
 
   // Cambio rápido de estado inline
   actualizarEstado: async (id, estado) => {
-    const res = await fetch(`${API_URL}/tareas/${id}/estado`, {
+    const res = await apiFetch(`${API_URL}/tareas/${id}/estado`, {
       method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ estado }),
     });
     const data = await handleResponse(res);
@@ -226,36 +387,21 @@ export const tareasService = {
   },
 
   // ── Importación masiva ──────────────────────────────────────────────────
-  importar: async (proyectoId, archivo, modoAsignacion = 'archivo', asignadoId = null) => {
-    const fd = new FormData();
-    fd.append('archivo', archivo);
-    fd.append('modoAsignacion', modoAsignacion);
-    if (asignadoId) fd.append('asignadoId', asignadoId);
-    const token = localStorage.getItem('crm_token');
-    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: fd,
-    });
-    return handleResponse(res);
-  },
-
   previewImportar: async (proyectoId, archivo, modoAsignacion = 'archivo', asignadoId = null) => {
     const fd = new FormData();
     fd.append('archivo', archivo);
     fd.append('modoAsignacion', modoAsignacion);
     if (asignadoId) fd.append('asignadoId', asignadoId);
-    const token = localStorage.getItem('crm_token');
-    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar/preview`, {
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar/preview`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: getHeaders(true),
       body: fd,
     });
     return handleResponse(res);
   },
 
   confirmarImportacion: async (proyectoId, filas, modoAsignacion = 'archivo', asignadoId = null) => {
-    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar/confirmar`, {
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/tareas/importar/confirmar`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -267,103 +413,98 @@ export const tareasService = {
     return handleResponse(res);
   },
 
-  descargarPlantilla: (tipo) => {
-    const token = localStorage.getItem('crm_token');
-    const url   = `${API_URL}/tareas/plantilla/${tipo}`;
-    const a = document.createElement('a');
-    a.href = url + (token ? `?token=${token}` : '');
-    a.download = `plantilla_tareas.${tipo === 'json' ? 'json' : 'xlsx'}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  },
+  descargarPlantilla: (tipo) => descargarArchivo(
+    `${API_URL}/tareas/plantilla/${tipo}`,
+    `plantilla_tareas.${tipo === 'json' ? 'json' : 'xlsx'}`,
+  ),
 
-  exportarProyecto: (proyectoId, tipo = 'json') => {
-    const token = localStorage.getItem('crm_token');
-    const url = `${API_URL}/proyectos/${proyectoId}/tareas/exportar/${tipo}`;
-    const a = document.createElement('a');
-    a.href = url + (token ? `?token=${token}` : '');
-    a.download = `proyecto_${proyectoId}_tareas.${tipo === 'excel' ? 'xlsx' : 'json'}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  },
+  exportarProyecto: (proyectoId, tipo = 'json') => descargarArchivo(
+    `${API_URL}/proyectos/${proyectoId}/tareas/exportar/${tipo}`,
+    `proyecto_${proyectoId}_tareas.${tipo === 'excel' ? 'xlsx' : 'json'}`,
+  ),
 };
 
 // ── Usuarios ──────────────────────────────────────────────────────────────
 
 export const usuariosService = {
   listar: async (params = {}) => {
-    const res = await fetch(`${API_URL}/usuarios${construirQuery(params)}`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/usuarios${construirQuery(params)}`, { headers: getHeaders() });
     return handleResponse(res);
   },
   listarParaProyectos: async () => {
-    const res = await fetch(`${API_URL}/usuarios/catalogo/proyectos`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/usuarios/catalogo/proyectos`, { headers: getHeaders() });
     return handleResponse(res);
   },
   perfil: async () => {
-    const res = await fetch(`${API_URL}/usuarios/perfil`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/usuarios/perfil`, { headers: getHeaders() });
     return handleResponse(res);
   },
   actualizarPerfil: async (datos) => {
-    const res = await fetch(`${API_URL}/usuarios/perfil`, {
+    const res = await apiFetch(`${API_URL}/usuarios/perfil`, {
       method: 'PUT',
       headers: getHeaders(true),
       body: datos,
     });
     return handleResponse(res);
   },
-  actividad: async (id) => {
-    const res = await fetch(`${API_URL}/usuarios/${id}/actividad?t=${Date.now()}`, {
-      headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },
-      cache: 'no-store',
-    });
-    return handleResponse(res);
-  },
   crear: async (datos) => {
-    const res = await fetch(`${API_URL}/usuarios`, {
+    const res = await apiFetch(`${API_URL}/usuarios`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
     });
     return handleResponse(res);
   },
   editar: async (id, datos) => {
-    const res = await fetch(`${API_URL}/usuarios/${id}`, {
+    const res = await apiFetch(`${API_URL}/usuarios/${id}`, {
       method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos),
     });
     return handleResponse(res);
   },
-  eliminar: async (id) => {
-    const res = await fetch(`${API_URL}/usuarios/${id}`, {
+  // DELETE /usuarios/:id ya no borra: desactiva la cuenta. Los usuarios no se
+  // eliminan para no perder su historial de tareas y proyectos.
+  desactivar: async (id) => {
+    const res = await apiFetch(`${API_URL}/usuarios/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
     return handleResponse(res);
   },
   toggleEstado: async (id, estado) => {
-    const res = await fetch(`${API_URL}/usuarios/${id}/estado`, {
+    const res = await apiFetch(`${API_URL}/usuarios/${id}/estado`, {
       method: 'PUT', headers: getHeaders(), body: JSON.stringify({ estado }),
     });
     return handleResponse(res);
   },
-  
+  // Ajustes de permisos de una persona (solo el administrador general):
+  // { usuario, catalogo, heredados, ajustes, efectivos }.
+  obtenerPermisos: async (id) => {
+    const res = await apiFetch(`${API_URL}/usuarios/${id}/permisos`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  guardarPermisos: async (id, ajustes) => {
+    const res = await apiFetch(`${API_URL}/usuarios/${id}/permisos`, {
+      method: 'PUT', headers: getHeaders(), body: JSON.stringify({ ajustes }),
+    });
+    return handleResponse(res);
+  },
+
   // Invitaciones (Solo Admin)
   invitar: async (datos) => {
-    const res = await fetch(`${API_URL}/auth/invitar`, {
+    const res = await apiFetch(`${API_URL}/auth/invitar`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
     });
     return handleResponse(res);
   },
   reenviarInvitacion: async (email) => {
-    const res = await fetch(`${API_URL}/auth/invitar/reenviar`, {
+    const res = await apiFetch(`${API_URL}/auth/invitar/reenviar`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify({ email }),
     });
     return handleResponse(res);
   },
   listarInvitaciones: async () => {
-    const res = await fetch(`${API_URL}/auth/invitaciones`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/auth/invitaciones`, { headers: getHeaders() });
     return handleResponse(res);
   },
   eliminarInvitacion: async (id) => {
-    const res = await fetch(`${API_URL}/auth/invitaciones/${id}`, {
+    const res = await apiFetch(`${API_URL}/auth/invitaciones/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
     return handleResponse(res);
@@ -373,23 +514,23 @@ export const usuariosService = {
 // ── Notificaciones ────────────────────────────────────────────────────────
 export const notificacionesService = {
   listar: async () => {
-    const res = await fetch(`${API_URL}/notificaciones`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/notificaciones`, { headers: getHeaders() });
     return handleResponse(res);
   },
   marcarLeida: async (id) => {
-    const res = await fetch(`${API_URL}/notificaciones/${id}/leida`, {
+    const res = await apiFetch(`${API_URL}/notificaciones/${id}/leida`, {
       method: 'PUT', headers: getHeaders(),
     });
     return handleResponse(res);
   },
   marcarTodasLeidas: async () => {
-    const res = await fetch(`${API_URL}/notificaciones/todas/leidas`, {
+    const res = await apiFetch(`${API_URL}/notificaciones/todas/leidas`, {
       method: 'PUT', headers: getHeaders(),
     });
     return handleResponse(res);
   },
   eliminar: async (id) => {
-    const res = await fetch(`${API_URL}/notificaciones/${id}`, {
+    const res = await apiFetch(`${API_URL}/notificaciones/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
     return handleResponse(res);
@@ -399,17 +540,17 @@ export const notificacionesService = {
 // ── Comentarios ───────────────────────────────────────────────────────────
 export const comentariosService = {
   listar: async (parentId, type = 'tareas') => {
-    const res = await fetch(`${API_URL}/${type}/${parentId}/comentarios`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/${type}/${parentId}/comentarios`, { headers: getHeaders() });
     return handleResponse(res);
   },
   crear: async (parentId, contenido, type = 'tareas') => {
-    const res = await fetch(`${API_URL}/${type}/${parentId}/comentarios`, {
+    const res = await apiFetch(`${API_URL}/${type}/${parentId}/comentarios`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify({ contenido }),
     });
     return handleResponse(res);
   },
   eliminar: async (comentarioId) => {
-    const res = await fetch(`${API_URL}/tareas/comentarios/${comentarioId}`, {
+    const res = await apiFetch(`${API_URL}/tareas/comentarios/${comentarioId}`, {
       method: 'DELETE', headers: getHeaders(),
     });
     return handleResponse(res);
@@ -419,15 +560,19 @@ export const comentariosService = {
 // ── Historial (Logs) ───────────────────────────────────────────────────────
 export const logsService = {
   listarPorProyecto: async (proyectoId) => {
-    const res = await fetch(`${API_URL}/proyectos/${proyectoId}/logs`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/logs`, { headers: getHeaders() });
     return handleResponse(res);
   },
 };
 
 // ── Adjuntos ──────────────────────────────────────────────────────────────
+// Los archivos se guardan en el disco del servidor: cada adjunto trae su `url`
+// relativa (/api/archivos/adjuntos/...) y se abre o descarga con
+// getPublicAssetUrl. Los adjuntos antiguos conservan su URL absoluta de Vercel
+// Blob. Las rutas /adjuntos/ver y /adjuntos/descargar desaparecieron.
 export const adjuntosService = {
   listar: async (parentId, type = 'tareas') => {
-    const res = await fetch(`${API_URL}/${type}/${parentId}/adjuntos`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/${type}/${parentId}/adjuntos`, { headers: getHeaders() });
     return handleResponse(res);
   },
   subir: async (parentId, payload, type = 'tareas') => {
@@ -439,7 +584,7 @@ export const adjuntosService = {
           files.forEach((file) => fd.append('archivos', file));
           return fd;
         })();
-    const res = await fetch(`${API_URL}/${type}/${parentId}/adjuntos`, {
+    const res = await apiFetch(`${API_URL}/${type}/${parentId}/adjuntos`, {
       method: 'POST',
       headers: getHeaders(true), // Multipart
       body: formData
@@ -447,78 +592,88 @@ export const adjuntosService = {
     return handleResponse(res);
   },
   eliminar: async (adjuntoId) => {
-    const res = await fetch(`${API_URL}/tareas/adjuntos/${adjuntoId}`, {
+    const res = await apiFetch(`${API_URL}/tareas/adjuntos/${adjuntoId}`, {
       method: 'DELETE',
       headers: getHeaders()
     });
     return handleResponse(res);
   },
-  getPreviewUrl: (filename) => {
-    // Los adjuntos nuevos guardan la URL absoluta de Vercel Blob; los antiguos, solo el nombre.
-    if (/^https?:\/\//i.test(filename)) return filename;
-    return `${API_URL}/tareas/adjuntos/ver/${filename}?token=${localStorage.getItem('crm_token')}`;
-  },
-  descargar: (filename) => {
-    // Abrir en nueva pestaña para descargar
-    if (/^https?:\/\//i.test(filename)) {
-      window.open(filename, '_blank');
-      return;
-    }
-    window.open(`${API_URL}/tareas/adjuntos/descargar/${filename}?token=${localStorage.getItem('crm_token')}`, '_blank');
-  }
 };
 
 // ── Estadísticas ──────────────────────────────────────────────────────────
 export const statsService = {
   // Actividad del equipo de un día concreto (sin fecha = hoy)
   actividadEquipo: async (fecha) => {
-    const res = await fetch(`${API_URL}/stats/actividad-equipo${construirQuery({ fecha })}`, {
+    const res = await apiFetch(`${API_URL}/stats/actividad-equipo${construirQuery({ fecha })}`, {
       headers: getHeaders(),
     });
     return handleResponse(res);
   },
   getAdminStats: async () => {
-    const res = await fetch(`${API_URL}/stats/admin?t=${Date.now()}`, {
+    const res = await apiFetch(`${API_URL}/stats/admin?t=${Date.now()}`, {
       headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },
       cache: 'no-store',
     });
     return handleResponse(res);
   },
   getMemberStats: async () => {
-    const res = await fetch(`${API_URL}/stats/member?t=${Date.now()}`, {
+    const res = await apiFetch(`${API_URL}/stats/member?t=${Date.now()}`, {
       headers: { ...getHeaders(), 'Cache-Control': 'no-cache' },
       cache: 'no-store',
     });
     return handleResponse(res);
   },
 
-  // Reporte del día en Excel. Va como enlace de descarga con el token en la
-  // query (igual que exportar un proyecto): en una descarga directa el
-  // navegador no manda la cabecera Authorization.
-  descargarReporteDia: (fecha, proyectoId = null) => {
-    const token = localStorage.getItem('crm_token');
-    const url = `${API_URL}/stats/reporte-dia/excel${construirQuery({ fecha, proyectoId, token })}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `actividad_${fecha}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  },
+  // Reporte del día en Excel, con la cabecera Authorization como cualquier
+  // otra peticion (el token ya no viaja en la URL).
+  descargarReporteDia: (fecha, proyectoId = null) => descargarArchivo(
+    `${API_URL}/stats/reporte-dia/excel${construirQuery({ fecha, proyectoId })}`,
+    `actividad_${fecha}.xlsx`,
+  ),
 };
 
 // ── Agenda Personal ────────────────────────────────────────────────────────
 export const agendaService = {
+  // Calendario de la empresa: dias ya expandidos ('YYYY-MM-DD') en el rango.
+  diasEmpresa: async (desde, hasta) => {
+    const res = await apiFetch(`${API_URL}/agenda/dias-empresa${construirQuery({ desde, hasta })}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // Registros para administrarlos (admin).
+  registrosDiasEmpresa: async () => {
+    const res = await apiFetch(`${API_URL}/agenda/dias-empresa/registros`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // { fechaInicio, fechaFin?, tipo: festivo|no_laboral|cierre|puente|especial, nombre, descripcion?, repetirAnual?, area? }
+  crearDiaEmpresa: async (datos) => {
+    const res = await apiFetch(`${API_URL}/agenda/dias-empresa`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  eliminarDiaEmpresa: async (id) => {
+    const res = await apiFetch(`${API_URL}/agenda/dias-empresa/${id}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // Vista de equipo (admin): personas con horario, eventos, tareas y ausencias.
+  equipo: async (desde, hasta) => {
+    const res = await apiFetch(`${API_URL}/agenda/equipo${construirQuery({ desde, hasta })}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // Huecos libres comunes: { usuariosIds: [], desde, dias, duracion (min), excluirId, max }
+  sugerirHorarios: async ({ usuariosIds = [], desde, dias, duracion, excluirId, max } = {}) => {
+    const query = construirQuery({ usuarios_ids: usuariosIds.join(','), desde, dias, duracion, excluir_id: excluirId, max });
+    const res = await apiFetch(`${API_URL}/agenda/sugerir-horarios${query}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
   listar: async (fechaInicio, fechaFin) => {
     let url = `${API_URL}/agenda`;
     if (fechaInicio && fechaFin) {
       url += `?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
     }
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
   crear: async (datos) => {
-    const res = await fetch(`${API_URL}/agenda`, {
+    const res = await apiFetch(`${API_URL}/agenda`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(datos),
     });
     const data = await handleResponse(res);
@@ -526,7 +681,7 @@ export const agendaService = {
     return data;
   },
   editar: async (id, datos) => {
-    const res = await fetch(`${API_URL}/agenda/${id}`, {
+    const res = await apiFetch(`${API_URL}/agenda/${id}`, {
       method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos),
     });
     const data = await handleResponse(res);
@@ -534,7 +689,7 @@ export const agendaService = {
     return data;
   },
   eliminar: async (id) => {
-    const res = await fetch(`${API_URL}/agenda/${id}`, {
+    const res = await apiFetch(`${API_URL}/agenda/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
     const data = await handleResponse(res);
@@ -542,54 +697,62 @@ export const agendaService = {
     return data;
   },
   recordatorios: async () => {
-    const res = await fetch(`${API_URL}/agenda/recordatorios`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/agenda/recordatorios`, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   // Phase 8.1 - Compartidos e Invitaciones
   invitacionesPendientes: async () => {
-    const res = await fetch(`${API_URL}/agenda/invitaciones/pendientes`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/agenda/invitaciones/pendientes`, { headers: getHeaders() });
     return handleResponse(res);
   },
   responderInvitacion: async (id, estado) => {
-    const res = await fetch(`${API_URL}/agenda/${id}/responder`, {
+    const res = await apiFetch(`${API_URL}/agenda/${id}/responder`, {
       method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ estado }),
     });
     return handleResponse(res);
   },
-  consultarDisponibilidad: async ({ usuarios_ids, inicio, fin, excluir_id, excluir_proyecto_id }) => {
+  consultarDisponibilidad: async ({ usuarios_ids, inicio, fin, excluir_id, excluir_proyecto_id, sin_proyectos }) => {
     const params = new URLSearchParams({ usuarios_ids, inicio });
     if (fin) params.append('fin', fin);
     if (excluir_id) params.append('excluir_id', excluir_id);
     if (excluir_proyecto_id) params.append('excluir_proyecto_id', excluir_proyecto_id);
-    const res = await fetch(`${API_URL}/agenda/disponibilidad?${params}`, { headers: getHeaders() });
+    if (sin_proyectos) params.append('sin_proyectos', '1');
+    const res = await apiFetch(`${API_URL}/agenda/disponibilidad?${params}`, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   // Phase 8.1 - Configuración Laboral
   getConfigLaboral: async () => {
-    const res = await fetch(`${API_URL}/agenda/config-laboral`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/agenda/config-laboral`, { headers: getHeaders() });
     return handleResponse(res);
   },
   updateConfigLaboral: async (payload) => {
-    const res = await fetch(`${API_URL}/agenda/config-laboral`, {
+    const res = await apiFetch(`${API_URL}/agenda/config-laboral`, {
       method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload),
     });
     return handleResponse(res);
   },
   getGoogleCalendarStatus: async () => {
-    const res = await fetch(`${API_URL}/agenda/google-calendar/status`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_URL}/agenda/google-calendar/status`, { headers: getHeaders() });
     return handleResponse(res);
   },
   connectGoogleCalendar: async (code) => {
-    const res = await fetch(`${API_URL}/agenda/google-calendar/connect`, {
+    const res = await apiFetch(`${API_URL}/agenda/google-calendar/connect`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify({ code }),
     });
     return handleResponse(res);
   },
   disconnectGoogleCalendar: async () => {
-    const res = await fetch(`${API_URL}/agenda/google-calendar/connect`, {
+    const res = await apiFetch(`${API_URL}/agenda/google-calendar/connect`, {
       method: 'DELETE', headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+  // Trae lo que cambio en el calendario del CRM en Google. { cambios }
+  sincronizarGoogleCalendar: async () => {
+    const res = await apiFetch(`${API_URL}/agenda/google-calendar/sync`, {
+      method: 'POST', headers: getHeaders(),
     });
     return handleResponse(res);
   },
@@ -598,19 +761,439 @@ export const agendaService = {
   listarDiasEspeciales: async (mes, anio) => {
     let url = `${API_URL}/agenda/dias-especiales`;
     if (mes && anio) url += `?mes=${mes}&anio=${anio}`;
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
   crearDiaEspecial: async (payload) => {
-    const res = await fetch(`${API_URL}/agenda/dias-especiales`, {
+    const res = await apiFetch(`${API_URL}/agenda/dias-especiales`, {
       method: 'POST', headers: getHeaders(), body: JSON.stringify(payload),
     });
     return handleResponse(res);
   },
   eliminarDiaEspecial: async (id) => {
-    const res = await fetch(`${API_URL}/agenda/dias-especiales/${id}`, {
+    const res = await apiFetch(`${API_URL}/agenda/dias-especiales/${id}`, {
       method: 'DELETE', headers: getHeaders(),
     });
     return handleResponse(res);
+  },
+};
+
+// ── Contratos (solo admin) ─────────────────────────────────────────────────
+export const contratosService = {
+  listar: async (params = {}) => {
+    const res = await apiFetch(`${API_URL}/contratos${construirQuery(params)}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  resumen: async () => {
+    const res = await apiFetch(`${API_URL}/contratos/resumen`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  catalogos: async () => {
+    const res = await apiFetch(`${API_URL}/contratos/catalogos`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  obtener: async (id) => {
+    const res = await apiFetch(`${API_URL}/contratos/${id}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  crear: async (datos) => {
+    const res = await apiFetch(`${API_URL}/contratos`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  editar: async (id, datos) => {
+    const res = await apiFetch(`${API_URL}/contratos/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  eliminar: async (id) => {
+    const res = await apiFetch(`${API_URL}/contratos/${id}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  subirArchivo: async (id, archivo, tipoDocumento = 'FIRMADO') => {
+    const fd = new FormData();
+    fd.append('tipoDocumento', tipoDocumento);
+    fd.append('archivo', archivo);
+    const res = await apiFetch(`${API_URL}/contratos/${id}/archivos`, { method: 'POST', headers: getHeaders(true), body: fd });
+    return handleResponse(res);
+  },
+  eliminarArchivo: async (archivoId) => {
+    const res = await apiFetch(`${API_URL}/contratos/archivos/${archivoId}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // El PDF no tiene URL publica: se pide con la sesion y se muestra desde
+  // memoria (blob). Quien llama debe liberar la URL con URL.revokeObjectURL.
+  urlParaVer: async (archivoId) => {
+    const res = await apiFetch(`${API_URL}/contratos/archivos/${archivoId}`, { headers: getHeaders(true) });
+    if (!res.ok) await handleResponse(res);
+    return URL.createObjectURL(await res.blob());
+  },
+  descargarArchivo: (archivoId, nombre) => descargarArchivo(`${API_URL}/contratos/archivos/${archivoId}?descargar=1`, nombre),
+};
+
+// ── Finanzas: Ventas (pagos), Tesorería (partidas) y Gastos ────────────────
+// El acceso es por usuario y recurso (usuario.permisos, casillas finanzas.*); el servidor manda
+// 403 SIN_PERMISO si no alcanza el nivel.
+const pedirFinanzas = async (ruta, { metodo = 'GET', cuerpo, formData } = {}) => {
+  const res = await apiFetch(`${API_URL}/finanzas${ruta}`, {
+    method: metodo,
+    headers: getHeaders(Boolean(formData)),
+    body: formData || (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined),
+  });
+  return handleResponse(res);
+};
+const formularioComprobante = (archivo) => {
+  const fd = new FormData();
+  fd.append('archivo', archivo);
+  return fd;
+};
+/** FormData con el archivo y los demás campos (los vacíos no se mandan). */
+const formularioConArchivo = (archivo, datos = {}) => {
+  const fd = formularioComprobante(archivo);
+  Object.entries(datos).forEach(([clave, valor]) => {
+    if (valor !== undefined && valor !== null && valor !== '') fd.append(clave, valor);
+  });
+  return fd;
+};
+/** Archivo privado de la API como URL de memoria (blob); quien llama la libera. */
+const urlBlob = async (url) => {
+  const res = await apiFetch(url, { headers: getHeaders(true) });
+  if (!res.ok) await handleResponse(res);
+  return URL.createObjectURL(await res.blob());
+};
+
+export const finanzasService = {
+  catalogos: () => pedirFinanzas('/catalogos'),
+  bitacora: (params = {}) => pedirFinanzas(`/bitacora${construirQuery(params)}`),
+  cuentas: {
+    listar: () => pedirFinanzas('/cuentas'),
+    crear: (datos) => pedirFinanzas('/cuentas', { metodo: 'POST', cuerpo: datos }),
+    editar: (id, datos) => pedirFinanzas(`/cuentas/${id}`, { metodo: 'PUT', cuerpo: datos }),
+    eliminar: (id) => pedirFinanzas(`/cuentas/${id}`, { metodo: 'DELETE' }),
+  },
+  pagos: {
+    listar: (params = {}) => pedirFinanzas(`/pagos${construirQuery(params)}`),
+    resumen: (params = {}) => pedirFinanzas(`/pagos/resumen${construirQuery(params)}`),
+    obtener: (id) => pedirFinanzas(`/pagos/${id}`),
+    crear: (datos) => pedirFinanzas('/pagos', { metodo: 'POST', cuerpo: datos }),
+    editar: (id, datos) => pedirFinanzas(`/pagos/${id}`, { metodo: 'PUT', cuerpo: datos }),
+    anular: (id, motivo) => pedirFinanzas(`/pagos/${id}/anular`, { metodo: 'POST', cuerpo: { motivo } }),
+    eliminar: (id) => pedirFinanzas(`/pagos/${id}`, { metodo: 'DELETE' }),
+    subirComprobante: (id, archivo) => pedirFinanzas(`/pagos/${id}/comprobantes`, { metodo: 'POST', formData: formularioComprobante(archivo) }),
+  },
+  gastos: {
+    listar: (params = {}) => pedirFinanzas(`/gastos${construirQuery(params)}`),
+    resumen: (params = {}) => pedirFinanzas(`/gastos/resumen${construirQuery(params)}`),
+    // Presupuesto de una categoría en un mes: { categoria, anio, mes }.
+    presupuesto: (params = {}) => pedirFinanzas(`/gastos/presupuesto${construirQuery(params)}`),
+    obtener: (id) => pedirFinanzas(`/gastos/${id}`),
+    crear: (datos) => pedirFinanzas('/gastos', { metodo: 'POST', cuerpo: datos }),
+    editar: (id, datos) => pedirFinanzas(`/gastos/${id}`, { metodo: 'PUT', cuerpo: datos }),
+    pagar: (id, datos = {}) => pedirFinanzas(`/gastos/${id}/pagar`, { metodo: 'POST', cuerpo: datos }),
+    reabrir: (id) => pedirFinanzas(`/gastos/${id}/reabrir`, { metodo: 'POST', cuerpo: {} }),
+    anular: (id, motivo) => pedirFinanzas(`/gastos/${id}/anular`, { metodo: 'POST', cuerpo: { motivo } }),
+    duplicar: (id, meses = 1) => pedirFinanzas(`/gastos/${id}/duplicar`, { metodo: 'POST', cuerpo: { meses } }),
+    eliminar: (id) => pedirFinanzas(`/gastos/${id}`, { metodo: 'DELETE' }),
+    subirComprobante: (id, archivo) => pedirFinanzas(`/gastos/${id}/comprobantes`, { metodo: 'POST', formData: formularioComprobante(archivo) }),
+  },
+  tesoreria: {
+    resumen: (params = {}) => pedirFinanzas(`/tesoreria${construirQuery(params)}`),
+    // { anio, mes, presupuestos: [{ categoria, monto }] } (monto 0 = quitarlo).
+    guardarPresupuestos: (datos) => pedirFinanzas('/tesoreria/presupuestos', { metodo: 'PUT', cuerpo: datos }),
+  },
+  cotizaciones: {
+    listar: (params = {}) => pedirFinanzas(`/cotizaciones${construirQuery(params)}`),
+    obtener: (id) => pedirFinanzas(`/cotizaciones/${id}`),
+    // datos: { tipo, titulo, descripcion, empresaId, contraparteNombre, moneda, fecha, monto, nota }
+    crear: (archivo, datos) => pedirFinanzas('/cotizaciones', { metodo: 'POST', formData: formularioConArchivo(archivo, datos) }),
+    nuevaVersion: (id, archivo, datos) => pedirFinanzas(`/cotizaciones/${id}/versiones`, { metodo: 'POST', formData: formularioConArchivo(archivo, datos) }),
+    editar: (id, datos) => pedirFinanzas(`/cotizaciones/${id}`, { metodo: 'PUT', cuerpo: datos }),
+    cambiarEstado: (id, estado) => pedirFinanzas(`/cotizaciones/${id}/estado`, { metodo: 'POST', cuerpo: { estado } }),
+    eliminar: (id) => pedirFinanzas(`/cotizaciones/${id}`, { metodo: 'DELETE' }),
+    urlArchivo: (versionId) => urlBlob(`${API_URL}/finanzas/cotizaciones/versiones/${versionId}/archivo`),
+    descargarArchivo: (versionId, nombre) => descargarArchivo(`${API_URL}/finanzas/cotizaciones/versiones/${versionId}/archivo?descargar=1`, nombre),
+  },
+  informe: (params = {}) => pedirFinanzas(`/informe${construirQuery(params)}`),
+  descargarInforme: (params = {}) => descargarArchivo(
+    `${API_URL}/finanzas/informe${construirQuery({ ...params, formato: 'excel' })}`,
+    `informe_${params.vista || 'presupuesto'}_${params.anio || ''}${params.mes ? `_${String(params.mes).padStart(2, '0')}` : ''}.xlsx`,
+  ),
+  comprobantes: {
+    // Sin URL pública: se pide con la sesión y se muestra desde memoria (blob).
+    // Quien llama debe liberar la URL con URL.revokeObjectURL.
+    urlParaVer: async (id) => {
+      const res = await apiFetch(`${API_URL}/finanzas/comprobantes/${id}`, { headers: getHeaders(true) });
+      if (!res.ok) await handleResponse(res);
+      return URL.createObjectURL(await res.blob());
+    },
+    descargar: (id, nombre) => descargarArchivo(`${API_URL}/finanzas/comprobantes/${id}?descargar=1`, nombre),
+    eliminar: (id) => pedirFinanzas(`/comprobantes/${id}`, { metodo: 'DELETE' }),
+  },
+};
+
+// ── Base de conocimiento ──────────────────────────────────────────────────
+const pedirConocimiento = async (ruta, { metodo = 'GET', cuerpo, formData } = {}) => {
+  const res = await apiFetch(`${API_URL}/conocimiento${ruta}`, {
+    method: metodo,
+    headers: getHeaders(Boolean(formData)),
+    body: formData || (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined),
+  });
+  return handleResponse(res);
+};
+
+export const conocimientoService = {
+  listar: (params = {}) => pedirConocimiento(construirQuery(params)),
+  obtener: (id) => pedirConocimiento(`/${id}`),
+  // datos: { titulo, categoria, resumen, contenido, publicado, fijado, acceso? }
+  // acceso: { restringido, reglas: [{ area, rol, usuarioId }] } (permiso conocimiento.acceso)
+  crear: (datos) => pedirConocimiento('', { metodo: 'POST', cuerpo: datos }),
+  editar: (id, datos) => pedirConocimiento(`/${id}`, { metodo: 'PUT', cuerpo: datos }),
+  cambiarAcceso: (id, acceso) => pedirConocimiento(`/${id}/acceso`, { metodo: 'PUT', cuerpo: acceso }),
+  eliminar: (id) => pedirConocimiento(`/${id}`, { metodo: 'DELETE' }),
+  // Un artículo por archivo: { titulo, categoria, acceso? }.
+  crearDocumento: (archivo, { acceso, ...datos }) => pedirConocimiento('/documentos', {
+    metodo: 'POST',
+    formData: formularioConArchivo(archivo, { ...datos, acceso: acceso ? JSON.stringify(acceso) : undefined }),
+  }),
+  subirArchivo: (id, archivo) => pedirConocimiento(`/${id}/archivos`, { metodo: 'POST', formData: formularioComprobante(archivo) }),
+  cambiarAccesoArchivo: (id, acceso) => pedirConocimiento(`/archivos/${id}/acceso`, { metodo: 'PUT', cuerpo: acceso }),
+  eliminarArchivo: (id) => pedirConocimiento(`/archivos/${id}`, { metodo: 'DELETE' }),
+  urlArchivo: (id) => urlBlob(`${API_URL}/conocimiento/archivos/${id}`),
+  descargarArchivo: (id, nombre) => descargarArchivo(`${API_URL}/conocimiento/archivos/${id}?descargar=1`, nombre),
+};
+
+// ── Configuración de la instalación ────────────────────────────────────────
+// Directorio de clientes y proveedores (solo administradores).
+export const empresasService = {
+  listar: async (params = {}) => {
+    const res = await apiFetch(`${API_URL}/empresas${construirQuery(params)}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  resumen: async () => {
+    const res = await apiFetch(`${API_URL}/empresas/resumen`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // tipo: 'CLIENTE' | 'PROVEEDOR' | undefined (todas). Lista corta para selects.
+  catalogo: async (tipo) => {
+    const res = await apiFetch(`${API_URL}/empresas/catalogo${construirQuery({ tipo })}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  obtener: async (id) => {
+    const res = await apiFetch(`${API_URL}/empresas/${id}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  crear: async (datos) => {
+    const res = await apiFetch(`${API_URL}/empresas`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  editar: async (id, datos) => {
+    const res = await apiFetch(`${API_URL}/empresas/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  eliminar: async (id) => {
+    const res = await apiFetch(`${API_URL}/empresas/${id}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  crearContacto: async (empresaId, datos) => {
+    const res = await apiFetch(`${API_URL}/empresas/${empresaId}/contactos`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  editarContacto: async (contactoId, datos) => {
+    const res = await apiFetch(`${API_URL}/empresas/contactos/${contactoId}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  eliminarContacto: async (contactoId) => {
+    const res = await apiFetch(`${API_URL}/empresas/contactos/${contactoId}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // Accesos al portal de clientes de la empresa
+  accesos: async (empresaId) => {
+    const res = await apiFetch(`${API_URL}/empresas/${empresaId}/accesos`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // datos: { contactoId } o { nombre, email }
+  darAcceso: async (empresaId, datos) => {
+    const res = await apiFetch(`${API_URL}/empresas/${empresaId}/accesos`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  reenviarAcceso: async (empresaId, invitacionId) => {
+    const res = await apiFetch(`${API_URL}/empresas/${empresaId}/accesos/invitaciones/${segmento(invitacionId)}/reenviar`, { method: 'POST', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  cancelarAcceso: async (empresaId, invitacionId) => {
+    const res = await apiFetch(`${API_URL}/empresas/${empresaId}/accesos/invitaciones/${segmento(invitacionId)}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // estado: 'activo' | 'inactivo'
+  estadoAcceso: async (empresaId, usuarioId, estado) => {
+    const res = await apiFetch(`${API_URL}/empresas/${empresaId}/accesos/${usuarioId}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ estado }) });
+    return handleResponse(res);
+  },
+};
+
+// Portal de clientes (solo cuentas CLIENTE). Todo viene ya filtrado por la
+// empresa de la cuenta.
+const pedirPortal = async (ruta, { metodo = 'GET', cuerpo } = {}) => {
+  const res = await apiFetch(`${API_URL}/portal${ruta}`, {
+    method: metodo,
+    headers: getHeaders(),
+    ...(cuerpo !== undefined ? { body: JSON.stringify(cuerpo) } : {}),
+  });
+  return handleResponse(res);
+};
+
+export const portalService = {
+  resumen: () => pedirPortal('/resumen'),
+  perfil: () => pedirPortal('/perfil'),
+  // Multipart (foto opcional): sin Content-Type JSON.
+  actualizarPerfil: async (datos) => {
+    const res = await apiFetch(`${API_URL}/portal/perfil`, { method: 'PUT', headers: getHeaders(true), body: datos });
+    return handleResponse(res);
+  },
+  proyectos: () => pedirPortal('/proyectos'),
+  proyecto: (id) => pedirPortal(`/proyectos/${segmento(id)}`),
+  mensajes: (id) => pedirPortal(`/proyectos/${segmento(id)}/mensajes`),
+  enviarMensaje: (id, contenido) => pedirPortal(`/proyectos/${segmento(id)}/mensajes`, { metodo: 'POST', cuerpo: { contenido } }),
+  documentos: () => pedirPortal('/documentos'),
+  reuniones: () => pedirPortal('/reuniones'),
+  contratos: () => pedirPortal('/contratos'),
+  // PDF del contrato: se pide con la sesión y se abre desde memoria (blob).
+  urlArchivoContrato: async (archivoId) => {
+    const res = await apiFetch(`${API_URL}/portal/contratos/archivos/${segmento(archivoId)}`, { headers: getHeaders(true) });
+    if (!res.ok) await handleResponse(res);
+    return URL.createObjectURL(await res.blob());
+  },
+  descargarArchivoContrato: (archivoId, nombre) => descargarArchivo(`${API_URL}/portal/contratos/archivos/${segmento(archivoId)}?descargar=1`, nombre),
+};
+
+// Lado del equipo: conversación con el cliente y archivos compartidos.
+export const portalEquipoService = {
+  proyecto: async (proyectoId) => {
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/portal`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  responder: async (proyectoId, contenido) => {
+    const res = await apiFetch(`${API_URL}/proyectos/${proyectoId}/portal/mensajes`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ contenido }) });
+    return handleResponse(res);
+  },
+  compartirArchivo: async (adjuntoId, visible) => {
+    const res = await apiFetch(`${API_URL}/proyectos/adjuntos/${adjuntoId}/visible-cliente`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ visible }) });
+    return handleResponse(res);
+  },
+};
+
+// Reportes para administradores. `formato: 'excel'` descarga el archivo.
+export const reportesService = {
+  personas: async ({ desde, hasta } = {}) => {
+    const res = await apiFetch(`${API_URL}/reportes/personas${construirQuery({ desde, hasta })}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  descargarPersonas: ({ desde, hasta } = {}) => descargarArchivo(
+    `${API_URL}/reportes/personas${construirQuery({ desde, hasta, formato: 'excel' })}`,
+    `reporte_personas_${desde || ''}_${hasta || ''}.xlsx`,
+  ),
+  clientes: async () => {
+    const res = await apiFetch(`${API_URL}/reportes/clientes`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  descargarClientes: () => descargarArchivo(`${API_URL}/reportes/clientes?formato=excel`, 'reporte_clientes.xlsx'),
+};
+
+export const configuracionService = {
+  // Sin sesión: la usa también la pantalla de inicio de sesión.
+  publica: async () => {
+    const res = await fetch(`${API_URL}/configuracion/publica`);
+    return handleResponse(res, { publica: true });
+  },
+  obtener: async () => {
+    const res = await apiFetch(`${API_URL}/configuracion`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  guardar: async (cambios) => {
+    const res = await apiFetch(`${API_URL}/configuracion`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(cambios) });
+    return handleResponse(res);
+  },
+  restablecer: async () => {
+    const res = await apiFetch(`${API_URL}/configuracion/restablecer`, { method: 'POST', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  subirImagen: async (clave, archivo) => {
+    const fd = new FormData();
+    fd.append('archivo', archivo);
+    const res = await apiFetch(`${API_URL}/configuracion/archivos/${encodeURIComponent(clave)}`, { method: 'POST', headers: getHeaders(true), body: fd });
+    return handleResponse(res);
+  },
+  eliminarImagen: async (clave) => {
+    const res = await apiFetch(`${API_URL}/configuracion/archivos/${encodeURIComponent(clave)}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // Cuentas que da de alta el configurador. `tipo`: 'administradores' o 'configuradores'.
+  cuentas: async (tipo) => {
+    const res = await apiFetch(`${API_URL}/configuracion/${tipo}`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  invitarCuenta: async (tipo, datos) => {
+    const res = await apiFetch(`${API_URL}/configuracion/${tipo}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  reenviarInvitacionCuenta: async (tipo, id) => {
+    const res = await apiFetch(`${API_URL}/configuracion/${tipo}/invitaciones/${encodeURIComponent(id)}/reenviar`, { method: 'POST', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  eliminarInvitacionCuenta: async (tipo, id) => {
+    const res = await apiFetch(`${API_URL}/configuracion/${tipo}/invitaciones/${encodeURIComponent(id)}`, { method: 'DELETE', headers: getHeaders() });
+    return handleResponse(res);
+  },
+  accionCuenta: async (tipo, id, accion) => {
+    const res = await apiFetch(`${API_URL}/configuracion/${tipo}/${id}/acciones`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ accion }) });
+    return handleResponse(res);
+  },
+  correoPrueba: async (email, plantilla) => {
+    const res = await apiFetch(`${API_URL}/configuracion/correo/prueba`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ email, plantilla }) });
+    return handleResponse(res);
+  },
+  plantillasCorreo: async () => {
+    const res = await apiFetch(`${API_URL}/configuracion/correo/plantillas`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // Arma el correo con el borrador del panel (sin guardarlo).
+  vistaPreviaCorreo: async (plantilla, borrador, signal) => {
+    const res = await apiFetch(`${API_URL}/configuracion/correo/vista-previa`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ plantilla, borrador }), signal });
+    return handleResponse(res);
+  },
+  // Prueba conexión e inicio de sesión SMTP con los datos del formulario (sin guardarlos).
+  verificarCorreo: async (datos) => {
+    const res = await apiFetch(`${API_URL}/configuracion/correo/verificar`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(datos) });
+    return handleResponse(res);
+  },
+  estado: async () => {
+    const res = await apiFetch(`${API_URL}/configuracion/estado`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+  // Google Drive: archivos del CRM y respaldo diario de la base.
+  drive: {
+    estado: async () => {
+      const res = await apiFetch(`${API_URL}/configuracion/drive`, { headers: getHeaders() });
+      return handleResponse(res);
+    },
+    conectar: async (code) => {
+      const res = await apiFetch(`${API_URL}/configuracion/drive/conectar`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ code }) });
+      return handleResponse(res);
+    },
+    desconectar: async () => {
+      const res = await apiFetch(`${API_URL}/configuracion/drive`, { method: 'DELETE', headers: getHeaders() });
+      return handleResponse(res);
+    },
+    respaldar: async () => {
+      const res = await apiFetch(`${API_URL}/configuracion/drive/respaldo`, { method: 'POST', headers: getHeaders() });
+      return handleResponse(res);
+    },
+    subirPendientes: async () => {
+      const res = await apiFetch(`${API_URL}/configuracion/drive/pendientes`, { method: 'POST', headers: getHeaders() });
+      return handleResponse(res);
+    },
+    // Pasa los adjuntos de antes a su carpeta de proyecto o tarea en Drive.
+    ordenar: async () => {
+      const res = await apiFetch(`${API_URL}/configuracion/drive/ordenar`, { method: 'POST', headers: getHeaders() });
+      return handleResponse(res);
+    },
   },
 };

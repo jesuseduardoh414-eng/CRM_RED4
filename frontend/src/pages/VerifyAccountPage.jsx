@@ -1,71 +1,64 @@
-import { useEffect, useState } from 'react';
+// Enlace de verificación antiguo (/verify/:token). Los registros nuevos usan
+// código de 6 dígitos (VerifyEmailPage); esta pantalla se mantiene para los
+// enlaces que ya se enviaron.
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { authService } from '../services/api';
 import { AuthSkeleton } from '../components/Skeleton';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { usePreferences } from '../context/PreferencesContext';
+import AuthLayout from '../components/auth/AuthLayout';
+import { AuthHeader } from '../components/auth/AuthUI';
 
 const VerifyAccountPage = () => {
+  const { t } = usePreferences();
   const { token } = useParams();
   const [estado, setEstado] = useState('verificando');
   const [mensaje, setMensaje] = useState('');
   const navigate = useNavigate();
 
+  // El token se consume en el servidor: solo se puede pedir una vez. En
+  // desarrollo StrictMode monta el efecto dos veces, así que la petición se
+  // guarda en un ref y se reutiliza.
+  const peticion = useRef({ token: null, promesa: null });
+
   useEffect(() => {
-    const verificar = async () => {
-      try {
-        const data = await authService.verifyAccount(token);
-        setEstado('exito');
-        setMensaje(data.mensaje);
+    document.title = `${t('authVerifiedTitle')} · ${t('appName')}`;
+    return () => { document.title = t('appName'); };
+  }, [t]);
 
-        setTimeout(() => {
-          navigate('/login');
-        }, 3000);
-      } catch (error) {
-        setEstado('error');
-        setMensaje(error.message);
-      }
-    };
+  useEffect(() => {
+    let cancelado = false;
+    if (peticion.current.token !== token) {
+      peticion.current = { token, promesa: authService.verifyAccount(token) };
+    }
+    peticion.current.promesa
+      .then((data) => { if (!cancelado) { setEstado('exito'); setMensaje(data.mensaje); } })
+      .catch((error) => { if (!cancelado) { setEstado('error'); setMensaje(error.message); } });
+    return () => { cancelado = true; };
+  }, [token]);
 
-    verificar();
-  }, [token, navigate]);
+  useEffect(() => {
+    if (estado !== 'exito') return undefined;
+    const temporizador = setTimeout(() => navigate('/login'), 3000);
+    return () => clearTimeout(temporizador);
+  }, [estado, navigate]);
 
-  if (estado === 'verificando') {
-    return <AuthSkeleton />;
-  }
+  if (estado === 'verificando') return <AuthSkeleton />;
 
+  const exito = estado === 'exito';
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', padding: '1.5rem' }}>
-      <div style={{ width: '100%', maxWidth: '450px', background: '#ffffff', border: '1px solid var(--color-border)', borderRadius: '1.5rem', padding: '3rem', textAlign: 'center', boxShadow: 'var(--shadow-xl)' }}>
-        {estado === 'exito' && (
-          <div style={{ animation: 'fadeSlideIn 0.4s ease' }}>
-            <div style={{ width: '64px', height: '64px', background: '#f0fdf4', color: '#10b981', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-              <CheckCircle2 size={40} strokeWidth={2.5} />
-            </div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '1rem' }}>¡Cuenta Verificada!</h1>
-            <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>
-              {mensaje}<br />
-              <span style={{ fontSize: '0.85rem', marginTop: '0.5rem', display: 'block' }}>Redirigiendo al login en 3 segundos...</span>
-            </p>
-            <Link to="/login" className="btn-primary" style={{ display: 'inline-block', textDecoration: 'none', padding: '0.8rem 2rem' }}>
-              Ir al Login
-            </Link>
-          </div>
-        )}
-
-        {estado === 'error' && (
-          <div style={{ animation: 'fadeSlideIn 0.4s ease' }}>
-            <div style={{ width: '64px', height: '64px', background: '#fef2f2', color: '#ef4444', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-              <XCircle size={40} strokeWidth={2.5} />
-            </div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '1rem' }}>Error de Verificación</h1>
-            <p style={{ color: 'var(--color-text-muted)', marginBottom: '2rem' }}>{mensaje}</p>
-            <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: 500, textDecoration: 'none' }}>
-              Intentar registrarse de nuevo
-            </Link>
-          </div>
-        )}
+    <AuthLayout>
+      <div role="status" aria-live="polite">
+        <AuthHeader
+          icono={exito ? CheckCircle2 : XCircle}
+          tono={exito ? 'exito' : 'error'}
+          titulo={exito ? t('authVerifiedTitle') : t('authVerifyErrorTitle')}
+          subtitulo={exito ? `${mensaje} ${t('authRedirecting')}` : mensaje}
+        />
       </div>
-    </div>
+      <Link to="/login" className="auth-btn">{t('authGoToLogin')}</Link>
+    </AuthLayout>
   );
 };
 

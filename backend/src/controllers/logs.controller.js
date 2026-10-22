@@ -1,22 +1,24 @@
 const prisma = require('../lib/prisma');
-const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
+const { cargarProyectoVisible } = require('../utils/permissions.utils');
+const { alcanceDe } = require('../utils/permisosArea.utils');
+const { contiene } = require('../utils/paginacion.utils');
 
 const listarPorProyecto = async (req, res) => {
   const proyectoId = parseInt(req.params.id);
   if (isNaN(proyectoId)) return res.status(400).json({ error: 'ID de proyecto inválido' });
 
   try {
-    const proyecto = await prisma.proyecto.findUnique({
-      where: { id: proyectoId },
-      select: { id: true, area: true }
-    });
-
+    // Misma regla de lectura que el resto de datos del proyecto: antes solo
+    // se validaba a los ADMIN y un MIEMBRO podia leer el historial de
+    // cualquier proyecto cambiando el id.
+    const { proyecto, permitido } = await cargarProyectoVisible(prisma, req.usuario, proyectoId);
     if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
-
-    const usuarioEsAdmin = esAdmin(req.usuario);
-    if (usuarioEsAdmin && !puedeAdministrarProyecto(req.usuario, proyecto)) {
+    if (!permitido) {
       return res.status(403).json({ error: 'No tienes permiso para ver el historial de este proyecto' });
     }
+
+    // Con "tareas.ver" = propios, solo la actividad de sus tareas.
+    const veTodas = alcanceDe(req.usuario, 'tareas.ver') === 'todos';
     const accionesSoloDeTarea = [
       'CREAR_TAREA',
       'EDITAR_TAREA',
@@ -27,12 +29,12 @@ const listarPorProyecto = async (req, res) => {
     const logs = await prisma.logActividad.findMany({
       where: {
         proyectoId,
-        ...(usuarioEsAdmin ? {} : {
+        ...(veTodas ? {} : {
           OR: [
             {
               tareaId: null,
               accion: { notIn: accionesSoloDeTarea },
-              NOT: { descripcion: { contains: 'tarea' } }
+              NOT: { descripcion: contiene('tarea') }
             },
             { tarea: { asignadoId: null } },
             { tarea: { asignadoId: req.usuario.id } },

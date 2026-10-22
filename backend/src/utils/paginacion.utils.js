@@ -3,6 +3,7 @@
 // REGLA IMPORTANTE: si la peticion no manda `page` ni `limit`, la respuesta sale
 // completa, exactamente como antes. El CRM ya desplegado sigue funcionando sin
 // cambios; las pantallas van adoptando la paginacion cuando les toque.
+const { esPostgres } = require('../lib/baseDatos');
 
 const LIMITE_POR_DEFECTO = 20;
 const LIMITE_MAXIMO = 100;
@@ -50,11 +51,21 @@ const paginar = (items, paginacion) => {
   };
 };
 
-/** Filtro `contains` insensible a mayusculas sobre varios campos. */
+/**
+ * Filtro `contains` que no distingue mayusculas en las dos bases. En MySQL ya
+ * lo hace el cotejamiento (utf8mb4_unicode_ci) y Prisma no admite `mode` ahi;
+ * en Postgres la comparacion es exacta y hace falta `mode: 'insensitive'`
+ * (ILIKE). Usar esto en vez de `{ contains }` a pelo en cualquier busqueda.
+ */
+const contiene = (texto) => (esPostgres()
+  ? { contains: texto, mode: 'insensitive' }
+  : { contains: texto });
+
+/** Filtro `contains` sobre varios campos (busqueda libre). */
 const construirBusqueda = (texto, campos) => {
   const q = String(texto || '').trim();
   if (!q) return null;
-  return { OR: campos.map((campo) => ({ [campo]: { contains: q, mode: 'insensitive' } })) };
+  return { OR: campos.map((campo) => ({ [campo]: contiene(q) })) };
 };
 
 /** Une condiciones ignorando las nulas, para no ensuciar el `where`. */
@@ -70,6 +81,7 @@ module.exports = {
   LIMITE_MAXIMO,
   parsearPaginacion,
   paginar,
+  contiene,
   construirBusqueda,
   combinarWhere,
 };

@@ -2,65 +2,48 @@ import { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
 import UserAvatar from './UserAvatar';
 import ActionMenu from './ActionMenu';
 import {
-  ListTodo,
-  Zap,
+  CircleDashed,
+  PlayCircle,
   CheckCircle2,
-  AlertCircle,
+  AlertTriangle,
   ArrowRight,
+  CalendarClock,
   Pencil,
+  Eye,
   Trash2,
   ChevronLeft,
   ChevronRight,
-  Calendar
 } from 'lucide-react';
 import { usePreferences } from '../context/PreferencesContext';
+import {
+  ESTADOS_TAREA,
+  getPrioridadTarea,
+  siguienteEstadoTarea,
+  asignadosDeTarea,
+} from '../utils/estadosTarea';
+import { claveDiaLocal, claveDesdeISO, estaPorVencer } from '../utils/fechasLocales';
+import { useConfiguracion } from '../context/ConfiguracionContext';
+import { useTextoPermisos } from '../hooks/useTextoPermisos';
+import { useTextoProyectos } from '../hooks/useTextoProyectos';
 
 // ── Configuración Visual ───────────────────────────────────────────────────
-const COLUMNAS = [
-  {
-    key:      'PENDIENTE',
-    labelKey: 'kanbanTodo',
-    icon:     <ListTodo size={18} />,
-    color:    'var(--color-text-muted)',
-    bg:       'var(--color-surface-2)',
-    borde:    'var(--color-border)',
-    hover:    'var(--color-surface-3)',
-  },
-  {
-    key:      'EN_PROGRESO',
-    labelKey: 'kanbanInProgress',
-    icon:     <Zap size={18} />,
-    color:    'var(--color-accent-blue)',
-    bg:       'rgba(0,162,255,0.05)',
-    borde:    'rgba(0,162,255,0.15)',
-    hover:    'rgba(0,162,255,0.1)',
-  },
-  {
-    key:      'HECHO',
-    labelKey: 'kanbanDone',
-    icon:     <CheckCircle2 size={18} />,
-    color:    'var(--color-accent-green)',
-    bg:       'rgba(0,209,102,0.05)',
-    borde:    'rgba(0,209,102,0.15)',
-    hover:    'rgba(0,209,102,0.1)',
-  },
-];
-
-const PRIORIDAD_CONFIG = {
-  ALTA:  { color: 'var(--color-accent-pink)',  bg: 'rgba(255,0,85,0.1)',   labelKey: 'priorityCritical' },
-  MEDIA: { color: 'var(--color-accent-amber)', bg: 'rgba(255,145,0,0.1)',  labelKey: 'priorityMedium' },
-  BAJA:  { color: 'var(--color-accent-blue)',  bg: 'rgba(0,162,255,0.1)',  labelKey: 'priorityNormal' },
+// Nombres y colores salen del catalogo compartido (utils/estadosTarea): aqui
+// solo se añade el icono de cada columna, el mismo de la lista y del inicio.
+const ICONOS_COLUMNA = {
+  PENDIENTE: CircleDashed,
+  EN_PROGRESO: PlayCircle,
+  HECHO: CheckCircle2,
 };
 
-const getTaskAssignees = (tarea) => {
-  if (Array.isArray(tarea?.asignados) && tarea.asignados.length > 0) return tarea.asignados;
-  return tarea?.asignado ? [tarea.asignado] : [];
-};
+const COLUMNAS = ESTADOS_TAREA.map((estado) => ({
+  key: estado.value,
+  labelKey: estado.labelKey,
+  Icono: ICONOS_COLUMNA[estado.value],
+  color: estado.color,
+}));
 
 // 10 tarjetas por pagina en cada columna, igual que la lista y el gantt.
 const TAREAS_POR_PAGINA = 10;
-
-const CICLO_ESTADOS = ['PENDIENTE', 'EN_PROGRESO', 'HECHO'];
 
 // ── Utilidades ──────────────────────────────────────────────────────────────
 const getLocale = () => document.documentElement.lang === 'en' ? 'en-US' : 'es-MX';
@@ -70,17 +53,26 @@ const formatFecha = (iso) => {
   return d.toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' });
 };
 
-const getDateKeyLocal = (value) => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
-
 const esVencida = (fechaStr) => {
   if (!fechaStr) return false;
-  const hoy = new Date(); hoy.setHours(0,0,0,0);
-  const f   = new Date(fechaStr); f.setHours(0,0,0,0);
-  return f < hoy;
+  return claveDesdeISO(fechaStr) < claveDiaLocal();
+};
+
+/**
+ * ¿La tarea "toca" el dia de hoy? Una hecha, si se cerro hoy. Una abierta, si
+ * hoy cae dentro de su rango inicio–vencimiento (una tarea del 1 al 5 tiene
+ * que salir el dia 3; antes solo salia si empezaba o vencia justo hoy).
+ */
+const tareaTocaHoy = (tarea, hoy) => {
+  if (tarea.estado === 'HECHO') {
+    return Boolean(tarea.completadoEn) && claveDiaLocal(new Date(tarea.completadoEn)) === hoy;
+  }
+  const inicio = tarea.fechaInicio ? claveDesdeISO(tarea.fechaInicio) : null;
+  const fin = tarea.venceEn ? claveDesdeISO(tarea.venceEn) : null;
+  if (inicio && fin) return inicio <= hoy && hoy <= fin;
+  if (inicio) return inicio === hoy;
+  if (fin) return fin === hoy;
+  return false;
 };
 
 const getScrollSnapshot = (el, count) => {
@@ -106,7 +98,9 @@ const sortKanbanColumnTasks = (tareas = [], columna) => {
   });
 };
 
-// ── Tarjeta Kanban (Material Style) ──────────────────────────────────────────
+// ── Tarjeta Kanban ───────────────────────────────────────────────────────────
+// Plana y compacta, como las tareas del inicio: prioridad y aviso arriba,
+// titulo, y responsables, fecha y acciones en el pie.
 const KanbanCard = ({
   tarea,
   actualizando,
@@ -114,160 +108,167 @@ const KanbanCard = ({
   onEditar,
   onEliminar,
   onCambiarEstado,
-  onActualizarTarea,
   onDragStart,
+  onDragEnd,
+  // Sin permiso (ni admin del proyecto, ni creador, ni responsable) no se
+  // ofrece avanzar, mover ni borrar: el backend lo rechazaria.
+  gestionable = true,
+  // Borrar depende ademas del permiso "borrar tareas" de la instalacion.
+  borrable = gestionable,
   seleccionable = false,
   seleccionada = false,
   onAlternarSeleccion,
 }) => {
   const { t } = usePreferences();
-  const prio = PRIORIDAD_CONFIG[tarea.prioridad] || PRIORIDAD_CONFIG.MEDIA;
-  const idxActual = CICLO_ESTADOS.indexOf(tarea.estado);
-  const sigEstado = CICLO_ESTADOS[(idxActual + 1) % CICLO_ESTADOS.length];
+  const tp = useTextoPermisos();
+  const tx = useTextoProyectos();
+  const { reglasTareas } = useConfiguracion();
+  const prio = getPrioridadTarea(tarea.prioridad);
+  const hecha = tarea.estado === 'HECHO';
+  const vencida = esVencida(tarea.venceEn) && !hecha;
+  // Aviso suave antes de vencer; los dias los fija la configuracion (0 = apagado).
+  const porVencer = !vencida && !hecha
+    && estaPorVencer(tarea.venceEn, reglasTareas.diasPorVencer);
+  // "Mover a..." en el menu: con el dedo no se puede arrastrar (el arrastre de
+  // HTML5 no existe en pantallas tactiles) y la flecha de avanzar solo va
+  // hacia delante. Desde aqui se llega a cualquier columna, tambien para
+  // devolver una tarea hecha.
+  const movimientos = gestionable
+    ? COLUMNAS.filter((col) => col.key !== tarea.estado).map((col) => ({
+      label: tx('det_moverA', { estado: t(col.labelKey) }),
+      icon: <col.Icono size={14} style={{ color: col.color }} />,
+      onSelect: () => onCambiarEstado(tarea.id, col.key),
+    }))
+    : [];
+  const acciones = [
+    ...movimientos,
+    movimientos.length > 0 && { separator: true },
+    gestionable && { label: t('edit'), icon: <Pencil size={14} />, onSelect: () => onEditar(tarea) },
+    borrable && { label: t('delete'), icon: <Trash2 size={14} />, onSelect: () => onEliminar(tarea), danger: true },
+  ].filter(Boolean);
+  const sigEstado = siguienteEstadoTarea(tarea.estado);
+  const asignados = asignadosDeTarea(tarea);
+  const arrastrable = !seleccionable && gestionable;
 
   return (
     <div
       data-task-id={tarea.id}
       // Sin arrastre mientras se seleccionan: mover y marcar tarjetas con el
       // mismo gesto se pisan y acabas cambiando de columna sin querer.
-      draggable={!seleccionable}
-      onDragStart={(e) => onDragStart(e, tarea.id)}
+      draggable={arrastrable}
+      onDragStart={(e) => {
+        // Sin esto, arrastrar el avatar o el texto de una tarjeta no
+        // arrastrable tambien la movia al soltarla en otra columna.
+        if (!arrastrable) { e.preventDefault(); return; }
+        onDragStart(e, tarea.id);
+      }}
+      onDragEnd={onDragEnd}
       onClick={() => (seleccionable ? onAlternarSeleccion?.(tarea.id) : onClick(tarea))}
-      style={{
-        background: 'var(--color-surface-2)',
-        border: `1px solid ${seleccionada ? 'var(--color-primary)' : 'var(--color-border)'}`,
-        borderRadius: '1rem',
-        padding: '1rem',
-        cursor: actualizando ? 'wait' : (seleccionable ? 'pointer' : 'grab'),
-        opacity: actualizando ? 0.6 : 1,
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        display: 'flex', flexDirection: 'column', gap: '0.75rem',
-        boxShadow: seleccionada ? '0 0 0 2px rgba(37,99,235,0.25)' : 'var(--shadow-sm)',
-        position: 'relative'
+      // Se abre (o se marca) tambien con el teclado, como las filas de la lista
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        if (seleccionable) onAlternarSeleccion?.(tarea.id);
+        else onClick(tarea);
       }}
-      // El realce de la seleccion se pinta con el mismo borde y sombra que toca
-      // el hover, asi que en una tarjeta marcada se deja quieto.
-      onMouseOver={e => {
-        if (!actualizando && !seleccionada) {
-          e.currentTarget.style.transform = 'translateY(-3px)';
-          e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
-        }
-      }}
-      onMouseOut={e => {
-        if (seleccionada) return;
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-        e.currentTarget.style.borderColor = 'var(--color-border)';
-      }}
+      className="det-kanban-tarjeta"
+      data-seleccionada={seleccionada || undefined}
+      data-actualizando={actualizando || undefined}
+      style={{ cursor: actualizando ? 'wait' : (arrastrable ? 'grab' : 'pointer') }}
     >
-      {/* Badge de Prioridad */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {seleccionable && (
-            <input
-              type="checkbox"
-              checked={seleccionada}
-              onChange={() => onAlternarSeleccion?.(tarea.id)}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={tarea.titulo}
-              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
-            />
-          )}
-          <span style={{
-            fontSize: '0.65rem', fontWeight: 500, textTransform: '', padding: '0.2rem 0.6rem', borderRadius: '4px',
-            background: prio.bg, color: prio.color
-          }}>
-            {t(prio.labelKey)}
+      <div className="flex items-center gap-2">
+        {seleccionable && (
+          <input
+            type="checkbox"
+            checked={seleccionada}
+            onChange={() => onAlternarSeleccion?.(tarea.id)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={tarea.titulo}
+            className="h-4 w-4 cursor-pointer accent-[var(--color-primary)]"
+          />
+        )}
+        <span className="det-chip" style={{ background: prio.bg, color: prio.fg }}>
+          {t(prio.labelKey)}
+        </span>
+        {vencida && (
+          <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-error)]">
+            <AlertTriangle size={11} /> {t('taskOverdue')}
           </span>
-        </div>
-        {esVencida(tarea.venceEn) && tarea.estado !== 'HECHO' && (
-          <span style={{ color: 'var(--color-error)', fontSize: '0.65rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-            <AlertCircle size={10} /> {t('taskOverdue')}
+        )}
+        {porVencer && (
+          <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-warning)]">
+            <CalendarClock size={11} /> {tp('tareaPorVencer')}
           </span>
         )}
       </div>
 
-      {/* Título y Desc */}
       <div>
-        <h4 style={{ 
-          fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.25rem',
-          textDecoration: tarea.estado === 'HECHO' ? 'line-through' : 'none',
-          opacity: tarea.estado === 'HECHO' ? 0.5 : 1
-        }}>
+        <p className={`text-[13.5px] font-medium leading-snug ${hecha ? 'det-hecha' : 'text-[var(--color-text)]'}`}>
+          {tarea.numeroActividad ? <span className="mr-1.5 font-normal tabular-nums text-[var(--color-text-muted)]">#{tarea.numeroActividad}</span> : null}
           {tarea.titulo}
-        </h4>
+        </p>
         {tarea.descripcion && (
-          <p style={{ 
-            fontSize: '0.8rem', color: 'var(--color-text-muted)', lineHeight: 1.4,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-          }}>
+          <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-[var(--color-text-muted)]">
             {tarea.descripcion}
           </p>
         )}
       </div>
 
-      {/* Info Asignado y Fecha */}
-      <div style={{ 
-        marginTop: '0.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        paddingTop: '0.75rem', borderTop: '1px solid var(--color-border-light)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <UserAvatar
-            usuario={getTaskAssignees(tarea)[0]}
-            size={24}
-            radius={999}
-            fontSize="0.65rem"
-            color="var(--color-primary-light)"
-            background="var(--color-surface-3)"
-            borderColor="var(--color-border)"
-          />
-          <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            {getTaskAssignees(tarea).map((asignado) => asignado.nombre?.split(' ')[0]).filter(Boolean).join(', ') || 'S/A'}
+      {/* Responsables, fecha y menu juntos en el pie: asi una tarea completada
+          no deja una fila de acciones vacia con el menu suelto en medio. */}
+      <div className="flex items-center gap-2 border-t border-[var(--color-border)] pt-2">
+        <UserAvatar
+          usuario={asignados[0]}
+          size={22}
+          radius={999}
+          fontSize="0.58rem"
+          color="var(--color-text-dim)"
+          background="var(--color-surface-3)"
+          borderColor="transparent"
+        />
+        <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text-muted)]">
+          {asignados.map((asignado) => asignado.nombre?.split(' ')[0]).filter(Boolean).join(', ') || t('taskUnassigned')}
+        </span>
+        {tarea.venceEn && (
+          <span className="det-vence" data-tono={vencida ? 'vencida' : porVencer ? 'por-vencer' : hecha ? 'hecha' : undefined}>
+            {formatFecha(tarea.venceEn)}
           </span>
-        </div>
-        {/* Fecha y menu juntos: asi una tarea completada no deja una fila de
-            acciones vacia con el boton de 3 puntitos suelto en medio. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          {tarea.venceEn && (
-            <span style={{ fontSize: '0.72rem', color: esVencida(tarea.venceEn) ? 'var(--color-error)' : 'var(--color-text-dim)' }}>
-              {formatFecha(tarea.venceEn)}
-            </span>
-          )}
-          {/* En modo seleccion manda la barra de arriba: un "Eliminar" aqui que
-              borra solo esta tarjeta despista. */}
-          {!seleccionable && (
-            <ActionMenu
-              size={14}
-              items={[
-                { label: t('edit'), icon: <Pencil size={14} />, onSelect: () => onEditar(tarea) },
-                { label: t('delete'), icon: <Trash2 size={14} />, onSelect: () => onEliminar(tarea), danger: true },
-              ]}
-            />
-          )}
-        </div>
+        )}
+        {/* Accion principal: solo existe mientras la tarea pueda avanzar */}
+        {!hecha && gestionable && !seleccionable && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
+            title={t('taskAdvanceStatus')}
+            aria-label={t('taskAdvanceStatus')}
+            className="dash-icono det-kanban-avanzar"
+          >
+            <ArrowRight size={14} />
+          </button>
+        )}
+        {/* En modo seleccion manda la barra de arriba: un "Eliminar" aqui que
+            borra solo esta tarjeta despista. */}
+        {!seleccionable && (
+          <ActionMenu
+            size={14}
+            items={acciones.length ? acciones : [
+              { label: t('viewDetail'), icon: <Eye size={14} />, onSelect: () => onClick(tarea) },
+            ]}
+          />
+        )}
       </div>
-
-      {/* Accion principal: solo existe mientras la tarea pueda avanzar */}
-      {tarea.estado !== 'HECHO' && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onCambiarEstado(tarea.id, sigEstado); }}
-          style={{
-            width: '100%', padding: '0.4rem', borderRadius: '0.5rem', background: 'var(--color-surface-3)',
-            border: 'none', color: 'var(--color-text)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem'
-          }}
-        >
-          {t('taskAdvance')} <ArrowRight size={12} />
-        </button>
-      )}
     </div>
   );
 };
 
 // ── Columna Kanban ───────────────────────────────────────────────────────────
-const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, onDragStart, onDrop, pagina, onCambiarPagina, scrollRef, seleccionable, seleccionadas, onAlternarSeleccion }) => {
+// Columna con fondo suave y cabecera (icono, nombre, cuantas). Crece con sus
+// tarjetas hasta un tope; vacia, solo muestra un aviso pequeño punteado.
+const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onEliminar, onCambiarEstado, onDragStart, onDragEnd, onDrop, pagina, onCambiarPagina, scrollRef, puedeGestionar, puedeBorrar, seleccionable, seleccionadas, onAlternarSeleccion }) => {
   const { t } = usePreferences();
+  const tx = useTextoProyectos();
   const [dragOver, setDragOver] = useState(false);
 
   // Paginacion por columna. Antes era un "Ver mas" que solo alargaba la
@@ -280,39 +281,35 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
   );
 
   return (
-    <div className="w-[85vw] min-w-[85vw] max-w-[85vw] md:w-auto md:min-w-0 md:max-w-none flex-shrink-0 flex flex-col gap-4">
-      <div className="flex items-center justify-between px-2">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{col.icon}</span>
-          <h3 className="text-sm font-semibold" style={{ color: col.color }}>{t(col.labelKey)}</h3>
-        </div>
-        <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] font-medium text-slate-500">
-          {tareas.length}
+    <div
+      className="det-kanban-columna w-[85vw] min-w-[85vw] max-w-[85vw] md:w-auto md:min-w-0 md:max-w-none flex-shrink-0"
+      data-arrastrando={dragOver || undefined}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false); }}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, col.key); }}
+    >
+      <div className="det-kanban-cabecera">
+        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text)]">
+          <col.Icono size={15} style={{ color: col.color }} aria-hidden="true" />
+          {t(col.labelKey)}
         </span>
+        <span className="text-[12.5px] font-medium tabular-nums text-[var(--color-text-muted)]">{tareas.length}</span>
       </div>
 
-      <div
-        ref={scrollRef}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, col.key); }}
-        className={`
-          rounded-2xl p-2 flex flex-col gap-4 transition-all duration-200 h-[70vh] min-h-[70vh] max-h-[70vh] overflow-y-auto
-          ${dragOver ? 'bg-slate-50 border-2 border-dashed' : 'bg-transparent border-2 border-transparent'}
-        `}
-        style={{ borderColor: dragOver ? col.color : 'transparent' }}
-      >
+      <div ref={scrollRef} className="det-kanban-cuerpo">
         {tareasVisibles.map(t => (
-          <KanbanCard 
-            key={t.id} 
-            tarea={t} 
+          <KanbanCard
+            key={t.id}
+            tarea={t}
             actualizando={actualizando === t.id}
             onClick={onClick}
             onEditar={onEditar}
             onEliminar={onEliminar}
             onCambiarEstado={onCambiarEstado}
-            onActualizarTarea={onActualizarTarea}
             onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            gestionable={puedeGestionar ? puedeGestionar(t) : true}
+            borrable={puedeBorrar ? puedeBorrar(t) : (puedeGestionar ? puedeGestionar(t) : true)}
             seleccionable={seleccionable}
             seleccionada={!!seleccionadas?.has(t.id)}
             onAlternarSeleccion={onAlternarSeleccion}
@@ -320,58 +317,89 @@ const KanbanColumna = ({ col, tareas, actualizando, onClick, onEditar, onElimina
         ))}
 
         {tareas.length === 0 && (
-          <div className="flex-1 min-h-[420px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 flex items-center justify-center px-6 text-center">
-            <span className="text-[11px] font-medium text-slate-300">
-              {t('taskNoTasks')}
-            </span>
-          </div>
-        )}
-
-        {totalPaginas > 1 && (
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => onCambiarPagina(Math.max(1, paginaActual - 1))}
-              disabled={paginaActual === 1}
-              aria-label={t('previous')}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <span className="text-xs font-medium text-[var(--color-text-muted)]">
-              {paginaActual} / {totalPaginas}
-            </span>
-            <button
-              type="button"
-              onClick={() => onCambiarPagina(Math.min(totalPaginas, paginaActual + 1))}
-              disabled={paginaActual === totalPaginas}
-              aria-label={t('next')}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
-            >
-              <ChevronRight size={15} />
-            </button>
+          <div className="det-kanban-vacio">
+            {dragOver ? tx('det_soltarAqui') : t('taskNoTasks')}
           </div>
         )}
       </div>
+
+      {totalPaginas > 1 && (
+        <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-2 py-1.5">
+          <button
+            type="button"
+            onClick={() => onCambiarPagina(Math.max(1, paginaActual - 1))}
+            disabled={paginaActual === 1}
+            aria-label={t('previous')}
+            className="dash-icono !h-7 !w-7"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <span className="text-[12px] font-medium tabular-nums text-[var(--color-text-muted)]">
+            {paginaActual} / {totalPaginas}
+          </span>
+          <button
+            type="button"
+            onClick={() => onCambiarPagina(Math.min(totalPaginas, paginaActual + 1))}
+            disabled={paginaActual === totalPaginas}
+            aria-label={t('next')}
+            className="dash-icono !h-7 !w-7"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
 // ── View Principal ───────────────────────────────────────────────────────────
-const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, onActualizarTarea, seleccionable = false, seleccionadas, onAlternarSeleccion }) => {
+const KanbanView = ({
+  tareas,
+  onClick,
+  onEditar,
+  onEliminar,
+  onCambiarEstado,
+  puedeGestionar,
+  // Opcional: si no llega, borrar sigue la misma regla que gestionar.
+  puedeBorrar,
+  // Avisa al padre de que tareas esta mostrando el tablero (tiene su propio
+  // filtro de dia), para que "Seleccionar todas" no marque las escondidas.
+  onTareasVisiblesChange,
+  seleccionable = false,
+  seleccionadas,
+  onAlternarSeleccion,
+}) => {
   const { t } = usePreferences();
   const [actualizando, setActualizando] = useState(null);
   const [optimisticMoves, setOptimisticMoves] = useState({});
-  const [soloHoy, setSoloHoy] = useState(true);
+  // Arranca mostrando todo: el filtro "Hoy" escondia las tareas en curso que
+  // no empiezan ni vencen justo hoy, y parecia que el tablero estaba vacio.
+  const [soloHoy, setSoloHoy] = useState(false);
   const [paginas, setPaginas] = useState({ PENDIENTE: 1, EN_PROGRESO: 1, HECHO: 1 });
   const dragId = useRef(null);
   const columnasRef = useRef({});
   const scrollRestoreRef = useRef(null);
   const scrollFocusRef = useRef(null);
 
+  // Un movimiento optimista deja de valer en cuanto el padre refleja el nuevo
+  // estado (o lo revierte por error). Se deriva aqui en vez de limpiarlo con
+  // un efecto, que provocaba un render extra en cascada.
+  const movimientosVigentes = useMemo(() => {
+    const entradas = Object.entries(optimisticMoves);
+    if (entradas.length === 0) return optimisticMoves;
+    const vigentes = {};
+    entradas.forEach(([taskId, movimiento]) => {
+      const tareaReal = tareas.find((item) => item.id === Number(taskId));
+      if (!tareaReal) return;
+      if (tareaReal.estado === movimiento.estado || tareaReal.estado === movimiento.previousEstado) return;
+      vigentes[taskId] = movimiento;
+    });
+    return vigentes;
+  }, [optimisticMoves, tareas]);
+
   const tareasConEstadoLocal = useMemo(() => (
     tareas.map((tarea) => {
-      const movimiento = optimisticMoves[tarea.id];
+      const movimiento = movimientosVigentes[tarea.id];
       if (!movimiento) return tarea;
       return {
         ...tarea,
@@ -379,27 +407,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
         completadoEn: movimiento.completadoEn,
       };
     })
-  ), [tareas, optimisticMoves]);
-
-  useEffect(() => {
-    setOptimisticMoves((prev) => {
-      const entries = Object.entries(prev);
-      if (entries.length === 0) return prev;
-
-      let changed = false;
-      const next = { ...prev };
-
-      entries.forEach(([taskId, movimiento]) => {
-        const tareaReal = tareas.find((item) => item.id === Number(taskId));
-        if (!tareaReal || tareaReal.estado === movimiento.estado || tareaReal.estado === movimiento.previousEstado) {
-          delete next[taskId];
-          changed = true;
-        }
-      });
-
-      return changed ? next : prev;
-    });
-  }, [tareas]);
+  ), [tareas, movimientosVigentes]);
 
   const handleDragStart = (e, id) => {
     dragId.current = id;
@@ -424,20 +432,24 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
   const aplicarMovimientoOptimista = (tareaActual, nuevoEstado) => {
     if (!tareaActual || tareaActual.estado === nuevoEstado) return;
 
-    setOptimisticMoves((prev) => ({
-      ...prev,
+    // Se parte de los vigentes: asi los movimientos ya confirmados se van del
+    // estado y no se acumulan.
+    setOptimisticMoves({
+      ...movimientosVigentes,
       [Number(tareaActual.id)]: {
         previousEstado: tareaActual.estado,
         estado: nuevoEstado,
         completadoEn: nuevoEstado === 'HECHO' ? new Date().toISOString() : null,
       }
-    }));
+    });
 
     // Al mover una tarjeta a otra columna, saltar a la pagina donde cae, para
-    // no perderla de vista. Antes se subia el tope de "Ver mas" con el mismo fin.
+    // no perderla de vista. "Hecho" va de la mas reciente a la mas vieja, asi
+    // que la recien completada cae en la primera pagina; antes se saltaba a la
+    // ultima y se veian las completadas hace meses.
     setPaginas((prev) => ({
       ...prev,
-      [nuevoEstado]: Math.max(1, Math.ceil(
+      [nuevoEstado]: nuevoEstado === 'HECHO' ? 1 : Math.max(1, Math.ceil(
         (tareasConEstadoLocal.filter((item) => item.estado === nuevoEstado).length + 1) / TAREAS_POR_PAGINA,
       )),
     }));
@@ -446,6 +458,7 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
   const handleCambiarEstadoKanban = async (id, nuevoEstado) => {
     const tareaActual = tareasConEstadoLocal.find(x => x.id === Number(id));
     if (!tareaActual || tareaActual.estado === nuevoEstado) return;
+    if (puedeGestionar && !puedeGestionar(tareaActual)) return;
 
     aplicarMovimientoOptimista(tareaActual, nuevoEstado);
     registrarSnapshotScroll(tareaActual.estado, nuevoEstado);
@@ -471,16 +484,22 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
     dragId.current = null;
   };
 
-  const hoy = getDateKeyLocal(new Date());
-  const tareasFiltradas = soloHoy 
-    ? tareasConEstadoLocal.filter(t => {
-        if (optimisticMoves[t.id]) return true;
-        if (t.estado === 'HECHO') {
-          return t.completadoEn && getDateKeyLocal(t.completadoEn) === hoy;
-        }
-        return (t.fechaInicio && getDateKeyLocal(t.fechaInicio) === hoy) || (t.venceEn && getDateKeyLocal(t.venceEn) === hoy);
-      })
-    : tareasConEstadoLocal;
+  const hoy = claveDiaLocal();
+  const tareasFiltradas = useMemo(() => (
+    soloHoy
+      ? tareasConEstadoLocal.filter((t) => Boolean(movimientosVigentes[t.id]) || tareaTocaHoy(t, hoy))
+      : tareasConEstadoLocal
+  ), [soloHoy, tareasConEstadoLocal, movimientosVigentes, hoy]);
+
+  // El padre necesita saber que se ve para "Seleccionar todas". Al desmontar
+  // (cambio de vista) se avisa con null para que vuelva a la lista general.
+  useEffect(() => {
+    onTareasVisiblesChange?.(tareasFiltradas);
+  }, [tareasFiltradas, onTareasVisiblesChange]);
+
+  useEffect(() => () => {
+    onTareasVisiblesChange?.(null);
+  }, [onTareasVisiblesChange]);
 
   const tareasPorColumna = useMemo(() => ({
     PENDIENTE: sortKanbanColumnTasks(
@@ -542,35 +561,21 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
   }, [tareasPorColumna]);
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Filtro de día */}
-      <div className="flex flex-wrap gap-2 lg:gap-4 items-center">
-        <button 
-          onClick={() => setSoloHoy(true)}
-          className={`
-            px-6 py-3 rounded-xl text-xs font-medium transition-all flex items-center gap-2
-            ${soloHoy ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}
-          `}
-        >
-          {t('taskFilterToday')} <Calendar size={14} />
-        </button>
-        <button 
-          onClick={() => setSoloHoy(false)}
-          className={`
-            px-5 py-3 rounded-xl text-xs font-medium transition-all border
-            ${!soloHoy
-              ? 'bg-slate-800 text-white border-slate-800 shadow-lg'
-              : 'bg-white text-slate-700 border-slate-300 shadow-sm hover:bg-slate-50 hover:border-slate-400'}
-          `}
-        >
+    <div className="flex flex-col gap-3">
+      {/* Filtro de día, como segmento: antes eran dos botones grandes con sombra */}
+      <div role="tablist" aria-label={t('projectTaskFilters')} className="dash-segmento self-start">
+        <button type="button" role="tab" onClick={() => setSoloHoy(false)} aria-selected={!soloHoy}>
           {t('taskFilterAll')}
+        </button>
+        <button type="button" role="tab" onClick={() => setSoloHoy(true)} aria-selected={soloHoy}>
+          {t('taskFilterToday')}
         </button>
       </div>
 
-      <div className="flex md:grid md:grid-cols-3 items-start gap-4 lg:gap-8 overflow-x-auto md:overflow-visible pb-8 snap-x snap-mandatory lg:snap-none">
+      <div className="flex md:grid md:grid-cols-3 items-start gap-3 overflow-x-auto md:overflow-visible pb-2 snap-x snap-mandatory lg:snap-none">
         {COLUMNAS.map(col => (
           <div key={col.key} className="snap-center md:min-w-0">
-            <KanbanColumna 
+            <KanbanColumna
               col={col}
               tareas={tareasPorColumna[col.key]}
               actualizando={actualizando}
@@ -578,12 +583,16 @@ const KanbanView = ({ tareas, onClick, onEditar, onEliminar, onCambiarEstado, on
               onEditar={onEditar}
               onEliminar={onEliminar}
               onCambiarEstado={handleCambiarEstadoKanban}
-              onActualizarTarea={onActualizarTarea}
               onDragStart={handleDragStart}
+              // Soltar fuera de una columna no pasa por handleDrop: sin
+              // limpiar, el siguiente drop de otra cosa movia esta tarea.
+              onDragEnd={() => { dragId.current = null; }}
               onDrop={handleDrop}
               pagina={paginas[col.key]}
               onCambiarPagina={(n) => setPaginas(prev => ({ ...prev, [col.key]: n }))}
               scrollRef={(el) => { columnasRef.current[col.key] = el; }}
+              puedeGestionar={puedeGestionar}
+              puedeBorrar={puedeBorrar}
               seleccionable={seleccionable}
               seleccionadas={seleccionadas}
               onAlternarSeleccion={onAlternarSeleccion}

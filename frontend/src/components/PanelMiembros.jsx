@@ -4,162 +4,109 @@
 // moverla dentro de Proyectos como una pestaña mas y dejarla **solo para el
 // admin**, que es quien reparte trabajo entre proyectos. Quien decide que se ve
 // es ProyectosPage; aqui solo se dibuja.
+//
+// Mismo lenguaje que el directorio de clientes: un panel con filas, sin
+// tarjetas grandes. Cada proyecto es una fila que se despliega con su equipo.
 
 import { useState } from 'react';
-import useSWR from 'swr';
 import { proyectosService } from '../services/api';
-import { PageSkeleton } from './Skeleton';
+import { ListSkeleton } from './Skeleton';
 import UserAvatar from './UserAvatar';
 import { usePreferences } from '../context/PreferencesContext';
+import { useConfiguracion } from '../context/ConfiguracionContext';
+import { useTextoProyectos } from '../hooks/useTextoProyectos';
+import { useProyectosTodos } from '../hooks/useProyectosTodos';
 import { getEstadoProyecto } from '../utils/estadosProyecto';
-import { 
-  Code2, 
-  BarChart3, 
-  Megaphone, 
-  User, 
+import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ClipboardList, 
-  Zap, 
+  ClipboardList,
+  Zap,
   CheckCircle2,
-  Mail
 } from 'lucide-react';
 
-const AREA_CONF = {
-  DESARROLLO:     { labelKey: 'areaDesarrollo',    color: '#818cf8', bg: 'rgba(129,140,248,0.08)',  icon: <Code2 size={16} /> },
-  ADMINISTRACION: { labelKey: 'areaAdministracion', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',   icon: <BarChart3 size={16} /> },
-  COMUNICACION:   { labelKey: 'areaComunicacion',   color: '#10b981', bg: 'rgba(16,185,129,0.08)',  icon: <Mail size={16} /> },
-  MARKETING:      { labelKey: 'areaMarketing',      color: '#db2777', bg: 'rgba(219,39,119,0.08)',  icon: <Megaphone size={16} /> },
-};
-
-// 10 por pagina: con 29 proyectos, abrirlos todos era una pared de tarjetas.
+// 10 por pagina: con 29 proyectos, abrirlos todos era una pared de filas.
 const PROYECTOS_POR_PAGINA = 10;
 
-const ROL_CONF = {
-  ADMIN:   { labelKey: 'roleAdmin',   color: '#818cf8', bg: 'rgba(129,140,248,0.08)' },
-  MIEMBRO: { labelKey: 'roleMember',  color: '#94a3b8', bg: 'rgba(148,163,184,0.08)' },
-};
+const ROL_CLAVE = { ADMIN: 'roleAdmin', MIEMBRO: 'roleMember' };
 
-// Los colores salen del catalogo compartido (utils/estadosProyecto)
-const getColorEstado = (estado) => getEstadoProyecto(estado).color;
-
-// —— Tarjeta de miembro —————————————————————————————————————————————————————
-const MiembroCard = ({ miembro }) => {
+/** Área en texto con su punto de color; sin área, "General" en gris. */
+const AreaTexto = ({ clave }) => {
   const { t } = usePreferences();
-  const areaConf = AREA_CONF[miembro.area] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', icon: <User size={16} />, labelKey: 'areaGeneral' };
-  const rolConf  = ROL_CONF[miembro.rol] || ROL_CONF.MIEMBRO;
-  const pct      = miembro.tareas.total > 0
-    ? Math.round((miembro.tareas.hechas / miembro.tareas.total) * 100)
-    : 0;
-
+  const { nombreArea, colorArea } = useConfiguracion();
   return (
-    <div style={{
-      background: 'var(--color-surface)',
-      border: '1px solid var(--color-border)',
-      borderRadius: '1.5rem',
-      padding: '1.5rem',
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      cursor: 'default',
-      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.01)',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '1rem',
-    }}
-    onMouseOver={e => { 
-      e.currentTarget.style.transform = 'translateY(-4px)'; 
-      e.currentTarget.style.boxShadow = 'var(--shadow-xl)'; 
-      e.currentTarget.style.borderColor = 'var(--color-primary-20)'; 
-    }}
-    onMouseOut={e => { 
-      e.currentTarget.style.transform = 'translateY(0)'; 
-      e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.01)'; 
-      e.currentTarget.style.borderColor = 'var(--color-border)'; 
-    }}
-    >
-      {/* Cabecera */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <UserAvatar
-          usuario={miembro}
-          size={48}
-          radius={14}
-          color={areaConf.color}
-          background={areaConf.bg}
-          borderColor={`${areaConf.color}30`}
-          fontSize="1.15rem"
-          shadow={`0 8px 16px ${areaConf.color}15`}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 500, fontSize: '1.1rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.02em' }}>
-            {miembro.nombre}
-          </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>
-            {miembro.email}
-          </div>
-        </div>
-      </div>
-
-      {/* Badges área + rol */}
-      <div style={{ display: 'flex', gap: '0.45rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-        <span style={{
-          padding: '0.25rem 0.75rem', borderRadius: '999px',
-          fontSize: '0.8rem', fontWeight: 500,
-          background: areaConf.bg, color: areaConf.color,
-          display: 'flex', alignItems: 'center', gap: '0.4rem',
-          border: `1px solid ${areaConf.color}20`
-        }}>
-          {areaConf.icon}
-          <span style={{ position: 'relative', top: '0.5px' }}>{t(areaConf.labelKey)}</span>
-        </span>
-        <span style={{
-          padding: '0.25rem 0.75rem', borderRadius: '999px',
-          fontSize: '0.8rem', fontWeight: 500,
-          background: rolConf.bg, color: rolConf.color,
-          border: `1px solid ${rolConf.color}20`,
-          display: 'flex', alignItems: 'center'
-        }}>
-          <span style={{ position: 'relative', top: '0.5px' }}>{t(rolConf.labelKey)}</span>
-        </span>
-      </div>
-
-      {/* Barra de progreso tareas */}
-      {miembro.tareas.total > 0 && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--color-text-dim)', marginBottom: '0.4rem', fontWeight: 500, textTransform: '' }}>
-            <span>{miembro.tareas.hechas}/{miembro.tareas.total} {t('teamTasksPlural')}</span>
-            <span style={{ color: pct === 100 ? '#34d399' : areaConf.color }}>{pct}%</span>
-          </div>
-          <div style={{ height: '4px', background: 'var(--color-surface-3)', borderRadius: '999px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', borderRadius: '999px',
-              width: `${pct}%`,
-              background: pct === 100 ? '#34d399' : areaConf.color,
-              transition: 'width 0.4s ease',
-            }} />
-          </div>
-          <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.6rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', alignItems: 'center' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}><ClipboardList size={14} strokeWidth={2.5} /> {miembro.tareas.pendientes}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}><Zap size={14} strokeWidth={2.5} /> {miembro.tareas.enProgreso}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}><CheckCircle2 size={14} strokeWidth={2.5} /> {miembro.tareas.hechas}</span>
-          </div>
-        </div>
-      )}
-    </div>
+    <span className="proy-area" style={clave ? { '--proy-punto': colorArea(clave) } : undefined}>
+      {clave ? nombreArea(clave) : t('areaGeneral')}
+    </span>
   );
 };
 
-// —— Sección de proyecto —————————————————————————————————————————————————————
+// —— Fila de miembro —————————————————————————————————————————————————————————
+const MiembroFila = ({ miembro }) => {
+  const { t } = usePreferences();
+  const tp = useTextoProyectos();
+  const { colorArea } = useConfiguracion();
+  const { total, hechas, pendientes, enProgreso } = miembro.tareas;
+  const pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
+  const color = miembro.area ? colorArea(miembro.area) : 'var(--color-text-muted)';
+
+  return (
+    <li className="proy-miembro">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <UserAvatar
+          usuario={miembro}
+          size={30}
+          radius={999}
+          fontSize="11px"
+          color={color}
+          background={`color-mix(in srgb, ${color} 12%, transparent)`}
+          borderColor={`color-mix(in srgb, ${color} 25%, transparent)`}
+        />
+        <div className="min-w-0">
+          <div className="truncate text-[13.5px] font-medium text-[var(--color-text)]">{miembro.nombre}</div>
+          <div className="truncate text-[12px] text-[var(--color-text-muted)]">{miembro.email}</div>
+        </div>
+      </div>
+      <div className="text-[12.5px] text-[var(--color-text-dim)]"><AreaTexto clave={miembro.area} /></div>
+      <div className="text-[12.5px] text-[var(--color-text-dim)]">{t(ROL_CLAVE[miembro.rol] || 'roleMember')}</div>
+      <div className="min-w-0">
+        {total > 0 ? (
+          <>
+            <div className="flex items-center gap-2.5">
+              <span className="proy-barra"><span style={{ width: `${pct}%`, background: pct === 100 ? 'var(--color-success)' : 'var(--color-primary)' }} /></span>
+              <span className="w-9 shrink-0 text-right text-[12px] font-semibold tabular-nums text-[var(--color-text)]">{pct}%</span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 text-[11.5px] tabular-nums text-[var(--color-text-muted)]">
+              <span className="inline-flex items-center gap-1" title={tp('lista_equipoPendientes')}><ClipboardList size={12} /> {pendientes}</span>
+              <span className="inline-flex items-center gap-1" title={tp('lista_equipoEnCurso')}><Zap size={12} /> {enProgreso}</span>
+              <span className="inline-flex items-center gap-1" title={tp('lista_equipoHechas')}><CheckCircle2 size={12} /> {hechas}/{total}</span>
+            </div>
+          </>
+        ) : (
+          <span className="text-[12px] text-[var(--color-text-muted)]">{tp('lista_equipoSinTareas')}</span>
+        )}
+      </div>
+    </li>
+  );
+};
+
+// —— Fila de proyecto ————————————————————————————————————————————————————————
 const ProyectoEquipo = ({ proyecto }) => {
   const { t } = usePreferences();
+  const tp = useTextoProyectos();
   // Plegado de entrada: con veintitantos proyectos, abiertos era una pared.
   const [open, setOpen] = useState(false);
   const [equipoData, setEquipoData] = useState(null);
   const [cargandoEquipo, setCargandoEquipo] = useState(false);
-  const estadoColor = getColorEstado(proyecto.estado);
-  const areaConf    = AREA_CONF[proyecto.creador?.area] || AREA_CONF.DESARROLLO;
-  // El conteo del encabezado sale de lo que ya trae el proyecto, para no tener
+  // Si falla la peticion se avisa y se puede reintentar; antes se tomaba como
+  // un equipo vacio y el proyecto parecia no tener a nadie.
+  const [errorEquipo, setErrorEquipo] = useState(false);
+  const estado = getEstadoProyecto(proyecto.estado);
+  // El conteo y las fotos salen de lo que ya trae el proyecto, para no tener
   // que pedir el equipo solo para poder mostrar un numero.
-  const totalDelProyecto = equipoData?.length ?? proyecto.miembros?.length ?? 0;
+  const miembros = proyecto.miembros || [];
+  const totalDelProyecto = equipoData?.length ?? miembros.length;
 
   // El equipo se pide al abrir por primera vez, no al cargar el panel. Antes se
   // pedian los 29 de golpe y habia que esperarlos todos para ver algo.
@@ -167,108 +114,88 @@ const ProyectoEquipo = ({ proyecto }) => {
   // Se lanza desde el propio clic y no desde un efecto que observe `open`: asi
   // la peticion sale una sola vez, sin la cascada de renders que provoca poner
   // el estado de carga dentro de un efecto.
-  const alternar = async () => {
-    const abriendo = !open;
-    setOpen(abriendo);
-    if (!abriendo || equipoData !== null || cargandoEquipo) return;
-
+  const cargarEquipo = async () => {
     setCargandoEquipo(true);
+    setErrorEquipo(false);
     try {
       const data = await proyectosService.equipoDeProyecto(proyecto.id);
       setEquipoData(data.equipo || []);
     } catch {
-      setEquipoData([]);
+      setErrorEquipo(true);
     } finally {
       setCargandoEquipo(false);
     }
   };
 
+  const alternar = () => {
+    const abriendo = !open;
+    setOpen(abriendo);
+    if (!abriendo || equipoData !== null || cargandoEquipo) return;
+    cargarEquipo();
+  };
+
   return (
-    <div style={{
-      background: 'var(--color-surface-2)',
-      border: '1px solid var(--color-border)',
-      borderRadius: '1rem', overflow: 'hidden',
-    }}>
-      {/* Cabecera del proyecto — clickeable para colapsar */}
-      <button
-        onClick={alternar}
-        style={{
-          width: '100%', padding: '1rem 1.25rem',
-          display: 'flex', alignItems: 'center', gap: '0.75rem',
-          background: 'none', border: 'none', cursor: 'pointer',
-          borderBottom: open ? '1px solid var(--color-border)' : 'none',
-          textAlign: 'left',
-        }}
-      >
-        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: estadoColor, flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 500, fontSize: '0.95rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' }}>
-            {proyecto.nombre}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginTop: '0.15rem', fontWeight: 600 }}>
-            {totalDelProyecto} {totalDelProyecto !== 1 ? t('teamMemberPlural') : t('teamMemberSingular')}
-          </div>
-        </div>
-        <span style={{
-          padding: '0.35rem 0.85rem', borderRadius: '12px',
-          fontSize: '0.7rem', fontWeight: 500,
-          background: areaConf.bg, color: areaConf.color, flexShrink: 0,
-          display: 'flex', alignItems: 'center', gap: '0.45rem',
-          border: `1.2px solid ${areaConf.color}30`,
-          textTransform: '',
-          whiteSpace: 'nowrap'
-        }}>
-          {areaConf.icon && <span style={{ display: 'flex', opacity: 0.8 }}>{areaConf.icon}</span>}
-          {t(areaConf.labelKey)}
+    <li className="proy-equipo" data-abierto={open || undefined}>
+      <button type="button" onClick={alternar} aria-expanded={open} className="proy-equipo-cabecera">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estado.dot }} title={t(estado.labelKey)} aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13.5px] font-medium text-[var(--color-text)]">{proyecto.nombre}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12px] text-[var(--color-text-muted)]">
+            <span>{t(estado.labelKey)}</span>
+            <span className="tabular-nums">{totalDelProyecto} {totalDelProyecto !== 1 ? t('teamMemberPlural') : t('teamMemberSingular')}</span>
+            <AreaTexto clave={proyecto.creador?.area} />
+          </span>
         </span>
-        <span style={{ color: 'var(--color-text-dim)', display: 'flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0 }}><ChevronDown size={18} strokeWidth={2.5} /></span>
+        {miembros.length > 0 && (
+          <span className="proy-avatares hidden sm:inline-flex">
+            {miembros.slice(0, 5).map((m) => <UserAvatar key={m.id} usuario={m} size={24} radius={999} fontSize="10px" />)}
+            {miembros.length > 5 && <span className="proy-avatar-mas">{tp('lista_masMiembros', { n: miembros.length - 5 })}</span>}
+          </span>
+        )}
+        <ChevronDown size={16} className="proy-equipo-flecha shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
       </button>
 
       {/* Equipo del proyecto */}
       {open && (
-        <div style={{ padding: '1rem 1.25rem' }}>
-          {cargandoEquipo || equipoData === null ? (
-            <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-              {t('loading')}
+        <div className="proy-equipo-cuerpo">
+          {errorEquipo && !cargandoEquipo ? (
+            <div className="flex items-center justify-center gap-3 px-4 py-5 text-[12.5px] text-[var(--color-error)]">
+              <span>{tp('lista_equipoError')}</span>
+              <button type="button" onClick={cargarEquipo} className="cli-enlace">{t('retry')}</button>
             </div>
+          ) : cargandoEquipo || equipoData === null ? (
+            <p className="px-4 py-5 text-center text-[12.5px] text-[var(--color-text-muted)]">{t('loading')}</p>
           ) : equipoData.length === 0 ? (
-            <div style={{
-              padding: '1.5rem', textAlign: 'center',
-              border: '1px dashed var(--color-border)', borderRadius: '0.6rem',
-              color: 'var(--color-text-muted)', fontSize: '0.8rem',
-            }}>
-              {t('teamNoMembers')}
-            </div>
+            <p className="px-4 py-5 text-center text-[12.5px] text-[var(--color-text-muted)]">{t('teamNoMembers')}</p>
           ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: '1rem',
-            }}>
-              {equipoData.map(m => <MiembroCard key={m.id} miembro={m} />)}
-            </div>
+            <>
+              <div className="proy-miembro proy-miembro-titulos" aria-hidden="true">
+                <span>{tp('lista_equipoPersona')}</span>
+                <span>{tp('lista_equipoArea')}</span>
+                <span>{tp('lista_equipoRol')}</span>
+                <span>{tp('lista_equipoTareas')}</span>
+              </div>
+              <ul>
+                {equipoData.map((m) => <MiembroFila key={m.id} miembro={m} />)}
+              </ul>
+            </>
           )}
         </div>
       )}
-    </div>
+    </li>
   );
 };
 
 // —— Panel ——————————————————————————————————————————————————————————————————
 const PanelMiembros = () => {
   const { t } = usePreferences();
+  const tp = useTextoProyectos();
   const [pagina, setPagina] = useState(1);
 
   // Una sola peticion: la lista de proyectos. El equipo de cada uno lo pide su
-  // propia seccion al desplegarse. Antes se pedian los 29 equipos de golpe y
-  // no se pintaba nada hasta que llegaba el ultimo.
-  const { data, isLoading, error } = useSWR(
-    'panel-miembros-proyectos',
-    async () => {
-      const { proyectos } = await proyectosService.listar();
-      return proyectos || [];
-    },
-  );
+  // propia fila al desplegarse. Antes se pedian los 29 equipos de golpe y no
+  // se pintaba nada hasta que llegaba el ultimo.
+  const { data, isLoading, error } = useProyectosTodos();
 
   const proyectos = data || [];
   const totalPaginas = Math.max(1, Math.ceil(proyectos.length / PROYECTOS_POR_PAGINA));
@@ -282,69 +209,52 @@ const PanelMiembros = () => {
   const totalMiembros = proyectos.reduce((suma, p) => suma + (p.miembros?.length || 0), 0);
 
   if (isLoading && !data) {
-    return <PageSkeleton cards={3} showSidebar={false} />;
+    return <div className="cli-panel p-4"><ListSkeleton rows={6} header={false} /></div>;
   }
 
   return (
-    <div>
+    <div className="cli-panel overflow-hidden">
       {/* El resumen se queda: dice de un vistazo cuanta gente hay repartida y
           en cuantos proyectos. El titulo lo pone la pestaña. */}
-      <p className="mb-5 text-sm font-normal text-[var(--color-text-muted)]">
-        {t('teamSummary', {
-          members: totalMiembros,
-          memberLabel: totalMiembros !== 1 ? t('teamMemberPlural') : t('teamMemberSingular'),
-          projects: proyectos.length,
-          projectLabel: proyectos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular'),
-        })}
-      </p>
+      <header className="cli-panel-cabecera flex-wrap">
+        <h2 className="cli-etiqueta">{t('teamTitle')}</h2>
+        <p className="text-[12.5px] text-[var(--color-text-muted)]">
+          {t('teamSummary', {
+            members: totalMiembros,
+            memberLabel: totalMiembros !== 1 ? t('teamMemberPlural') : t('teamMemberSingular'),
+            projects: proyectos.length,
+            projectLabel: proyectos.length !== 1 ? t('teamProjectPlural') : t('teamProjectSingular'),
+          })}
+        </p>
+      </header>
 
       {error ? (
-        <div className="alert-error">{error.message}</div>
+        <div className="p-4"><div className="alert-error">{error.message}</div></div>
       ) : proyectos.length === 0 ? (
-        <div style={{
-          padding: '3rem', textAlign: 'center',
-          background: 'var(--color-surface-2)', border: '1px dashed var(--color-border)',
-          borderRadius: '1rem', color: 'var(--color-text-muted)',
-        }}>
-          {t('teamNoProjects')}
-        </div>
+        <p className="px-6 py-12 text-center text-[13px] text-[var(--color-text-muted)]">{t('teamNoProjects')}</p>
       ) : (
         <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <ul>
             {proyectosDeLaPagina.map((proyecto) => (
               <ProyectoEquipo key={proyecto.id} proyecto={proyecto} />
             ))}
-          </div>
+          </ul>
 
           {totalPaginas > 1 && (
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-              <span className="text-sm font-normal text-[var(--color-text-muted)]">
-                {t('timelineRange', {
+            <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] px-4 py-2.5 text-[12.5px] text-[var(--color-text-muted)]">
+              <span className="tabular-nums">
+                {tp('lista_rango', {
                   desde: (paginaActual - 1) * PROYECTOS_POR_PAGINA + 1,
                   hasta: Math.min(paginaActual * PROYECTOS_POR_PAGINA, proyectos.length),
                   total: proyectos.length,
                 })}
               </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPagina((n) => Math.max(1, n - 1))}
-                  disabled={paginaActual === 1}
-                  aria-label={t('previous')}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
-                >
+              <div className="flex items-center gap-1">
+                <button type="button" className="dash-icono" onClick={() => setPagina((n) => Math.max(1, n - 1))} disabled={paginaActual === 1} aria-label={t('previous')} title={t('previous')}>
                   <ChevronLeft size={16} />
                 </button>
-                <span className="min-w-[70px] text-center text-sm font-medium text-[var(--color-text)]">
-                  {paginaActual} / {totalPaginas}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPagina((n) => Math.min(totalPaginas, n + 1))}
-                  disabled={paginaActual === totalPaginas}
-                  aria-label={t('next')}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:opacity-40"
-                >
+                <span className="min-w-[52px] text-center font-medium tabular-nums text-[var(--color-text)]">{paginaActual} / {totalPaginas}</span>
+                <button type="button" className="dash-icono" onClick={() => setPagina((n) => Math.min(totalPaginas, n + 1))} disabled={paginaActual === totalPaginas} aria-label={t('next')} title={t('next')}>
                   <ChevronRight size={16} />
                 </button>
               </div>

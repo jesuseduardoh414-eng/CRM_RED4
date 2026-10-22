@@ -1,2 +1,15 @@
 node_modules/
 .env
+uploads/
+scratch/
+
+# Archivos de prueba locales (se quedan en disco, fuera del repo)
+test_smtp.js
+generar_test_excel.js
+plantilla_tareas_test.xlsx
+
+# PDF de contratos (fuera del repo: son documentos confidenciales)
+storage/
+
+# Credenciales para copiar datos entre bases (scripts/copiar_base.js); nunca al repositorio
+.env.migracion

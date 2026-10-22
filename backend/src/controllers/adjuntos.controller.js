@@ -1,13 +1,9 @@
 const prisma = require('../lib/prisma');
 const { registrarActividad } = require('../utils/logger');
-const path = require('path');
-const fs = require('fs');
-const { put, del } = require('@vercel/blob');
-const { esAdmin, puedeAdministrarProyecto } = require('../utils/permissions.utils');
-
-// Detecta si una "url" guardada es una URL absoluta de Vercel Blob
-// (los adjuntos antiguos guardaban solo el nombre de archivo en disco).
-const esUrlAbsoluta = (valor) => /^https?:\/\//i.test(valor || '');
+const { puedeAdministrarProyecto, puedeVerProyecto, cargarProyectoVisible } = require('../utils/permissions.utils');
+const { subirArchivo, borrarBlobs } = require('../utils/blob.utils');
+const { nombreUtf8 } = require('../utils/nombreArchivo.utils');
+const driveProyectos = require('../services/driveProyectos.service');
 
 const getEntityType = (req) => {
   if (req.baseUrl.includes('agenda')) return 'agenda';
@@ -34,6 +30,25 @@ const canAccessEvento = (evento, usuarioId) => (
 const canManageEvento = (evento, usuarioId) => (
   evento.usuarioId === usuarioId || evento.creadoPorId === usuarioId
 );
+
+// Carga una tarea con lo minimo de su proyecto que necesita `puedeVerProyecto`
+// y aplica la regla unica de lectura. Devuelve { tarea, permitido }.
+// (Mismo helper en comentarios.controller; candidato a permissions.utils.)
+const cargarTareaVisible = async (usuario, tareaId) => {
+  const id = Number(tareaId);
+  if (!Number.isInteger(id)) return { tarea: null, permitido: false };
+  const tarea = await prisma.tarea.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      titulo: true,
+      proyectoId: true,
+      proyecto: { select: { id: true, nombre: true, area: true, creadorId: true, miembros: { select: { id: true } } } },
+    },
+  });
+  if (!tarea) return { tarea: null, permitido: false };
+  return { tarea, permitido: await puedeVerProyecto(prisma, usuario, tarea.proyecto) };
+};
 
 const buildActivityPayload = async ({ entityType, parentId, reqUsuario, adjunto, tituloRef }) => {
   if (entityType === 'tareas') {
@@ -72,21 +87,17 @@ const listar = async (req, res) => {
   const entityType = getEntityType(req);
 
   try {
+    // Misma regla de lectura que el resto de datos del proyecto
+    // (`puedeVerProyecto`): antes solo se validaba a los ADMIN y cualquier
+    // MIEMBRO podia leer los adjuntos de cualquier proyecto cambiando el id.
     if (entityType === 'tareas') {
-      const tarea = await prisma.tarea.findUnique({
-        where: { id: Number(parentId) },
-        include: { proyecto: { select: { area: true } } },
-      });
+      const { tarea, permitido } = await cargarTareaVisible(req.usuario, parentId);
       if (!tarea) return res.status(404).json({ error: 'Tarea no encontrada' });
-      if (esAdmin(req.usuario) && !puedeAdministrarProyecto(req.usuario, tarea.proyecto)) {
-        return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de esta tarea' });
-      }
+      if (!permitido) return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de esta tarea' });
     } else if (entityType === 'proyectos') {
-      const proyecto = await prisma.proyecto.findUnique({ where: { id: Number(parentId) } });
+      const { proyecto, permitido } = await cargarProyectoVisible(prisma, req.usuario, parentId);
       if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
-      if (esAdmin(req.usuario) && !puedeAdministrarProyecto(req.usuario, proyecto)) {
-        return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de este proyecto' });
-      }
+      if (!permitido) return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de este proyecto' });
     } else {
       const evento = await prisma.evento.findUnique({
         where: { id: String(parentId) },
@@ -97,6 +108,10 @@ const listar = async (req, res) => {
         return res.status(403).json({ error: 'No tienes permiso para ver adjuntos de este evento' });
       }
     }
+
+    // Lo que se agrego, renombro o borro en las carpetas de Drive desde la
+    // ultima vez (espera unos segundos como mucho).
+    if (entityType !== 'agenda') await driveProyectos.sincronizarSiHaceFalta();
 
     const where = entityType === 'tareas'
       ? { tareaId: Number(parentId) }
@@ -114,7 +129,8 @@ const listar = async (req, res) => {
 
     res.json({ adjuntos });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[adjuntos.listar]', error);
+    res.status(500).json({ error: 'Error al obtener los adjuntos' });
   }
 };
 
@@ -132,38 +148,17 @@ const subir = async (req, res) => {
     let tituloRef = '';
 
     if (entityType === 'tareas') {
-      const tarea = await prisma.tarea.findUnique({ where: { id: Number(parentId) } });
+      const { tarea, permitido } = await cargarTareaVisible(req.usuario, parentId);
       if (!tarea) return res.status(404).json({ error: 'Tarea no encontrada' });
+      if (!permitido) return res.status(403).json({ error: 'No tienes permiso para subir archivos a esta tarea' });
       tituloRef = `la tarea "${tarea.titulo}"`;
-      createBase = { tareaId: Number(parentId), proyectoId: null, eventoId: null };
-
-      if (esAdmin(req.usuario)) {
-        const proyecto = await prisma.proyecto.findUnique({ where: { id: tarea.proyectoId } });
-        if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
-          return res.status(403).json({ error: 'No tienes permiso para subir archivos a esta tarea' });
-        }
-      } else {
-        const miembro = await prisma.proyecto.findFirst({
-          where: { id: tarea.proyectoId, miembros: { some: { id: req.usuario.id } } },
-        });
-        if (!miembro) return res.status(403).json({ error: 'No tienes permiso para subir archivos a esta tarea' });
-      }
+      createBase = { tareaId: tarea.id, proyectoId: null, eventoId: null };
     } else if (entityType === 'proyectos') {
-      const proyecto = await prisma.proyecto.findUnique({ where: { id: Number(parentId) } });
+      const { proyecto, permitido } = await cargarProyectoVisible(prisma, req.usuario, parentId);
       if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+      if (!permitido) return res.status(403).json({ error: 'No tienes permiso para subir archivos a este proyecto' });
       tituloRef = `el proyecto "${proyecto.nombre}"`;
-      createBase = { proyectoId: Number(parentId), tareaId: null, eventoId: null };
-
-      if (esAdmin(req.usuario)) {
-        if (!puedeAdministrarProyecto(req.usuario, proyecto)) {
-          return res.status(403).json({ error: 'No tienes permiso para subir archivos a este proyecto' });
-        }
-      } else {
-        const miembro = await prisma.proyecto.findFirst({
-          where: { id: proyecto.id, miembros: { some: { id: req.usuario.id } } },
-        });
-        if (!miembro) return res.status(403).json({ error: 'No tienes permiso para subir archivos a este proyecto' });
-      }
+      createBase = { proyectoId: proyecto.id, tareaId: null, eventoId: null };
     } else {
       const evento = await prisma.evento.findUnique({
         where: { id: String(parentId) },
@@ -179,17 +174,17 @@ const subir = async (req, res) => {
 
     const createdAdjuntos = [];
     for (const file of files) {
-      const ext = path.extname(file.originalname);
-      const blobName = `adjuntos/${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-      const blob = await put(blobName, file.buffer, {
-        access: 'public',
-        contentType: file.mimetype,
-      });
+      const nombre = nombreUtf8(file.originalname);
+      // Tareas y proyectos: a su carpeta de Drive con su nombre real. Eventos: como antes.
+      const { url, driveArchivoId } = createBase.eventoId
+        ? { url: await subirArchivo(file, 'adjuntos'), driveArchivoId: null }
+        : await driveProyectos.guardarAdjunto(file, nombre, { tareaId: createBase.tareaId, proyectoId: createBase.proyectoId });
 
       const adjunto = await prisma.adjunto.create({
         data: {
-          nombre: file.originalname,
-          url: blob.url,
+          nombre,
+          url,
+          driveArchivoId,
           tipo: file.mimetype,
           tamano: file.size,
           usuarioId: req.usuario.id,
@@ -225,15 +220,17 @@ const subir = async (req, res) => {
       adjuntos: createdAdjuntos,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[adjuntos.subir]', error);
+    res.status(500).json({ error: 'Error al subir el archivo' });
   }
 };
 
 const eliminar = async (req, res) => {
-  const { id } = req.params;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'ID de adjunto inválido' });
   try {
     const adjunto = await prisma.adjunto.findUnique({
-      where: { id: Number(id) },
+      where: { id },
       include: {
         tarea: true,
         evento: {
@@ -250,38 +247,28 @@ const eliminar = async (req, res) => {
     if (adjunto.tarea) {
       proyectoScope = await prisma.proyecto.findUnique({
         where: { id: adjunto.tarea.proyectoId },
-        select: { area: true },
+        select: { area: true, creadorId: true, miembros: { select: { id: true } } },
       });
     } else if (adjunto.proyectoId) {
       proyectoScope = await prisma.proyecto.findUnique({
         where: { id: adjunto.proyectoId },
-        select: { area: true },
+        select: { area: true, creadorId: true, miembros: { select: { id: true } } },
       });
     }
 
-    const adminPuedeBorrar = esAdmin(req.usuario) && proyectoScope && puedeAdministrarProyecto(req.usuario, proyectoScope);
+    // Modera quien puede editar el proyecto ("proyectos.editar").
+    const adminPuedeBorrar = proyectoScope && puedeAdministrarProyecto(req.usuario, proyectoScope);
     const puedeBorrarEvento = adjunto.evento && canManageEvento(adjunto.evento, req.usuario.id);
 
     if (adjunto.usuarioId !== req.usuario.id && !adminPuedeBorrar && !puedeBorrarEvento) {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este archivo' });
     }
 
-    if (esUrlAbsoluta(adjunto.url)) {
-      // Archivo en Vercel Blob
-      try {
-        await del(adjunto.url);
-      } catch (_error) {
-        // Si el blob ya no existe, continuamos con el borrado en BD igualmente.
-      }
-    } else {
-      // Compatibilidad con adjuntos antiguos guardados en disco
-      const filePath = path.join(__dirname, '../../uploads', adjunto.url);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
+    await prisma.adjunto.delete({ where: { id } });
 
-    await prisma.adjunto.delete({ where: { id: Number(id) } });
+    // Los adjuntos viven en Vercel Blob; `borrarBlobs` ignora URLs que no
+    // sean de Blob (adjuntos antiguos) y nunca lanza.
+    await borrarBlobs([adjunto.url]);
 
     let proyectoId = adjunto.proyectoId;
     let desc = `archivo "${adjunto.nombre}"`;
@@ -309,29 +296,8 @@ const eliminar = async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-const descargar = async (req, res) => {
-  const { filename } = req.params;
-  const filePath = path.join(__dirname, '../../uploads', filename);
-
-  if (fs.existsSync(filePath)) {
-    res.download(filePath);
-  } else {
-    res.status(404).json({ error: 'Archivo no encontrado fisicamente' });
-  }
-};
-
-const ver = async (req, res) => {
-  const { filename } = req.params;
-  const filePath = path.join(__dirname, '../../uploads', filename);
-
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'Archivo no encontrado fisicamente' });
+    console.error('[adjuntos.eliminar]', error);
+    res.status(500).json({ error: 'Error al eliminar el archivo' });
   }
 };
 
@@ -339,6 +305,4 @@ module.exports = {
   listar,
   subir,
   eliminar,
-  descargar,
-  ver,
 };

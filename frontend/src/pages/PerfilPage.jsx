@@ -1,34 +1,38 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  AtSign,
+  Bell,
+  Briefcase,
+  Building2,
+  CalendarDays,
   Camera,
+  CheckCircle2,
+  ClipboardList,
+  FolderKanban,
+  ImagePlus,
+  Info,
+  KeyRound,
+  LockKeyhole,
   Mail,
   Phone,
-  Briefcase,
-  FolderKanban,
-  ShieldCheck,
-  Building2,
   Save,
-  UserRound,
+  ShieldCheck,
   Sparkles,
-  BadgeCheck,
-  Bell,
-  ClipboardList,
-  ImagePlus,
+  Trash2,
+  UserRound,
 } from 'lucide-react';
 import { PageSkeleton } from '../components/Skeleton';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getPublicAssetUrl, usuariosService } from '../services/api';
 import { usePreferences } from '../context/PreferencesContext';
-
-const formatDate = (value) => {
-  if (!value) return 'Sin dato';
-  return new Date(value).toLocaleDateString('es-MX', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-};
+import { useConfiguracion } from '../context/ConfiguracionContext';
+import { getEstadoProyecto } from '../utils/estadosProyecto';
+import { areasDeTexto } from '../utils/areas';
+import SeguridadCuenta, { CambiarPassword } from '../components/SeguridadCuenta';
+import { AuthAlert, BotonAuth, CampoPassword, CampoTexto } from '../components/auth/AuthUI';
+import '../perfil.css';
 
 const getInitials = (nombre = '') => (
   nombre
@@ -39,46 +43,160 @@ const getInitials = (nombre = '') => (
     .join('') || 'U'
 );
 
-const AREAS_KEY = {
-  DESARROLLO: 'areaDesarrollo',
-  ADMINISTRACION: 'areaAdministracion',
-  COMUNICACION: 'areaComunicacion',
-  MARKETING: 'areaMarketing',
+// Foto de perfil: formatos aceptados y peso máximo (se valida en el cliente
+// antes de subir, con mensaje claro)
+const TIPOS_FOTO = ['image/png', 'image/jpeg', 'image/webp'];
+const MAX_FOTO_BYTES = 2 * 1024 * 1024;
+const MAX_BIO = 500;
+
+// Pestañas del perfil; el hash de la URL (#acceso, #seguridad) abre la que toca
+const PESTANAS = [
+  { id: 'perfil', hash: '', icono: UserRound, etiqueta: 'pfTabProfile' },
+  { id: 'acceso', hash: '#acceso', icono: KeyRound, etiqueta: 'pfTabAccess' },
+  { id: 'seguridad', hash: '#seguridad', icono: ShieldCheck, etiqueta: 'pfTabSecurity' },
+];
+const pestanaDesdeHash = (hash) => PESTANAS.find((p) => p.hash && p.hash === hash)?.id || 'perfil';
+
+const formDesdePerfil = (perfil) => ({
+  nombre: perfil.nombre || '',
+  telefono: perfil.telefono || '',
+  puesto: perfil.puesto || '',
+  biografia: perfil.biografia || '',
+});
+
+// Fila de formulario estilo "ajustes": etiqueta y ayuda a la izquierda, control a la derecha
+const Fila = ({ etiqueta, ayuda, htmlFor, children }) => (
+  <div className="pf-fila">
+    <div>
+      {htmlFor
+        ? <label htmlFor={htmlFor} className="pf-fila-etiqueta">{etiqueta}</label>
+        : <span className="pf-fila-etiqueta">{etiqueta}</span>}
+      {ayuda && <p className="pf-fila-ayuda">{ayuda}</p>}
+    </div>
+    <div className="min-w-0">{children}</div>
+  </div>
+);
+
+const Campo = ({ icono: Icono, ...props }) => (
+  <div className="relative">
+    <Icono size={16} className="pf-campo-icono" aria-hidden="true" />
+    <input className="pf-campo" {...props} />
+  </div>
+);
+
+// ── Cambio del correo de acceso (pide la contraseña actual) ──────────────
+const CambiarCorreo = ({ perfil, onActualizado }) => {
+  const { t } = usePreferences();
+  const { showToast } = useToast();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(false);
+
+  const enviar = async (e) => {
+    e.preventDefault();
+    const nuevo = email.trim().toLowerCase();
+    if (nuevo === String(perfil.email || '').toLowerCase()) { setError(t('pfEmailSame')); return; }
+    setCargando(true); setError('');
+    try {
+      // El endpoint de perfil exige nombre y correo; el resto se reenvía tal cual
+      // para no tocar lo que ya está guardado
+      const payload = new FormData();
+      payload.append('nombre', perfil.nombre || '');
+      payload.append('email', nuevo);
+      payload.append('passwordActual', password);
+      const data = await usuariosService.actualizarPerfil(payload);
+      setEmail(''); setPassword('');
+      onActualizado(data.perfil);
+      showToast(t('pfEmailUpdated'), 'success');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  return (
+    <form onSubmit={enviar} className="pf-panel flex flex-col" noValidate>
+      <div className="pf-panel-cabecera">
+        <span className="pf-panel-icono" aria-hidden="true"><AtSign size={18} /></span>
+        <div>
+          <h2 className="pf-panel-titulo">{t('pfEmailTitle')}</h2>
+          <p className="pf-panel-ayuda">{t('pfEmailHint')}</p>
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-base)] px-4 py-3">
+          <p className="text-xs text-[var(--color-text-muted)]">{t('pfEmailCurrent')}</p>
+          <p className="mt-0.5 break-all text-sm font-semibold text-[var(--color-text)]">{perfil.email}</p>
+        </div>
+        {error && <AuthAlert>{error}</AuthAlert>}
+        <CampoTexto
+          label={t('pfEmailNew')}
+          icono={Mail}
+          type="email"
+          name="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setError(''); }}
+          maxLength={191}
+          required
+        />
+        <CampoPassword
+          label={t('perfilCurrentPassword')}
+          icono={LockKeyhole}
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(''); }}
+          maxLength={200}
+          required
+        />
+        <div className="mt-auto pt-2">
+          <BotonAuth cargando={cargando} textoCargando={t('saving')} disabled={!email.trim() || !password}>
+            {t('pfEmailSubmit')}
+          </BotonAuth>
+        </div>
+      </div>
+    </form>
+  );
 };
 
 const PerfilPage = () => {
-  const { t } = usePreferences();
+  const { t, locale } = usePreferences();
+  const { nombreArea } = useConfiguracion();
   const { usuario, updateUsuario } = useAuth();
   const { showToast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Nombre del área (o áreas, en proyectos: "DESARROLLO,VENTAS").
+  const etiquetaArea = (valor) => {
+    const lista = areasDeTexto(valor);
+    return lista.length ? lista.map(nombreArea).join(', ') : t('areaGeneral');
+  };
+  const inputFotoRef = useRef(null);
+  const urlPreviaRef = useRef(''); // object URL vigente, para liberarla al cambiar o salir
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [archivoFoto, setArchivoFoto] = useState(null);
   const [previewFoto, setPreviewFoto] = useState('');
   const [removeFoto, setRemoveFoto] = useState(false);
-  const [form, setForm] = useState({
-    nombre: '',
-    email: '',
-    telefono: '',
-    puesto: '',
-    biografia: '',
-  });
+  const [form, setForm] = useState({ nombre: '', telefono: '', puesto: '', biografia: '' });
+  const pestana = pestanaDesdeHash(location.hash);
+
+  useEffect(() => {
+    document.title = `${t('profileTitle')} · ${t('appName')}`;
+    return () => { document.title = t('appName'); };
+  }, [t]);
 
   useEffect(() => {
     const cargarPerfil = async () => {
       try {
         setCargando(true);
         const data = await usuariosService.perfil();
-        const nextPerfil = data.perfil;
-        setPerfil(nextPerfil);
-        setForm({
-          nombre: nextPerfil.nombre || '',
-          email: nextPerfil.email || '',
-          telefono: nextPerfil.telefono || '',
-          puesto: nextPerfil.puesto || '',
-          biografia: nextPerfil.biografia || '',
-        });
-        setPreviewFoto(getPublicAssetUrl(nextPerfil.fotoPerfilUrl));
+        setPerfil(data.perfil);
+        setForm(formDesdePerfil(data.perfil));
+        setPreviewFoto(getPublicAssetUrl(data.perfil.fotoPerfilUrl));
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -89,21 +207,83 @@ const PerfilPage = () => {
     cargarPerfil();
   }, [showToast]);
 
-  useEffect(() => {
-    if (!archivoFoto) return undefined;
-    const objectUrl = URL.createObjectURL(archivoFoto);
-    setPreviewFoto(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [archivoFoto]);
+  // Al salir de la página se libera la vista previa local, si la hubiera
+  useEffect(() => () => {
+    if (urlPreviaRef.current) URL.revokeObjectURL(urlPreviaRef.current);
+  }, []);
+
+  const liberarPrevia = () => {
+    if (urlPreviaRef.current) {
+      URL.revokeObjectURL(urlPreviaRef.current);
+      urlPreviaRef.current = '';
+    }
+  };
+
+  const cambiarPestana = (id) => {
+    const destino = PESTANAS.find((p) => p.id === id);
+    navigate({ hash: destino.hash }, { replace: true });
+  };
+
+  const seleccionarFoto = (event) => {
+    const file = event.target.files?.[0] || null;
+    event.target.value = ''; // permite volver a elegir el mismo archivo tras un error
+    if (!file) return;
+    if (!TIPOS_FOTO.includes(file.type)) {
+      showToast(t('perfilPhotoInvalidType'), 'error');
+      return;
+    }
+    if (file.size > MAX_FOTO_BYTES) {
+      showToast(t('perfilPhotoTooBig'), 'error');
+      return;
+    }
+    liberarPrevia();
+    const url = URL.createObjectURL(file);
+    urlPreviaRef.current = url;
+    setArchivoFoto(file);
+    setPreviewFoto(url);
+    setRemoveFoto(false);
+    if (pestana !== 'perfil') cambiarPestana('perfil');
+  };
+
+  const quitarFoto = () => {
+    liberarPrevia();
+    setArchivoFoto(null);
+    setPreviewFoto('');
+    setRemoveFoto(true);
+  };
+
+  const aplicarPerfil = (nuevo) => {
+    setPerfil(nuevo);
+    updateUsuario(nuevo);
+  };
+
+  const formatDate = (value) => {
+    if (!value) return t('perfilNoData');
+    return new Date(value).toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' });
+  };
 
   const proyectosDestacados = useMemo(() => {
     if (!perfil) return [];
     const combinados = new Map();
-    [...perfil.proyectosMiembro, ...perfil.proyectosCreados].forEach((proyecto) => {
+    [...(perfil.proyectosMiembro || []), ...(perfil.proyectosCreados || [])].forEach((proyecto) => {
       combinados.set(proyecto.id, proyecto);
     });
     return [...combinados.values()].slice(0, 8);
   }, [perfil]);
+
+  const hayCambios = Boolean(perfil) && (
+    archivoFoto !== null
+    || removeFoto
+    || Object.entries(formDesdePerfil(perfil)).some(([k, v]) => form[k] !== v)
+  );
+
+  const descartar = () => {
+    liberarPrevia();
+    setForm(formDesdePerfil(perfil));
+    setArchivoFoto(null);
+    setRemoveFoto(false);
+    setPreviewFoto(getPublicAssetUrl(perfil.fotoPerfilUrl));
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -111,22 +291,21 @@ const PerfilPage = () => {
       setGuardando(true);
       const payload = new FormData();
       payload.append('nombre', form.nombre);
-      payload.append('email', form.email);
+      payload.append('email', perfil.email); // el correo se cambia en su propia pestaña
       payload.append('telefono', form.telefono);
       payload.append('puesto', form.puesto);
       payload.append('biografia', form.biografia);
       payload.append('removeFoto', String(removeFoto));
-      if (archivoFoto) {
-        payload.append('fotoPerfil', archivoFoto);
-      }
+      if (archivoFoto) payload.append('fotoPerfil', archivoFoto);
 
       const data = await usuariosService.actualizarPerfil(payload);
-      setPerfil(data.perfil);
+      liberarPrevia();
       setArchivoFoto(null);
       setRemoveFoto(false);
+      setForm(formDesdePerfil(data.perfil));
       setPreviewFoto(getPublicAssetUrl(data.perfil.fotoPerfilUrl));
-      updateUsuario(data.perfil);
-      showToast('Perfil actualizado');
+      aplicarPerfil(data.perfil);
+      showToast(t('perfilUpdated'));
     } catch (error) {
       showToast(error.message, 'error');
     } finally {
@@ -137,259 +316,333 @@ const PerfilPage = () => {
   if (cargando) return <PageSkeleton cards={4} />;
   if (!perfil) {
     return (
-      <div className="mx-auto max-w-3xl rounded-[32px] border border-amber-200 bg-[var(--color-surface)] p-8 shadow-sm">
-        <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700">
-          <Sparkles size={12} />
+      <div className="pf-panel mx-auto max-w-3xl p-8">
+        <div className="badge-warning">
+          <Sparkles size={12} aria-hidden="true" />
           {t('profileNotAvailable')}
         </div>
         <h1 className="mt-4 text-2xl font-semibold text-[var(--color-text)]">{t('profileLoadError')}</h1>
-        <p className="mt-2 text-sm font-normal text-slate-500">
-          Intenta recargar la p&aacute;gina. Si el problema sigue, revisamos el backend para terminar de aplicar los cambios pendientes.
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+          {t('perfilErrorHint')}
         </p>
       </div>
     );
   }
 
+  // Chip de estado de la cuenta: color según el estado real, no siempre verde
+  const chipEstado = {
+    activo: { clase: 'badge-success', texto: t('profileActive') },
+    pendiente: { clase: 'badge-warning', texto: t('profilePending') },
+  }[perfil.estado] || { clase: 'badge-neutral', texto: t('usersStatusInactive') };
+  const rolTexto = t(perfil.rol === 'ADMIN' ? 'roleAdmin' : 'roleMember');
+
+  const cifras = [
+    { label: t('profileStatsActive'), value: perfil.resumen?.proyectosActivos ?? 0, icon: FolderKanban },
+    { label: t('profileStatsTasks'), value: perfil.resumen?.tareasAsignadas ?? 0, icon: ClipboardList },
+    { label: t('profileStatsCreated'), value: perfil.resumen?.tareasCreadas ?? 0, icon: CheckCircle2 },
+    { label: t('profileStatsPending'), value: perfil.resumen?.notificacionesPendientes ?? 0, icon: Bell },
+  ];
+
+  const datosCuenta = [
+    { label: t('fieldRole'), value: rolTexto, icon: ShieldCheck },
+    { label: t('fieldArea'), value: etiquetaArea(perfil.area), icon: Building2 },
+    { label: t('fieldRegistration'), value: formatDate(perfil.creadoEn), icon: CalendarDays },
+    { label: t('fieldGoogleCalendar'), value: perfil.googleCalendarEmail || t('fieldNotConnected'), icon: CalendarDays, apagado: !perfil.googleCalendarEmail },
+  ];
+
+  const avatar = (tamano) => (
+    previewFoto
+      ? <img src={previewFoto} alt="" className="h-full w-full object-cover" />
+      : <span aria-hidden="true" style={{ fontSize: tamano }}>{getInitials(form.nombre || perfil.nombre)}</span>
+  );
+
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="relative overflow-hidden rounded-[36px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm lg:p-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.12),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(249,115,22,0.14),_transparent_28%)] pointer-events-none" />
-        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
-            <div className="relative">
-              <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-[28px] border-4 border-white bg-slate-100 text-2xl font-medium text-slate-500 shadow-lg shadow-slate-200/70">
-                {previewFoto ? (
-                  <img src={previewFoto} alt={perfil.nombre} className="h-full w-full object-cover" />
-                ) : (
-                  getInitials(perfil.nombre)
-                )}
-              </div>
-              <label className="absolute -bottom-2 -right-2 flex h-11 w-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-blue-300 hover:text-blue-600">
-                <Camera size={16} />
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setArchivoFoto(file);
-                    setRemoveFoto(false);
-                  }}
-                />
-              </label>
-            </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      {/* Un único <input type="file"> para todos los botones de foto */}
+      <input
+        ref={inputFotoRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={seleccionarFoto}
+      />
 
-            <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-medium text-blue-700">
-                <Sparkles size={12} />
-                {t('profileTitle')}
+      {/* ── Cabecera: portada, identidad y cifras ── */}
+      <header className="pf-panel overflow-hidden">
+        <div className="pf-portada" aria-hidden="true" />
+        <div className="px-6 pb-6 lg:px-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <div className="relative -mt-14 w-fit shrink-0">
+                <div className="pf-avatar h-28 w-28">{avatar('2rem')}</div>
+                <button
+                  type="button"
+                  onClick={() => inputFotoRef.current?.click()}
+                  aria-label={t('perfilChangePhotoAria')}
+                  title={t('perfilChangePhotoAria')}
+                  className="pf-avatar-boton"
+                >
+                  <Camera size={15} aria-hidden="true" />
+                </button>
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-900 lg:text-4xl">{perfil.nombre}</h1>
-              <p className="mt-2 max-w-2xl text-sm font-normal text-slate-500">
-                Administra tu información personal, tu foto de perfil y el contexto de trabajo que te acompaña dentro del CRM.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                  {t(perfil.rol === 'ADMIN' ? 'roleAdmin' : 'roleMember')}
-                </span>
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                  {t(AREAS_KEY[perfil.area] || 'areaGeneral')}
-                </span>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                  {perfil.estado === 'activo' ? t('profileActive') : t('profilePending')}
-                </span>
+              <div className="min-w-0 pb-1">
+                <h1 className="truncate text-2xl font-semibold tracking-tight text-[var(--color-text)] lg:text-[1.75rem]">{perfil.nombre}</h1>
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--color-text-muted)]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Briefcase size={14} aria-hidden="true" />
+                    {perfil.puesto || t('pfNoTitle')}
+                  </span>
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <Mail size={14} aria-hidden="true" />
+                    <span className="truncate">{perfil.email}</span>
+                  </span>
+                </p>
               </div>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 lg:w-[340px]">
-            {[
-              { label: t('profileStatsActive'),  value: perfil.resumen?.proyectosActivos ?? 0, icon: <FolderKanban size={18} /> },
-              { label: t('profileStatsTasks'),  value: perfil.resumen?.tareasAsignadas ?? 0, icon: <ClipboardList size={18} /> },
-              { label: t('profileStatsCreated'),value: perfil.resumen?.tareasCreadas ?? 0, icon: <BadgeCheck size={18} /> },
-              { label: t('profileStatsPending'),value: perfil.resumen?.notificacionesPendientes ?? 0, icon: <Bell size={18} /> },
-            ].map((item) => (
-              <div key={item.label} className="rounded-[24px] border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                  {item.icon}
-                </div>
-                <div className="text-2xl font-medium text-slate-900">{item.value}</div>
-                <div className="text-[11px] font-medium text-slate-400">{item.label}</div>
-              </div>
-            ))}
+            <div className="flex flex-wrap gap-2 pb-1 sm:justify-end">
+              <span className="badge-info">{rolTexto}</span>
+              <span className="badge-neutral">{etiquetaArea(perfil.area)}</span>
+              <span className={chipEstado.clase}>{chipEstado.texto}</span>
+            </div>
           </div>
         </div>
+
+        <dl className="pf-cifras">
+          {cifras.map(({ label, value, icon: Icono }) => (
+            <div key={label} className="pf-cifra">
+              <dt className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-muted)]">
+                <Icono size={14} aria-hidden="true" />
+                {label}
+              </dt>
+              <dd className="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-text)]">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </header>
+
+      {/* ── Pestañas ── */}
+      <div role="tablist" aria-label={t('pfTabsAria')} className="pf-pestanas">
+        {PESTANAS.map(({ id, icono: Icono, etiqueta }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`pf-tab-${id}`}
+            aria-controls={`pf-panel-${id}`}
+            aria-selected={pestana === id}
+            onClick={() => cambiarPestana(id)}
+          >
+            <Icono size={16} aria-hidden="true" />
+            {t(etiqueta)}
+          </button>
+        ))}
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
-        <form onSubmit={handleSubmit} className="rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm lg:p-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-[var(--color-text)]">{t('profilePersonalInfo')}</h2>
-          </div>
+      {pestana === 'perfil' && (
+        <div role="tabpanel" id="pf-panel-perfil" aria-labelledby="pf-tab-perfil" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <form onSubmit={handleSubmit} className="pf-panel">
+            <div className="pf-panel-cabecera">
+              <span className="pf-panel-icono" aria-hidden="true"><UserRound size={18} /></span>
+              <div>
+                <h2 className="pf-panel-titulo">{t('profilePersonalInfo')}</h2>
+                <p className="pf-panel-ayuda">{t('pfPersonalHint')}</p>
+              </div>
+            </div>
 
-          <div className="grid gap-5 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldName')}</span>
-              <div className="relative">
-                <UserRound size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
+            <div className="divide-y divide-[var(--color-border)]">
+              <Fila etiqueta={t('pfPhoto')} ayuda={t('pfPhotoHint')}>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="pf-avatar h-16 w-16 border-2">{avatar('1.15rem')}</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => inputFotoRef.current?.click()} className="pf-boton">
+                      <ImagePlus size={15} aria-hidden="true" />
+                      {t('profileChangePhoto')}
+                    </button>
+                    {previewFoto && (
+                      <button type="button" onClick={quitarFoto} className="pf-boton pf-boton-peligro">
+                        <Trash2 size={15} aria-hidden="true" />
+                        {t('profileRemovePhoto')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </Fila>
+
+              <Fila etiqueta={t('fieldName')} htmlFor="perfil-nombre">
+                <Campo
+                  icono={UserRound}
+                  id="perfil-nombre"
+                  name="nombre"
+                  autoComplete="name"
                   value={form.nombre}
                   onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  maxLength={120}
                   required
                 />
-              </div>
-            </label>
+              </Fila>
 
-            <label className="space-y-2">
-              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldEmail')}</span>
-              <div className="relative">
-                <Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                  required
-                />
-              </div>
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldPhone')}</span>
-              <div className="relative">
-                <Phone size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={form.telefono}
-                  onChange={(e) => setForm((prev) => ({ ...prev, telefono: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                  placeholder={t('fieldPhonePlaceholder')}
-                />
-              </div>
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldPosition')}</span>
-              <div className="relative">
-                <Briefcase size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
+              <Fila etiqueta={t('fieldPosition')} htmlFor="perfil-puesto">
+                <Campo
+                  icono={Briefcase}
+                  id="perfil-puesto"
+                  name="puesto"
+                  autoComplete="organization-title"
                   value={form.puesto}
                   onChange={(e) => setForm((prev) => ({ ...prev, puesto: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   placeholder={t('fieldPositionPlaceholder')}
+                  maxLength={255}
                 />
-              </div>
-            </label>
-          </div>
+              </Fila>
 
-          <label className="mt-5 block space-y-2">
-            <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{t('fieldBio')}</span>
-            <textarea
-              rows={5}
-              value={form.biografia}
-              onChange={(e) => setForm((prev) => ({ ...prev, biografia: e.target.value }))}
-              className="w-full resize-none rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-              placeholder={t('fieldBioPlaceholder')}
-            />
-          </label>
+              <Fila etiqueta={t('fieldPhone')} htmlFor="perfil-telefono">
+                <Campo
+                  icono={Phone}
+                  id="perfil-telefono"
+                  name="telefono"
+                  type="tel"
+                  autoComplete="tel"
+                  value={form.telefono}
+                  onChange={(e) => setForm((prev) => ({ ...prev, telefono: e.target.value }))}
+                  placeholder={t('fieldPhonePlaceholder')}
+                  maxLength={40}
+                />
+              </Fila>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 transition-all hover:border-blue-300 hover:text-blue-700">
-              <ImagePlus size={16} />
-              {t('profileChangePhoto')}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] || null;
-                  setArchivoFoto(file);
-                  setRemoveFoto(false);
-                }}
-              />
-            </label>
-
-            {previewFoto && (
-              <button
-                type="button"
-                onClick={() => {
-                  setArchivoFoto(null);
-                  setPreviewFoto('');
-                  setRemoveFoto(true);
-                }}
-                className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600 transition-all hover:bg-rose-100"
-              >
-                {t('profileRemovePhoto')}
-              </button>
-            )}
-          </div>
-
-          <div className="mt-8 flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-normal text-slate-400">
-              Tu avatar, nombre y correo se reflejan en el layout y en el resto del CRM.
-            </p>
-            <button
-              type="submit"
-              disabled={guardando}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Save size={16} />
-              {guardando ? t('saving') : t('profileSave')}
-            </button>
-          </div>
-        </form>
-
-        <div className="space-y-6">
-          <div className="rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t('profileAccountData')}</h2>
-            <div className="mt-5 space-y-4">
-              {[
-                { label: t('fieldArea'),           value: t(AREAS_KEY[perfil.area] || 'areaGeneral'), icon: <Building2 size={16} /> },
-                { label: t('fieldRole'),           value: t(perfil.rol === 'ADMIN' ? 'roleAdmin' : 'roleMember'), icon: <ShieldCheck size={16} /> },
-                { label: t('fieldRegistration'),   value: formatDate(perfil.creadoEn), icon: <BadgeCheck size={16} /> },
-                { label: t('fieldGoogleCalendar'), value: perfil.googleCalendarEmail || t('fieldNotConnected'), icon: <Mail size={16} /> },
-              ].map((item) => (
-                <div key={item.label} className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
-                    {item.icon}
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-medium text-slate-400">{item.label}</div>
-                    <div className="mt-1 text-sm font-medium text-slate-700">{item.value}</div>
-                  </div>
+              <Fila etiqueta={t('fieldEmail')} ayuda={t('pfEmailHint')}>
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-[var(--color-border)] px-3.5 py-2.5">
+                  <span className="flex min-w-0 items-center gap-2 text-sm text-[var(--color-text)]">
+                    <Mail size={16} className="shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+                    <span className="truncate">{perfil.email}</span>
+                  </span>
+                  <button type="button" className="auth-link shrink-0 text-sm" onClick={() => cambiarPestana('acceso')}>
+                    {t('pfEmailManage')}
+                  </button>
                 </div>
-              ))}
+              </Fila>
+
+              <Fila etiqueta={t('fieldBio')} htmlFor="perfil-biografia">
+                <textarea
+                  id="perfil-biografia"
+                  name="biografia"
+                  rows={4}
+                  maxLength={MAX_BIO}
+                  value={form.biografia}
+                  onChange={(e) => setForm((prev) => ({ ...prev, biografia: e.target.value }))}
+                  className="pf-campo resize-none !pl-3.5"
+                  placeholder={t('fieldBioPlaceholder')}
+                  aria-describedby="perfil-biografia-conteo"
+                />
+                <p id="perfil-biografia-conteo" className="mt-1.5 text-right text-xs tabular-nums text-[var(--color-text-muted)]">
+                  {t('pfBioCount', { n: form.biografia.length })}
+                </p>
+              </Fila>
             </div>
-          </div>
 
-          <div className="rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t('profileRelatedProjects')}</h2>
-            <p className="mt-1 text-sm text-slate-500">Vista rápida de los proyectos donde participas o que has creado.</p>
+            <div className="pf-panel-pie">
+              <p className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]" aria-live="polite">
+                <span className={`h-2 w-2 rounded-full ${hayCambios ? 'bg-[var(--color-accent-warning)]' : 'bg-[var(--color-success)]'}`} aria-hidden="true" />
+                {hayCambios ? t('pfUnsaved') : t('pfAllSaved')}
+              </p>
+              <div className="flex gap-2">
+                {hayCambios && (
+                  <button type="button" onClick={descartar} className="pf-boton" disabled={guardando}>
+                    {t('pfDiscard')}
+                  </button>
+                )}
+                <button type="submit" disabled={guardando || !hayCambios || !form.nombre.trim()} aria-busy={guardando} className="btn-primary">
+                  <Save size={16} aria-hidden="true" />
+                  {guardando ? t('saving') : t('profileSave')}
+                </button>
+              </div>
+            </div>
+          </form>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              {proyectosDestacados.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm font-medium text-slate-400">
+          {/* Columna de 320px solo desde xl: con el menu lateral de una tableta
+              (1024px) el formulario quedaba en ~360px. Entre md y xl va debajo,
+              con sus dos tarjetas lado a lado. */}
+          <aside className="grid content-start gap-6 md:grid-cols-2 md:items-start xl:grid-cols-1">
+            <section className="pf-panel">
+              <div className="pf-panel-cabecera">
+                <div>
+                  <h2 className="pf-panel-titulo">{t('profileAccountData')}</h2>
+                  <p className="pf-panel-ayuda">{t('pfAccountHint')}</p>
+                </div>
+              </div>
+              <dl className="divide-y divide-[var(--color-border)]">
+                {datosCuenta.map(({ label, value, icon: Icono, apagado }) => (
+                  <div key={label} className="flex items-center gap-3 px-5 py-3.5">
+                    <Icono size={16} className="shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+                    <dt className="text-sm text-[var(--color-text-muted)]">{label}</dt>
+                    <dd className={`ml-auto min-w-0 truncate text-right text-sm font-medium ${apagado ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-text)]'}`} title={value}>
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
+            <section className="pf-panel">
+              <div className="pf-panel-cabecera">
+                <div>
+                  <h2 className="pf-panel-titulo">{t('profileRelatedProjects')}</h2>
+                  <p className="pf-panel-ayuda">{t('perfilRelatedHint')}</p>
+                </div>
+              </div>
+              {proyectosDestacados.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 px-5 py-8 text-center text-sm text-[var(--color-text-muted)]">
+                  <FolderKanban size={22} aria-hidden="true" />
                   {t('profileNoProjects')}
                 </div>
+              ) : (
+                <ul className="divide-y divide-[var(--color-border)]">
+                  {proyectosDestacados.map((proyecto) => {
+                    const estado = getEstadoProyecto(proyecto.estado);
+                    return (
+                      <li key={proyecto.id}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/proyectos/${proyecto.id}`)}
+                          className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-[var(--color-surface-3)]"
+                        >
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--color-primary-10)] text-[var(--color-primary)]" aria-hidden="true">
+                            <FolderKanban size={15} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-[var(--color-text)]">{proyecto.nombre}</span>
+                            <span className="block truncate text-xs text-[var(--color-text-muted)]">{etiquetaArea(proyecto.area)}</span>
+                          </span>
+                          <span className={`${estado.badgeClass} shrink-0`}>{t(estado.labelKey)}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
+            </section>
+          </aside>
+        </div>
+      )}
 
-              {proyectosDestacados.map((proyecto) => (
-                <div key={proyecto.id} className="min-w-[180px] flex-1 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
-                  <div className="text-sm font-medium text-slate-800">{proyecto.nombre}</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-slate-500">
-                      {t(AREAS_KEY[proyecto.area] || 'areaGeneral')}
-                    </span>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-slate-500">
-                      {proyecto.estado}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+      {pestana === 'acceso' && (
+        <div role="tabpanel" id="pf-panel-acceso" aria-labelledby="pf-tab-acceso" className="space-y-6">
+          <p className="flex items-start gap-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-dim)]">
+            <Info size={16} className="mt-0.5 shrink-0 text-[var(--color-primary)]" aria-hidden="true" />
+            {t('pfAccessNote')}
+          </p>
+          <div className="grid items-stretch gap-6 xl:grid-cols-2">
+            <CambiarCorreo perfil={perfil} onActualizado={aplicarPerfil} />
+            <CambiarPassword usuario={{ ...usuario, email: perfil.email, nombre: perfil.nombre }} />
           </div>
         </div>
-      </div>
+      )}
+
+      {pestana === 'seguridad' && (
+        <div role="tabpanel" id="pf-panel-seguridad" aria-labelledby="pf-tab-seguridad">
+          <SeguridadCuenta />
+        </div>
+      )}
     </div>
   );
 };

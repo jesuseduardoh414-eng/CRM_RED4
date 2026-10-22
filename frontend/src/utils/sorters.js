@@ -4,8 +4,12 @@ const PRIORIDAD_ORDEN = {
   BAJA: 2,
 };
 
+// Espejo de backend/src/utils/sort.utils.js: los activos primero, luego los
+// pausados, despues lo terminado y al final el archivo. Se conservan los
+// nombres viejos por si queda algun registro sin migrar.
 const PROYECTO_ESTADO_ORDEN = {
   ACTIVO: 0,
+  INACTIVO: 1,
   PENDIENTE: 1,
   EN_PAUSA: 1,
   PAUSA: 1,
@@ -13,6 +17,8 @@ const PROYECTO_ESTADO_ORDEN = {
   TERMINADO: 2,
   FINALIZADO: 2,
   CERRADO: 2,
+  HECHO: 2,
+  ARCHIVADO: 3,
 };
 
 const getDateMs = (value, fallback = Number.MAX_SAFE_INTEGER) => {

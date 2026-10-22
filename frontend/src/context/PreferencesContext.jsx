@@ -1,4 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { textosAuth } from './textosAuth';
+import { textosContratos } from './textosContratos';
+import { textosConfiguracion } from './textosConfiguracion';
+import { textosSistema } from './textosSistema';
+import { textosCorreo } from './textosCorreo';
+import { textosPanel } from './textosPanel';
+import { textosMiembro } from './textosMiembro';
 
 const PreferencesContext = createContext(null);
 
@@ -7,15 +14,106 @@ const STORAGE_LANGUAGE_KEY = 'crm_language';
 
 const translations = {
   es: {
+    // ── Pantallas públicas (login, recuperar, verificar, invitación) ──
+    authSubtitleLogin: 'Inicia sesión para continuar',
+    authEmail: 'Correo electrónico',
+    authEmailPlaceholder: 'tu@empresa.com',
+    authPassword: 'Contraseña',
+    authForgotLink: '¿Olvidaste tu contraseña?',
+    authLogin: 'Iniciar sesión',
+    authLoggingIn: 'Iniciando sesión...',
+    authForgotTitle: '¿Olvidaste tu contraseña?',
+    authForgotSubtitle: 'No te preocupes: te enviaremos un enlace para restablecerla.',
+    authForgotSent: 'Petición procesada. Si el correo está registrado, revisa tu bandeja de entrada.',
+    authSendResetLink: 'Enviar enlace de recuperación',
+    authSending: 'Enviando...',
+    authBackToLogin: 'Volver al inicio de sesión',
+    authResetTitle: 'Nueva contraseña',
+    authResetSubtitle: 'Ingresa tu nueva clave de acceso.',
+    authNewPassword: 'Nueva contraseña',
+    authConfirmPassword: 'Confirmar contraseña',
+    authPasswordsMismatch: 'Las contraseñas no coinciden',
+    authPasswordTooShort: 'La contraseña debe tener al menos 8 caracteres',
+    authRequirementsTitle: 'Requisitos de seguridad:',
+    authReqLength: 'Mínimo 8 caracteres',
+    authReqMix: 'Mayúsculas, minúsculas y números',
+    authReqSpecial: 'Al menos un carácter especial (!@#$...)',
+    authResetSubmit: 'Restablecer contraseña',
+    authUpdating: 'Actualizando...',
+    authResetDone: 'Contraseña actualizada. Ya puedes iniciar sesión.',
+    authVerifiedTitle: '¡Cuenta verificada!',
+    authRedirecting: 'Te llevamos al inicio de sesión en 3 segundos...',
+    authGoToLogin: 'Ir al inicio de sesión',
+    authVerifyErrorTitle: 'No pudimos verificar la cuenta',
+    authInviteTitle: 'Activa tu cuenta',
+    authInviteSubtitle: 'Completa tu perfil para unirte al equipo',
+    authInviteSubtitleConfig: 'Crea tu contraseña para entrar al panel de configuración',
+    authAccountType: 'Tipo de cuenta',
+    authAccountConfig: 'Configuración',
+    authInviteFor: 'Invitación para',
+    authInviteInvalidTitle: 'Enlace no válido',
+    authInviteInvalidText: 'Este enlace de invitación ha expirado o no es válido. Pide a tu administrador una invitación nueva.',
+    authArea: 'Área',
+    authCompany: 'Empresa',
+    authCreatePassword: 'Crear contraseña',
+    authPasswordMinPlaceholder: 'Mínimo 8 caracteres',
+    authRepeatPasswordPlaceholder: 'Repite tu contraseña',
+    authStrengthEmpty: 'Ingresa una contraseña',
+    authStrengthWeak: 'Contraseña muy débil',
+    authStrengthOk: 'Contraseña aceptable',
+    authStrengthStrong: 'Contraseña fuerte',
+    authStrengthExcellent: 'Contraseña excelente',
+    authActivating: 'Activando cuenta...',
+    authActivate: 'Activar mi cuenta',
+    authTerms: 'Al activar tu cuenta aceptas los términos de uso y la política de privacidad del CRM.',
+
+    // ── Perfil (textos nuevos) ──────────────────────────────────
+    perfilIntro: 'Administra tu información personal, tu foto de perfil y tu contexto de trabajo dentro del CRM.',
+    perfilErrorHint: 'Intenta recargar la página. Si el problema continúa, avisa a tu administrador.',
+    perfilCurrentPassword: 'Contraseña actual',
+    perfilCurrentPasswordHint: 'Para cambiar tu correo necesitamos confirmar tu contraseña actual.',
+    perfilPhotoInvalidType: 'La foto debe ser PNG, JPG o WEBP.',
+    perfilPhotoTooBig: 'La foto no puede pesar más de 2 MB.',
+    perfilFooterNote: 'Tu foto, nombre y correo se muestran en el menú y en el resto del CRM.',
+    perfilRelatedHint: 'Vista rápida de los proyectos donde participas o que has creado.',
+    perfilUpdated: 'Perfil actualizado',
+    perfilChangePhotoAria: 'Cambiar foto de perfil',
+    perfilNoData: 'Sin dato',
+    pfTabProfile: 'Perfil',
+    pfTabAccess: 'Correo y contraseña',
+    pfTabSecurity: 'Seguridad',
+    pfTabsAria: 'Secciones del perfil',
+    pfPhoto: 'Foto de perfil',
+    pfPhotoHint: 'PNG, JPG o WEBP de hasta 2 MB. Se recorta en círculo.',
+    pfPersonalHint: 'Así te ve el resto del equipo en proyectos, tareas y la agenda.',
+    pfUnsaved: 'Tienes cambios sin guardar',
+    pfAllSaved: 'Todo guardado',
+    pfDiscard: 'Descartar',
+    pfBioCount: '{n} / 500',
+    pfAccountHint: 'Lo asigna un administrador; no se puede editar aquí.',
+    pfEmailTitle: 'Correo de acceso',
+    pfEmailHint: 'Es el correo con el que inicias sesión y al que llegan los avisos del CRM.',
+    pfEmailCurrent: 'Correo actual',
+    pfEmailNew: 'Nuevo correo',
+    pfEmailSubmit: 'Actualizar correo',
+    pfEmailSame: 'Escribe un correo distinto al actual.',
+    pfEmailUpdated: 'Correo actualizado. Te enviamos un aviso al correo anterior y al nuevo.',
+    pfEmailManage: 'Cambiar',
+    pfAccessNote: 'Por seguridad, ambos cambios piden tu contraseña actual y quedan registrados en la bitácora de seguridad.',
+    pfNoTitle: 'Sin puesto definido',
+    pfMemberSince: 'Miembro desde {fecha}',
+
     // ── Navegación ─────────────────────────────────────────────
     home: 'Inicio',
     projects: 'Proyectos',
     agenda: 'Mi Agenda',
+    menuKnowledge: 'Base de conocimiento',
     community: 'Comunidad',
     users: 'Usuarios',
+    userGeneric: 'Usuario',
     administration: 'Administracion',
     mainMenu: 'Menu Principal',
-    internalPanel: 'Panel Interno',
+    internalPanel: 'CRM Interno',
     collapse: 'Colapsar',
     logout: 'Salir',
     searchPlaceholder: 'Buscar...',
@@ -506,7 +604,7 @@ const translations = {
     dashboardSeeAgenda: 'Ver agenda',
     dashboardConnectionError: 'Error de conexión',
     dashboardAdminTitle: 'Control Central',
-    dashboardAdminSubtitle: 'Supervisión estratégica del equipo CRM RED 4',
+    dashboardAdminSubtitle: 'Supervisión estratégica del equipo {marca}',
     dashboardProjectGantt: 'Gantt general de proyectos',
     dashboardFocusedView: 'Vista enfocada en {project}',
     dashboardGlobalView: 'Vista global con fechas y avance de proyectos',
@@ -581,6 +679,93 @@ const translations = {
     agendaMoreItems: '+{count} más',
     agendaDrag: 'Arrastrar',
     agendaSeeMore: 'Ver más',
+    // ── Agenda: correcciones (ventanas, movimientos, ajustes) ─────────
+    agendaTypeTask: 'Tarea',
+    agendaTypeProject: 'Proyecto',
+    agendaTypeExpense: 'Gasto',
+    agendaLoadError: 'No se pudo cargar la agenda',
+    agendaConfigLoadError: 'No se pudo cargar la configuración de la agenda',
+    agendaInvitationAccepted: 'Invitación aceptada',
+    agendaInvitationRejected: 'Invitación rechazada',
+    agendaDeleteEvent: 'Eliminar evento',
+    agendaDeleteEventConfirm: '¿Eliminar este evento?',
+    agendaDeleteSeriesConfirm: 'Este evento se repite. Se eliminará toda la serie.',
+    agendaEventDeleted: 'Evento eliminado',
+    agendaSeriesEditNotice: 'Este evento se repite. Los cambios se aplican a toda la serie; la fecha y la hora las marca la serie y no se cambian desde una ocurrencia.',
+    agendaLinkMustBeHttp: 'El enlace debe empezar por http:// o https://',
+    agendaShareSwitch: 'Compartir con el equipo',
+    agendaTaskMoveNone: 'No se encontraron tareas para mover en este bloque.',
+    agendaMovePartial: '{failed} de {total} elementos no se pudieron mover. La agenda se volvió a cargar.',
+    agendaMoveTasksTitle: 'Mover bloque de tareas',
+    agendaMoveTasksConfirm: 'Se moverán {count} {taskLabel} a partir del {date}. ¿Continuar?',
+    agendaMoveGroupTitle: 'Mover elementos',
+    agendaMoveGroupConfirm: 'Se moverán {count} {itemLabel} al {date}. ¿Continuar?',
+    agendaMoveConfirmButton: 'Mover',
+    agendaRecurringMoveUnsupported: 'Los eventos que se repiten no se pueden mover desde aquí; edita la serie.',
+    agendaRecurringSkipped: '{count} que se repiten se dejarán en su sitio.',
+    agendaItemMovedDays: '{item} movido {days} {dayLabel}.',
+    agendaMoveOneDay: 'Mover +1 día',
+    agendaMoveTwoDays: 'Mover +2 días',
+    agendaMoveCustom: 'Elegir cantidad...',
+    agendaMoveDaysTitle: 'Mover {item}',
+    agendaMoveDaysLabel: 'Días a mover (negativo para adelantar)',
+    agendaMoveDaysInvalid: 'Escribe un número entero de días distinto de cero (máximo 366).',
+    agendaNotWorkingDay: 'No laboral',
+    agendaWorkingDay: 'Día laboral',
+    agendaRestDay: 'Día de descanso',
+    agendaDayScheduleTitle: 'Agenda del día',
+    agendaNoEventsThisDay: 'No hay eventos este día',
+    agendaGlobalEvent: 'Evento global',
+    agendaSharedEvent: 'Evento compartido',
+    agendaVirtualMeeting: 'Reunión virtual',
+    agendaInPersonMeeting: 'Reunión presencial',
+    agendaLocationLabel: 'Ubicación:',
+    agendaOpenMeetingLink: 'Abrir enlace de reunión',
+    agendaGoogleMissingServerId: 'Falta configurar GOOGLE_CLIENT_ID en el servidor.',
+    agendaGoogleMissingClientId: 'Falta VITE_GOOGLE_CLIENT_ID en el frontend.',
+    agendaGoogleNoCode: 'No se recibió el código de Google.',
+    agendaGoogleAuthFailed: 'No se pudo completar la autorización con Google.',
+    agendaGoogleScriptError: 'No se pudo cargar Google Identity Services.',
+    agendaGoogleExpired: 'La conexión con Google caducó; vuelve a conectar.',
+    agendaGoogleReconnect: 'Volver a conectar',
+    agendaTabSchedule: 'Horario laboral',
+    agendaTabSpecialDays: 'Días especiales',
+    agendaWorkingDays: 'Días laborales',
+    agendaStart: 'Inicio',
+    agendaEnd: 'Fin',
+    agendaLunchBreak: 'Hora de comida',
+    agendaGoogleAccountConnected: 'Cuenta conectada',
+    agendaGoogleSyncOff: 'Sincronización desactivada',
+    agendaGoogleActive: 'Activa',
+    agendaGoogleInactive: 'Inactiva',
+    agendaGoogleSyncDesc: 'Tu agenda y el calendario "{sistema}" de {email} se mantienen iguales: lo que crees, edites o borres aquí o en Google se refleja en el otro lado.',
+    agendaGoogleMainCalendar: 'tu calendario principal de Google',
+    agendaGoogleConnectDesc: 'Conecta tu cuenta: el CRM crea en tu Google un calendario "{sistema}" y lo mantiene igual que tu agenda, en los dos sentidos. Tus otros calendarios no se tocan.',
+    agendaGoogleNotConfigured: 'El servidor aún no tiene configuradas las credenciales de Google Calendar.',
+    agendaGoogleDisconnect: 'Desconectar',
+    agendaSaveSettings: 'Guardar configuración',
+    agendaSettingsSaved: 'Configuración guardada correctamente',
+    agendaDateRange: 'Rango de fechas',
+    agendaDayType: 'Tipo',
+    agendaDayReason: 'Motivo / descripción',
+    agendaDayReasonPlaceholder: 'Ej. Navidad, Vacaciones...',
+    agendaMarkSpecialDay: 'Marcar día especial',
+    agendaMarkedDaysThisMonth: 'Días marcados este mes',
+    agendaNoSpecialDays: 'No hay días especiales registrados',
+    agendaSpecialDayAdded: 'Día especial marcado',
+    agendaSpecialDayDeleted: 'Día eliminado',
+    agendaSpecialDaysLoadError: 'No se pudieron cargar los días especiales',
+    agendaPickRangeFirst: 'Elige al menos una fecha.',
+    agendaDayTypeHoliday: 'Festivo',
+    agendaDayTypeVacation: 'Vacación',
+    agendaDayTypeLeave: 'Permiso',
+    agendaDayTypeHomeOffice: 'Home office',
+    agendaDayTypeBirthday: 'Cumpleaños',
+    agendaPickDate: 'Seleccionar fecha',
+    agendaPresetTomorrow: 'Mañana',
+    agendaPresetThreeDays: '3 días',
+    agendaPresetOneWeek: '1 semana',
+    agendaPresetTwoWeeks: '2 semanas',
 
     // ── Project modal ──────────────────────────────────────────────
     projectEditTitle: 'Editar Proyecto',
@@ -669,18 +854,228 @@ const translations = {
     usersTaskOccupied: 'Tarea ocupada',
     usersProjectActive: 'Proyecto activo',
     usersDateNoEnd: 'Sin fecha fin',
+
+    // ── Sesión y avisos globales ─────────────────────────────────
+    sessionExpired: 'Tu sesión expiró. Vuelve a iniciar sesión.',
+    accountDeactivated: 'Tu cuenta fue desactivada. Contacta a un administrador.',
+    sessionClosed: 'Sesión cerrada',
+    reminderToast: 'Recordatorio: {title} en {minutes} minutos',
+    undo: 'Deshacer',
+    retry: 'Reintentar',
+    refresh: 'Actualizar',
+    viewDetail: 'Ver detalle',
+    clearFilters: 'Limpiar filtros',
+    expandMenu: 'Expandir menú lateral',
+    collapseMenu: 'Colapsar menú lateral',
+    downloadFailed: 'No se pudo descargar el archivo',
+
+    // ── Buscador global ──────────────────────────────────────────
+    searchTitle: 'Buscar',
+    searchHint: 'Proyectos y personas. Atajo: Ctrl+K',
+    searchPlaceholderLong: 'Escribe el nombre de un proyecto o de una persona...',
+    searchGoTo: 'Ir a',
+    searchPeople: 'Personas',
+
+    // ── Notificaciones ───────────────────────────────────────────
+    notificationTypeTask: 'Tarea',
+    notificationTypeMessage: 'Mensaje del portal',
+    notificationFrom: 'De',
+    notificationTypeAgenda: 'Agenda',
+    notificationProject: 'Proyecto',
+    notificationInvitedBy: 'Invitó',
+    notificationAssignedBy: 'Asignó',
+    notificationDelete: 'Eliminar notificación',
+
+    // ── Proyectos (avisos) ───────────────────────────────────────
+    projectCreated: 'Proyecto creado',
+    projectUpdated: 'Proyecto actualizado',
+    projectArchivedToast: 'Proyecto "{name}" archivado',
+    projectStatusUpdated: '"{name}" ahora está {status}',
+    projectNoArchived: 'No hay proyectos archivados',
+    projectTasksTab: 'Tareas',
+    projectActivityTab: 'Actividad',
+
+    // ── Tareas ───────────────────────────────────────────────────
+    taskTitleRequired: 'Escribe un título para la tarea.',
+    taskNoPermissionHint: 'Solo el responsable, quien la creó o un administrador del proyecto pueden modificar esta tarea.',
+    taskDueToday: 'Vence hoy',
+
+    // ── Historial de actividad ───────────────────────────────────
+    activityLogTitle: 'Historial de actividad',
+    activityLogEmpty: 'Todavía no hay actividad registrada en este proyecto.',
+    activityActionCreateTask: 'Tarea creada',
+    activityActionEditTask: 'Tarea editada',
+    activityActionStatusChange: 'Cambio de estado',
+    activityActionComment: 'Comentario',
+    activityActionDeleteTask: 'Tarea eliminada',
+    activityActionAttachment: 'Archivo adjunto',
+
+    // ── Gantt ────────────────────────────────────────────────────
+    ganttEmpty: 'No hay tareas programadas para mostrar en el gantt.',
+    ganttDurationLabel: 'Duración',
+    ganttDurationOne: '1 día',
+    ganttDurationMany: '{count} días',
+
+    // ── Adjuntos ─────────────────────────────────────────────────
+    attachmentTaskTitle: 'Archivos adjuntos',
+    attachmentProjectTitle: 'Documentos del proyecto',
+    attachmentEventTitle: 'Documentos del evento',
+    attachmentUpload: 'Subir archivos',
+    attachmentUploading: 'Subiendo...',
+    attachmentUploaded: '{count} archivo(s) subido(s)',
+    attachmentDocument: 'Documento',
+    attachmentFile: 'Archivo',
+    attachmentNew: 'Nuevo',
+    attachmentView: 'Ver',
+    attachmentDownload: 'Descargar',
+    attachmentEmpty: 'Sin documentos adjuntos.',
+    attachmentDeleteConfirm: '¿Eliminar este archivo?',
+
+    // ── Comentarios ──────────────────────────────────────────────
+    commentsProjectWall: 'Muro del proyecto',
+    commentsTaskThread: 'Hilo de la tarea',
+    commentsEmpty: 'No hay mensajes todavía.',
+    commentsYou: 'Tú',
+    commentsUnknownAuthor: 'Usuario',
+    commentsPlaceholder: 'Escribe una nota o actualización...',
+    commentsSend: 'Enviar',
+    commentsSending: 'Enviando...',
+    commentDeleteConfirm: '¿Eliminar este comentario?',
+
+    // ── Inicio ───────────────────────────────────────────────────
+    dashboardActivityError: 'No se pudo cargar la actividad de ese día.',
+    dashboardNoProjectsMember: 'Todavía no participas en ningún proyecto.',
+    projectTasksInProject: 'tareas en el proyecto',
+
+    // ── Usuarios ─────────────────────────────────────────────────
+    usersStatusExpired: 'Expirada',
+    usersResend: 'Reenviar',
+    usersResendInvitation: 'Reenviar invitación',
+    usersSent: 'Enviada',
+    usersExpires: 'Expira',
+    usersAreaRole: 'Área / Rol',
+    usersFilterStatus: 'Estado',
+    usersAllStatuses: 'Todos los estados',
+    usersDeactivateConfirm: '¿Desactivar a {name}? Dejará de poder entrar al sistema.',
+    usersDeactivated: 'Usuario desactivado',
+    usersActivated: 'Usuario activado',
+    usersUpdated: 'Usuario actualizado',
+    usersInvitationSent: 'Invitación enviada',
+    usersInvitationResent: 'Invitación reenviada',
+    usersInvitationDeleted: 'Invitación eliminada',
+    usersInvitationDeleteConfirm: '¿Eliminar la invitación de {name}?',
+    usersInvitationAcceptedKept: 'Las invitaciones aceptadas se conservan como historial',
+    usersNoInvitations: 'No hay invitaciones',
+    ...textosAuth.es,
+    ...textosContratos.es,
+    ...textosConfiguracion.es,
+    ...textosSistema.es,
+    ...textosCorreo.es,
+    ...textosPanel.es,
+    ...textosMiembro.es,
   },
 
   en: {
+    // ── Public screens (login, recover, verify, invitation) ────
+    authSubtitleLogin: 'Sign in to continue',
+    authEmail: 'Email address',
+    authEmailPlaceholder: 'you@company.com',
+    authPassword: 'Password',
+    authForgotLink: 'Forgot your password?',
+    authLogin: 'Sign in',
+    authLoggingIn: 'Signing in...',
+    authForgotTitle: 'Forgot your password?',
+    authForgotSubtitle: "Don't worry: we'll send you a link to reset it.",
+    authForgotSent: 'Request received. If the email is registered, check your inbox.',
+    authSendResetLink: 'Send reset link',
+    authSending: 'Sending...',
+    authBackToLogin: 'Back to sign in',
+    authResetTitle: 'New password',
+    authResetSubtitle: 'Enter your new password.',
+    authNewPassword: 'New password',
+    authConfirmPassword: 'Confirm password',
+    authPasswordsMismatch: 'Passwords do not match',
+    authPasswordTooShort: 'Password must be at least 8 characters',
+    authRequirementsTitle: 'Security requirements:',
+    authReqLength: 'At least 8 characters',
+    authReqMix: 'Upper and lower case letters and numbers',
+    authReqSpecial: 'At least one special character (!@#$...)',
+    authResetSubmit: 'Reset password',
+    authUpdating: 'Updating...',
+    authResetDone: 'Password updated. You can sign in now.',
+    authVerifiedTitle: 'Account verified!',
+    authRedirecting: 'Taking you to sign in in 3 seconds...',
+    authGoToLogin: 'Go to sign in',
+    authVerifyErrorTitle: 'We could not verify the account',
+    authInviteTitle: 'Activate your account',
+    authInviteSubtitle: 'Complete your profile to join the team',
+    authInviteSubtitleConfig: 'Create your password to open the configuration panel',
+    authAccountType: 'Account type',
+    authAccountConfig: 'Configuration',
+    authInviteFor: 'Invitation for',
+    authInviteInvalidTitle: 'Invalid link',
+    authInviteInvalidText: 'This invitation link has expired or is not valid. Ask your administrator for a new invitation.',
+    authArea: 'Area',
+    authCompany: 'Company',
+    authCreatePassword: 'Create password',
+    authPasswordMinPlaceholder: 'At least 8 characters',
+    authRepeatPasswordPlaceholder: 'Repeat your password',
+    authStrengthEmpty: 'Enter a password',
+    authStrengthWeak: 'Very weak password',
+    authStrengthOk: 'Acceptable password',
+    authStrengthStrong: 'Strong password',
+    authStrengthExcellent: 'Excellent password',
+    authActivating: 'Activating account...',
+    authActivate: 'Activate my account',
+    authTerms: 'By activating your account you accept the CRM terms of use and privacy policy.',
+
+    // ── Profile (new texts) ─────────────────────────────────────
+    perfilIntro: 'Manage your personal information, profile photo and work context within the CRM.',
+    perfilErrorHint: 'Try reloading the page. If the problem continues, contact your administrator.',
+    perfilCurrentPassword: 'Current password',
+    perfilCurrentPasswordHint: 'To change your email we need to confirm your current password.',
+    perfilPhotoInvalidType: 'The photo must be PNG, JPG or WEBP.',
+    perfilPhotoTooBig: 'The photo cannot be larger than 2 MB.',
+    perfilFooterNote: 'Your photo, name and email are shown in the menu and across the CRM.',
+    perfilRelatedHint: 'Quick view of the projects you take part in or created.',
+    perfilUpdated: 'Profile updated',
+    perfilChangePhotoAria: 'Change profile photo',
+    perfilNoData: 'No data',
+    pfTabProfile: 'Profile',
+    pfTabAccess: 'Email & password',
+    pfTabSecurity: 'Security',
+    pfTabsAria: 'Profile sections',
+    pfPhoto: 'Profile photo',
+    pfPhotoHint: 'PNG, JPG or WEBP up to 2 MB. Cropped to a circle.',
+    pfPersonalHint: 'This is how the rest of the team sees you in projects, tasks and the calendar.',
+    pfUnsaved: 'You have unsaved changes',
+    pfAllSaved: 'All saved',
+    pfDiscard: 'Discard',
+    pfBioCount: '{n} / 500',
+    pfAccountHint: 'Set by an administrator; it cannot be edited here.',
+    pfEmailTitle: 'Sign-in email',
+    pfEmailHint: 'The email you sign in with and where CRM notices are sent.',
+    pfEmailCurrent: 'Current email',
+    pfEmailNew: 'New email',
+    pfEmailSubmit: 'Update email',
+    pfEmailSame: 'Enter an email different from the current one.',
+    pfEmailUpdated: 'Email updated. We sent a notice to both the old and the new address.',
+    pfEmailManage: 'Change',
+    pfAccessNote: 'For security, both changes ask for your current password and are recorded in the security log.',
+    pfNoTitle: 'No position set',
+    pfMemberSince: 'Member since {fecha}',
+
     // ── Navigation ─────────────────────────────────────────────
     home: 'Home',
     projects: 'Projects',
     agenda: 'My Agenda',
+    menuKnowledge: 'Knowledge base',
     community: 'Community',
     users: 'Users',
+    userGeneric: 'User',
     administration: 'Administration',
     mainMenu: 'Main Menu',
-    internalPanel: 'Internal Panel',
+    internalPanel: 'Internal CRM',
     collapse: 'Collapse',
     logout: 'Log out',
     searchPlaceholder: 'Search...',
@@ -1169,7 +1564,7 @@ const translations = {
     dashboardSeeAgenda: 'See agenda',
     dashboardConnectionError: 'Connection error',
     dashboardAdminTitle: 'Central Control',
-    dashboardAdminSubtitle: 'Strategic oversight for the CRM RED 4 team',
+    dashboardAdminSubtitle: 'Strategic oversight for the {marca} team',
     dashboardProjectGantt: 'General project gantt',
     dashboardFocusedView: 'Focused view on {project}',
     dashboardGlobalView: 'Global view with project dates and progress',
@@ -1244,6 +1639,93 @@ const translations = {
     agendaMoreItems: '+{count} more',
     agendaDrag: 'Drag',
     agendaSeeMore: 'See more',
+    // ── Agenda: fixes (dialogs, moves, settings) ──────────────────────
+    agendaTypeTask: 'Task',
+    agendaTypeProject: 'Project',
+    agendaTypeExpense: 'Expense',
+    agendaLoadError: 'The agenda could not be loaded',
+    agendaConfigLoadError: 'The agenda settings could not be loaded',
+    agendaInvitationAccepted: 'Invitation accepted',
+    agendaInvitationRejected: 'Invitation declined',
+    agendaDeleteEvent: 'Delete event',
+    agendaDeleteEventConfirm: 'Delete this event?',
+    agendaDeleteSeriesConfirm: 'This event repeats. The whole series will be deleted.',
+    agendaEventDeleted: 'Event deleted',
+    agendaSeriesEditNotice: 'This event repeats. Changes apply to the whole series; its date and time come from the series and cannot be changed from a single occurrence.',
+    agendaLinkMustBeHttp: 'The link must start with http:// or https://',
+    agendaShareSwitch: 'Share with the team',
+    agendaTaskMoveNone: 'No tasks were found to move in this block.',
+    agendaMovePartial: '{failed} of {total} items could not be moved. The agenda was reloaded.',
+    agendaMoveTasksTitle: 'Move task block',
+    agendaMoveTasksConfirm: '{count} {taskLabel} will be moved, starting on {date}. Continue?',
+    agendaMoveGroupTitle: 'Move items',
+    agendaMoveGroupConfirm: '{count} {itemLabel} will be moved to {date}. Continue?',
+    agendaMoveConfirmButton: 'Move',
+    agendaRecurringMoveUnsupported: 'Repeating events cannot be moved from here; edit the series instead.',
+    agendaRecurringSkipped: '{count} repeating item(s) will stay where they are.',
+    agendaItemMovedDays: '{item} moved by {days} {dayLabel}.',
+    agendaMoveOneDay: 'Move +1 day',
+    agendaMoveTwoDays: 'Move +2 days',
+    agendaMoveCustom: 'Choose amount...',
+    agendaMoveDaysTitle: 'Move {item}',
+    agendaMoveDaysLabel: 'Days to move (negative to move earlier)',
+    agendaMoveDaysInvalid: 'Enter a whole number of days other than zero (366 at most).',
+    agendaNotWorkingDay: 'Non-working',
+    agendaWorkingDay: 'Working day',
+    agendaRestDay: 'Day off',
+    agendaDayScheduleTitle: 'Day schedule',
+    agendaNoEventsThisDay: 'No events on this day',
+    agendaGlobalEvent: 'Global event',
+    agendaSharedEvent: 'Shared event',
+    agendaVirtualMeeting: 'Online meeting',
+    agendaInPersonMeeting: 'In-person meeting',
+    agendaLocationLabel: 'Location:',
+    agendaOpenMeetingLink: 'Open meeting link',
+    agendaGoogleMissingServerId: 'GOOGLE_CLIENT_ID is not configured on the server.',
+    agendaGoogleMissingClientId: 'VITE_GOOGLE_CLIENT_ID is missing in the frontend.',
+    agendaGoogleNoCode: 'No code was received from Google.',
+    agendaGoogleAuthFailed: 'Google authorization could not be completed.',
+    agendaGoogleScriptError: 'Google Identity Services could not be loaded.',
+    agendaGoogleExpired: 'The Google connection expired; please reconnect.',
+    agendaGoogleReconnect: 'Reconnect',
+    agendaTabSchedule: 'Working hours',
+    agendaTabSpecialDays: 'Special days',
+    agendaWorkingDays: 'Working days',
+    agendaStart: 'Start',
+    agendaEnd: 'End',
+    agendaLunchBreak: 'Lunch break',
+    agendaGoogleAccountConnected: 'Account connected',
+    agendaGoogleSyncOff: 'Sync disabled',
+    agendaGoogleActive: 'Active',
+    agendaGoogleInactive: 'Inactive',
+    agendaGoogleSyncDesc: 'Your agenda and the "{sistema}" calendar of {email} stay the same: whatever you create, edit or delete here or in Google shows up on the other side.',
+    agendaGoogleMainCalendar: 'your main Google calendar',
+    agendaGoogleConnectDesc: 'Connect your account: the CRM creates a "{sistema}" calendar in your Google account and keeps it the same as your agenda, both ways. Your other calendars are not touched.',
+    agendaGoogleNotConfigured: 'The server does not have Google Calendar credentials configured yet.',
+    agendaGoogleDisconnect: 'Disconnect',
+    agendaSaveSettings: 'Save settings',
+    agendaSettingsSaved: 'Settings saved successfully',
+    agendaDateRange: 'Date range',
+    agendaDayType: 'Type',
+    agendaDayReason: 'Reason / description',
+    agendaDayReasonPlaceholder: 'e.g. Christmas, Holidays...',
+    agendaMarkSpecialDay: 'Mark special day',
+    agendaMarkedDaysThisMonth: 'Days marked this month',
+    agendaNoSpecialDays: 'No special days registered',
+    agendaSpecialDayAdded: 'Special day marked',
+    agendaSpecialDayDeleted: 'Day deleted',
+    agendaSpecialDaysLoadError: 'Special days could not be loaded',
+    agendaPickRangeFirst: 'Pick at least one date.',
+    agendaDayTypeHoliday: 'Holiday',
+    agendaDayTypeVacation: 'Vacation',
+    agendaDayTypeLeave: 'Leave',
+    agendaDayTypeHomeOffice: 'Home office',
+    agendaDayTypeBirthday: 'Birthday',
+    agendaPickDate: 'Pick a date',
+    agendaPresetTomorrow: 'Tomorrow',
+    agendaPresetThreeDays: '3 days',
+    agendaPresetOneWeek: '1 week',
+    agendaPresetTwoWeeks: '2 weeks',
 
     // ── Project modal ──────────────────────────────────────────────
     projectEditTitle: 'Edit Project',
@@ -1332,17 +1814,172 @@ const translations = {
     usersTaskOccupied: 'Busy task',
     usersProjectActive: 'Active project',
     usersDateNoEnd: 'No end date',
+
+    // ── Session and global notices ───────────────────────────────
+    sessionExpired: 'Your session expired. Please sign in again.',
+    accountDeactivated: 'Your account has been deactivated. Contact an administrator.',
+    sessionClosed: 'Signed out',
+    reminderToast: 'Reminder: {title} in {minutes} minutes',
+    undo: 'Undo',
+    retry: 'Retry',
+    refresh: 'Refresh',
+    viewDetail: 'View details',
+    clearFilters: 'Clear filters',
+    expandMenu: 'Expand sidebar',
+    collapseMenu: 'Collapse sidebar',
+    downloadFailed: 'The file could not be downloaded',
+
+    // ── Global search ────────────────────────────────────────────
+    searchTitle: 'Search',
+    searchHint: 'Projects and people. Shortcut: Ctrl+K',
+    searchPlaceholderLong: 'Type a project or person name...',
+    searchGoTo: 'Go to',
+    searchPeople: 'People',
+
+    // ── Notifications ────────────────────────────────────────────
+    notificationTypeTask: 'Task',
+    notificationTypeMessage: 'Portal message',
+    notificationFrom: 'From',
+    notificationTypeAgenda: 'Agenda',
+    notificationProject: 'Project',
+    notificationInvitedBy: 'Invited by',
+    notificationAssignedBy: 'Assigned by',
+    notificationDelete: 'Delete notification',
+
+    // ── Projects (notices) ───────────────────────────────────────
+    projectCreated: 'Project created',
+    projectUpdated: 'Project updated',
+    projectArchivedToast: 'Project "{name}" archived',
+    projectStatusUpdated: '"{name}" is now {status}',
+    projectNoArchived: 'No archived projects',
+    projectTasksTab: 'Tasks',
+    projectActivityTab: 'Activity',
+
+    // ── Tasks ────────────────────────────────────────────────────
+    taskTitleRequired: 'Enter a title for the task.',
+    taskNoPermissionHint: 'Only the assignee, the creator or a project administrator can modify this task.',
+    taskDueToday: 'Due today',
+
+    // ── Activity log ─────────────────────────────────────────────
+    activityLogTitle: 'Activity log',
+    activityLogEmpty: 'No activity has been recorded in this project yet.',
+    activityActionCreateTask: 'Task created',
+    activityActionEditTask: 'Task edited',
+    activityActionStatusChange: 'Status change',
+    activityActionComment: 'Comment',
+    activityActionDeleteTask: 'Task deleted',
+    activityActionAttachment: 'Attachment',
+
+    // ── Gantt ────────────────────────────────────────────────────
+    ganttEmpty: 'There are no scheduled tasks to show in the Gantt.',
+    ganttDurationLabel: 'Duration',
+    ganttDurationOne: '1 day',
+    ganttDurationMany: '{count} days',
+
+    // ── Attachments ──────────────────────────────────────────────
+    attachmentTaskTitle: 'Attachments',
+    attachmentProjectTitle: 'Project documents',
+    attachmentEventTitle: 'Event documents',
+    attachmentUpload: 'Upload files',
+    attachmentUploading: 'Uploading...',
+    attachmentUploaded: '{count} file(s) uploaded',
+    attachmentDocument: 'Document',
+    attachmentFile: 'File',
+    attachmentNew: 'New',
+    attachmentView: 'View',
+    attachmentDownload: 'Download',
+    attachmentEmpty: 'No attached documents.',
+    attachmentDeleteConfirm: 'Delete this file?',
+
+    // ── Comments ─────────────────────────────────────────────────
+    commentsProjectWall: 'Project wall',
+    commentsTaskThread: 'Task thread',
+    commentsEmpty: 'No messages yet.',
+    commentsYou: 'You',
+    commentsUnknownAuthor: 'User',
+    commentsPlaceholder: 'Write a note or an update...',
+    commentsSend: 'Send',
+    commentsSending: 'Sending...',
+    commentDeleteConfirm: 'Delete this comment?',
+
+    // ── Home ─────────────────────────────────────────────────────
+    dashboardActivityError: 'The activity for that day could not be loaded.',
+    dashboardNoProjectsMember: 'You are not part of any project yet.',
+    projectTasksInProject: 'tasks in the project',
+
+    // ── Users ────────────────────────────────────────────────────
+    usersStatusExpired: 'Expired',
+    usersResend: 'Resend',
+    usersResendInvitation: 'Resend invitation',
+    usersSent: 'Sent',
+    usersExpires: 'Expires',
+    usersAreaRole: 'Area / Role',
+    usersFilterStatus: 'Status',
+    usersAllStatuses: 'All statuses',
+    usersDeactivateConfirm: 'Deactivate {name}? They will no longer be able to sign in.',
+    usersDeactivated: 'User deactivated',
+    usersActivated: 'User activated',
+    usersUpdated: 'User updated',
+    usersInvitationSent: 'Invitation sent',
+    usersInvitationResent: 'Invitation resent',
+    usersInvitationDeleted: 'Invitation deleted',
+    usersInvitationDeleteConfirm: 'Delete the invitation for {name}?',
+    usersInvitationAcceptedKept: 'Accepted invitations are kept as history',
+    usersNoInvitations: 'There are no invitations',
+    ...textosAuth.en,
+    ...textosContratos.en,
+    ...textosConfiguracion.en,
+    ...textosSistema.en,
+    ...textosCorreo.en,
+    ...textosPanel.en,
+    ...textosMiembro.en,
   },
 };
 
+// Sin preferencia guardada se sigue la del sistema. index.html aplica esto
+// mismo antes de cargar el CSS para que no haya destello claro.
+// Valores por defecto de la instalacion (panel de configuracion), guardados
+// por ConfiguracionContext en la visita anterior. Se usan solo si la persona
+// no eligio tema o idioma en este navegador.
+// Valores de {marca}, {empresa} y {sistema} hasta que llegue la configuración.
+const VARS_MARCA_FABRICA = { marca: 'RED 4', empresa: 'Red 4 Design', sistema: 'RED 4 CRM' };
+
+const reglasDeInstalacion = () => {
+  try {
+    return JSON.parse(localStorage.getItem('crm_marca_config') || 'null')?.reglas || {};
+  } catch {
+    return {};
+  }
+};
+
+const getInitialTheme = () => {
+  const guardado = localStorage.getItem(STORAGE_THEME_KEY);
+  if (guardado === 'light' || guardado === 'dark') return guardado;
+  const porDefecto = reglasDeInstalacion().temaPorDefecto;
+  if (porDefecto === 'claro') return 'light';
+  if (porDefecto === 'oscuro') return 'dark';
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
+
 export const PreferencesProvider = ({ children }) => {
-  const [theme, setTheme] = useState(() => localStorage.getItem(STORAGE_THEME_KEY) || 'light');
-  const [language, setLanguage] = useState(() => localStorage.getItem(STORAGE_LANGUAGE_KEY) || 'es');
+  const [theme, setTheme] = useState(getInitialTheme);
+  const [language, setLanguage] = useState(() => localStorage.getItem(STORAGE_LANGUAGE_KEY) || reglasDeInstalacion().idiomaPorDefecto || 'es');
+  // Textos que la instalacion personaliza (nombre del sistema, textos del
+  // login, nombres de areas...). Tienen prioridad sobre las traducciones.
+  const [textosMarca, setTextosMarca] = useState({});
 
   useEffect(() => {
     localStorage.setItem(STORAGE_THEME_KEY, theme);
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
+    // La barra del navegador en el movil (theme-color) sigue al encabezado de
+    // la app, que es --color-surface. Se lee ya calculada para respetar los
+    // colores de la marca; los valores fijos son el respaldo (los de index.css).
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      const surface = getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim();
+      meta.setAttribute('content', surface || (theme === 'dark' ? '#18181b' : '#ffffff'));
+    }
   }, [theme]);
 
   useEffect(() => {
@@ -1356,11 +1993,17 @@ export const PreferencesProvider = ({ children }) => {
     language,
     setLanguage,
     locale: language === 'en' ? 'en-US' : 'es-MX',
+    setTextosMarca,
+    // Traducción sin los textos personalizados de la instalación (para mostrar
+    // el valor por defecto en el panel de configuración).
+    tBase: (key) => Object.entries({ ...VARS_MARCA_FABRICA, ...(textosMarca.__vars || {}) })
+      .reduce((s, [k, v]) => s.replace(`{${k}}`, String(v)), translations[language]?.[key] ?? translations.es[key] ?? key),
     t: (key, vars = {}) => {
-      const str = translations[language]?.[key] ?? translations.es[key] ?? key;
-      return Object.entries(vars).reduce((s, [k, v]) => s.replace(`{${k}}`, String(v)), str);
+      const str = textosMarca[key] ?? translations[language]?.[key] ?? translations.es[key] ?? key;
+      // {marca}, {empresa} y {sistema} salen de la configuración de la instalación.
+      return Object.entries({ ...VARS_MARCA_FABRICA, ...(textosMarca.__vars || {}), ...vars }).reduce((s, [k, v]) => s.replace(`{${k}}`, String(v)), str);
     },
-  }), [theme, language]);
+  }), [theme, language, textosMarca]);
 
   return (
     <PreferencesContext.Provider value={value}>
@@ -1369,6 +2012,7 @@ export const PreferencesProvider = ({ children }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- el hook y el proveedor van juntos a proposito; Vite recarga el archivo completo y no hay otros componentes aqui
 export const usePreferences = () => {
   const context = useContext(PreferencesContext);
   if (!context) throw new Error('usePreferences must be used inside <PreferencesProvider>');
