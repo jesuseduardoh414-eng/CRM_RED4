@@ -227,7 +227,10 @@ A tener en cuenta:
 `backend/vercel.json` sigue valiendo: proyecto con *Root Directory* `backend`;
 `vercel-build` genera el cliente de Prisma del proveedor de `DATABASE_URL`. En
 serverless conviene `DATABASE_URL` con `?pgbouncer=true&connection_limit=1`
-(Supabase). Limitaciones: Vercel no aplica migraciones (`npm run db:migrate`
+(Supabase). Las funciones corren en `sfo1` (`regions` en `backend/vercel.json`)
+porque la Supabase de RED 4 esta en `us-west-1`: en `iad1`, la region por
+defecto, cada consulta cruzaba Estados Unidos (~65 ms) y `auth/me` tardaba
+0.5-0.9 s. Si la base cambia de region, mueve tambien esta. Limitaciones: Vercel no aplica migraciones (`npm run db:migrate`
 desde tu maquina), el disco es de solo lectura (no se pueden subir adjuntos,
 contratos ni comprobantes de finanzas) y no corren los avisos programados por correo.
 
