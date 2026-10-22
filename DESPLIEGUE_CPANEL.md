@@ -487,8 +487,10 @@ nada hasta suspenderla y reactivarla en WHM. Desde entonces `src/server.js` fija
 usa la cuenta antes de cada paso pesado. Lo que consume se ve en cPanel →
 **Uso de recursos** → *Current usage* → *Number of Processes*.
 
-Vercel ya no despliega con cada push (`"git": { "deploymentEnabled": false }`
-en los dos `vercel.json`): se queda en la última versión hasta apagarlo.
+En RED 4, Vercel sigue desplegando con cada push (frontend y API sobre
+Supabase). Si la producción pasa a cPanel, apágalo con
+`"git": { "deploymentEnabled": false }` en los dos `vercel.json` para que no
+haya dos versiones publicadas.
 
 ### A mano (si GitHub no está disponible)
 

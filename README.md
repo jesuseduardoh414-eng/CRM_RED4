@@ -157,8 +157,8 @@ Todo en [DESPLIEGUE_CPANEL.md](DESPLIEGUE_CPANEL.md). En corto:
   GitHub Actions (`.github/workflows/desplegar-cpanel.yml`: build del frontend,
   rsync, `backend/scripts/tras_desplegar.sh` para npm install / generate /
   migraciones / reinicio con `cloudlinux-selector`). Se activa con el secreto
-  `CPANEL_SSH_KEY` y la variable `CPANEL_USER`. Vercel ya no despliega en cada
-  push (`git.deploymentEnabled: false`).
+  `CPANEL_SSH_KEY` y la variable `CPANEL_USER`. En RED 4, Vercel (frontend y
+  API con Supabase) tambien despliega en cada push a `master`.
 - **Paquetes (a mano):** `npm run empaquetar:cpanel` (desde `backend/`) deja en
   `paquete_cpanel/` el frontend compilado con `VITE_API_URL=/api` y su
   `.htaccess` (`frontend/cpanel/.htaccess`: rutas de la SPA, `/api` intacto,
